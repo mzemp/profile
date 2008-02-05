@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
     int Nbin;
     int positionprecision;
     int gridtype;
-    double r, dr, rmin, rmax;
+    double r, dr, rmin, rmax, vol;
     TIPSY_HEADER th;
     GAS_PARTICLE gp;
     DARK_PARTICLE dp;
@@ -189,6 +189,8 @@ int main(int argc, char **argv) {
 	    fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,exp(log(pa[j].ri)+dr/2.0),pa[j].ro);
 	    }
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot,pa[j].Mgas,pa[j].Mdark,pa[j].Mstar);
+	vol = 4*M_PI*(pa[j].ro*pa[j].ro*pa[j].ro - pa[j].ri*pa[j].ri*pa[j].ri)/3.0;
+	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot/vol,pa[j].Mgas/vol,pa[j].Mdark/vol,pa[j].Mstar/vol);
 	fprintf(stdout,"%d %d %d %d\n",pa[j].Ntot,pa[j].Ngas,pa[j].Ndark,pa[j].Nstar);
 	}
     exit(0);
