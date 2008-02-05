@@ -37,7 +37,7 @@ int main(int argc, char **argv) {
     int positionprecision;
     int gridtype;
     double r, dr, rmin, rmax, vol;
-    double dx, dy, dz;
+    double pos[3];
     double rcentre[3] = {0,0,0};
     TIPSY_HEADER th;
     GAS_PARTICLE gp;
@@ -167,10 +167,10 @@ int main(int argc, char **argv) {
     if (positionprecision == 0) {
 	for (i = 0; i < th.ngas; i++) {
 	    read_tipsy_standard_gas(&xdrs,&gp);
-	    dx = gp.pos[0]-rcentre[0];
-	    dy = gp.pos[1]-rcentre[1];
-	    dz = gp.pos[2]-rcentre[2];
-	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < 3; j++) {
+		pos[j] = gp.pos[j]-rcentre[j];
+		}
+	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < Nbin; j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
@@ -182,10 +182,10 @@ int main(int argc, char **argv) {
 	    }
 	for (i = 0; i < th.ndark; i++) {
 	    read_tipsy_standard_dark(&xdrs,&dp);
-	    dx = dp.pos[0]-rcentre[0];
-	    dy = dp.pos[1]-rcentre[1];
-	    dz = dp.pos[2]-rcentre[2];
-	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < 3; j++) {
+		pos[j] = dp.pos[j]-rcentre[j];
+		}
+	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < Nbin; j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
@@ -197,10 +197,11 @@ int main(int argc, char **argv) {
 	    }
 	for (i = 0; i < th.nstar; i++) {
 	    read_tipsy_standard_star(&xdrs,&sp);
-	    dx = sp.pos[0]-rcentre[0];
-	    dy = sp.pos[1]-rcentre[1];
-	    dz = sp.pos[2]-rcentre[2];
-	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    read_tipsy_standard_dark(&xdrs,&dp);
+	    for (j = 0; j < 3; j++) {
+		pos[j] = sp.pos[j]-rcentre[j];
+		}
+	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < Nbin; j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
@@ -211,13 +212,13 @@ int main(int argc, char **argv) {
 		}
 	    }
 	}
-    else if (positionprecision == 0) {
+    else if (positionprecision == 1) {
 	for (i = 0; i < th.ngas; i++) {
 	    read_tipsy_standard_gas_dpp(&xdrs,&gpdpp);
-	    dx = gpdpp.pos[0]-rcentre[0];
-	    dy = gpdpp.pos[1]-rcentre[1];
-	    dz = gpdpp.pos[2]-rcentre[2];
-	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < 3; j++) {
+		pos[j] = gpdpp.pos[j]-rcentre[j];
+		}
+	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < Nbin; j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
@@ -229,10 +230,10 @@ int main(int argc, char **argv) {
 	    }
 	for (i = 0; i < th.ndark; i++) {
 	    read_tipsy_standard_dark_dpp(&xdrs,&dpdpp);
-	    dx = dpdpp.pos[0]-rcentre[0];
-	    dy = dpdpp.pos[1]-rcentre[1];
-	    dz = dpdpp.pos[2]-rcentre[2];
-	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < 3; j++) {
+		pos[j] = dpdpp.pos[j]-rcentre[j];
+		}
+	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < Nbin; j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
@@ -244,10 +245,10 @@ int main(int argc, char **argv) {
 	    }
 	for (i = 0; i < th.nstar; i++) {
 	    read_tipsy_standard_star_dpp(&xdrs,&spdpp);
-	    dx = spdpp.pos[0]-rcentre[0];
-	    dy = spdpp.pos[1]-rcentre[1];
-	    dz = spdpp.pos[2]-rcentre[2];
-	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < 3; j++) {
+		pos[j] = spdpp.pos[j]-rcentre[j];
+		}
+	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < Nbin; j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
