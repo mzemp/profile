@@ -37,6 +37,8 @@ int main(int argc, char **argv) {
     int positionprecision;
     int gridtype;
     double r, dr, rmin, rmax, vol;
+    double dx, dy, dz;
+    double rcentre[3] = {0,0,0};
     TIPSY_HEADER th;
     GAS_PARTICLE gp;
     DARK_PARTICLE dp;
@@ -98,6 +100,30 @@ int main(int argc, char **argv) {
 	    Nbin = atof(argv[i]);
 	    i++;
 	    }
+        else if (strcmp(argv[i],"-rxcen") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            rcentre[0] = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-rycen") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            rcentre[1] = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-rzcen") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            rcentre[2] = atof(argv[i]);
+            i++;
+            }
 	else if ((strcmp(argv[i],"-h") == 0) || (strcmp(argv[i],"-help") == 0)) {
 	    usage();
 	    }
@@ -144,7 +170,10 @@ int main(int argc, char **argv) {
 	    }
 	for (i = 0; i < th.ndark; i++) {
 	    read_tipsy_standard_dark(&xdrs,&dp);
-	    r = sqrt(dp.pos[0]*dp.pos[0] + dp.pos[1]*dp.pos[1] + dp.pos[2]*dp.pos[2]);
+	    dx = dp.pos[0]-rcentre[0];
+	    dy = dp.pos[1]-rcentre[1];
+	    dz = dp.pos[2]-rcentre[2];
+	    r = sqrt(dx*dy + dy*dy + dz*dz);
 	    for (j = 0; j < Nbin; j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
@@ -164,7 +193,10 @@ int main(int argc, char **argv) {
 	    }
 	for (i = 0; i < th.ndark; i++) {
 	    read_tipsy_standard_dark_dpp(&xdrs,&dpdpp);
-	    r = sqrt(dpdpp.pos[0]*dpdpp.pos[0] + dpdpp.pos[1]*dpdpp.pos[1] + dpdpp.pos[2]*dpdpp.pos[2]);
+	    dx = dpdpp.pos[0]-rcentre[0];
+	    dy = dpdpp.pos[1]-rcentre[1];
+	    dz = dpdpp.pos[2]-rcentre[2];
+	    r = sqrt(dx*dy + dy*dy + dz*dz);
 	    for (j = 0; j < Nbin; j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
@@ -199,19 +231,22 @@ int main(int argc, char **argv) {
 void usage(void) {
 
     fprintf(stderr,"\n");
-    fprintf(stderr,"Program calculates the profile of the input file around (0,0,0).\n");
+    fprintf(stderr,"Program calculates the profile of the input file around r_cen.\n");
     fprintf(stderr,"\n");
     fprintf(stderr,"You can specify the following arguments:\n");
     fprintf(stderr,"\n");
-    fprintf(stderr,"-spp          : set this flag if input and output files have single precision positions (default)\n");
-    fprintf(stderr,"-dpp          : set this flag if input and output files have double precision positions\n");
-    fprintf(stderr,"-lin          : set this flag for linear grid\n");
-    fprintf(stderr,"-log          : set this flag for logarithmic grid (default)\n");
-    fprintf(stderr,"-rmin <value> : minimum grid radius [LU]\n");
-    fprintf(stderr,"-rmax <value> : maximum grid radius [LU]\n");
-    fprintf(stderr,"-Nbin <value> : number of bins\n");
-    fprintf(stderr,"< <name>      : name of input file in tipsy standard binary format\n");
-    fprintf(stderr,"> <name>      : name of output file\n");
+    fprintf(stderr,"-spp           : set this flag if input and output files have single precision positions (default)\n");
+    fprintf(stderr,"-dpp           : set this flag if input and output files have double precision positions\n");
+    fprintf(stderr,"-lin           : set this flag for linear grid\n");
+    fprintf(stderr,"-log           : set this flag for logarithmic grid (default)\n");
+    fprintf(stderr,"-rmin <value>  : minimum grid radius [LU]\n");
+    fprintf(stderr,"-rmax <value>  : maximum grid radius [LU]\n");
+    fprintf(stderr,"-Nbin <value>  : number of bins\n");
+    fprintf(stderr,"-rxcen <value> : x-coordinate of centre [LU] (default: 0 LU)\n");
+    fprintf(stderr,"-rycen <value> : y-coordinate of centre [LU] (default: 0 LU)\n");
+    fprintf(stderr,"-rzcen <value> : z-coordinate of centre [LU] (default: 0 LU)\n");
+    fprintf(stderr,"< <name>       : name of input file in tipsy standard binary format\n");
+    fprintf(stderr,"> <name>       : name of output file\n");
     fprintf(stderr,"\n");
     exit(1);
     }
