@@ -51,9 +51,9 @@ int main(int argc, char **argv) {
 
     positionprecision = 0; /* spp 0, dpp 1 */
     gridtype = 1; /* lin 0, log 1 */
-    rmin = 0.1;
-    rmax = 1;
-    Nbin = 1;
+    rmin = 0;
+    rmax = 0;
+    Nbin = 0;
     dr = 0;
     /*
     ** Read in arguments
@@ -131,6 +131,12 @@ int main(int argc, char **argv) {
 	    usage();
 	    }
 	}
+    /*
+    ** Check some things
+    */
+    assert(Nbin > 0);
+    assert(rmax > 0);
+    assert(rmin >= 0);
     /*
     ** Initialise array
     */
