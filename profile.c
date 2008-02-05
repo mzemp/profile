@@ -167,6 +167,18 @@ int main(int argc, char **argv) {
     if (positionprecision == 0) {
 	for (i = 0; i < th.ngas; i++) {
 	    read_tipsy_standard_gas(&xdrs,&gp);
+	    dx = gp.pos[0]-rcentre[0];
+	    dy = gp.pos[1]-rcentre[1];
+	    dz = gp.pos[2]-rcentre[2];
+	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < Nbin; j++) {
+		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    pa[j].Ntot++;
+		    pa[j].Ngas++;
+		    pa[j].Mtot += gp.mass;
+		    pa[j].Mgas += gp.mass;
+		    }
+		}
 	    }
 	for (i = 0; i < th.ndark; i++) {
 	    read_tipsy_standard_dark(&xdrs,&dp);
@@ -185,11 +197,35 @@ int main(int argc, char **argv) {
 	    }
 	for (i = 0; i < th.nstar; i++) {
 	    read_tipsy_standard_star(&xdrs,&sp);
+	    dx = sp.pos[0]-rcentre[0];
+	    dy = sp.pos[1]-rcentre[1];
+	    dz = sp.pos[2]-rcentre[2];
+	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < Nbin; j++) {
+		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    pa[j].Ntot++;
+		    pa[j].Nstar++;
+		    pa[j].Mtot += sp.mass;
+		    pa[j].Mstar += sp.mass;
+		    }
+		}
 	    }
 	}
     else if (positionprecision == 0) {
 	for (i = 0; i < th.ngas; i++) {
 	    read_tipsy_standard_gas_dpp(&xdrs,&gpdpp);
+	    dx = gpdpp.pos[0]-rcentre[0];
+	    dy = gpdpp.pos[1]-rcentre[1];
+	    dz = gpdpp.pos[2]-rcentre[2];
+	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < Nbin; j++) {
+		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    pa[j].Ntot++;
+		    pa[j].Ngas++;
+		    pa[j].Mtot += gpdpp.mass;
+		    pa[j].Mgas += gpdpp.mass;
+		    }
+		}
 	    }
 	for (i = 0; i < th.ndark; i++) {
 	    read_tipsy_standard_dark_dpp(&xdrs,&dpdpp);
@@ -201,13 +237,25 @@ int main(int argc, char **argv) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
 		    pa[j].Ndark++;
-		    pa[j].Mtot += dp.mass;
-		    pa[j].Mdark += dp.mass;
+		    pa[j].Mtot += dpdpp.mass;
+		    pa[j].Mdark += dpdpp.mass;
 		    }
 		}
 	    }
 	for (i = 0; i < th.nstar; i++) {
 	    read_tipsy_standard_star_dpp(&xdrs,&spdpp);
+	    dx = spdpp.pos[0]-rcentre[0];
+	    dy = spdpp.pos[1]-rcentre[1];
+	    dz = spdpp.pos[2]-rcentre[2];
+	    r = sqrt(dx*dy + dy*dy + dz*dz);
+	    for (j = 0; j < Nbin; j++) {
+		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    pa[j].Ntot++;
+		    pa[j].Nstar++;
+		    pa[j].Mtot += spdpp.mass;
+		    pa[j].Mstar += spdpp.mass;
+		    }
+		}
 	    }
 	}
     /*
