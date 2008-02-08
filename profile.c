@@ -37,6 +37,7 @@ int main(int argc, char **argv) {
     int positionprecision;
     int gridtype;
     double r, dr, rmin, rmax, vol;
+    double Menctot, Mencgas, Mencdark, Mencstar;
     double pos[3];
     double rcentre[3] = {0,0,0};
     TIPSY_HEADER th;
@@ -278,6 +279,17 @@ int main(int argc, char **argv) {
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot,pa[j].Mgas,pa[j].Mdark,pa[j].Mstar);
 	vol = 4*M_PI*(pa[j].ro*pa[j].ro*pa[j].ro - pa[j].ri*pa[j].ri*pa[j].ri)/3.0;
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot/vol,pa[j].Mgas/vol,pa[j].Mdark/vol,pa[j].Mstar/vol);
+	Menctot = 0;
+	Mencgas = 0;
+	Mencdark = 0;
+	Mencstar = 0;
+	for (i = 0; i <= j; i++) {
+	    Menctot += pa[i].Mtot;
+	    Mencgas += pa[i].Mgas;
+	    Mencdark += pa[i].Mdark;
+	    Mencstar += pa[i].Mstar;
+	    }
+	fprintf(stdout,"%.6e %.6e %.6e %.6e ",Menctot,Mencgas,Mencdark,Mencstar);
 	fprintf(stdout,"%d %d %d %d\n",pa[j].Ntot,pa[j].Ngas,pa[j].Ndark,pa[j].Nstar);
 	}
     exit(0);
