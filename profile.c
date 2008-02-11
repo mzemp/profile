@@ -38,6 +38,7 @@ int main(int argc, char **argv) {
     int gridtype;
     double r, dr, rmin, rmax, vol;
     double Menctot, Mencgas, Mencdark, Mencstar;
+    int Nenctot, Nencgas, Nencdark, Nencstar;
     double pos[3];
     double rcentre[3] = {0,0,0};
     TIPSY_HEADER th;
@@ -147,15 +148,27 @@ int main(int argc, char **argv) {
     else if (gridtype == 1) {
 	dr = (log(rmax)-log(rmin))/Nbin;
 	}
-    pa = malloc(Nbin*sizeof(PA));
-    for (j = 0; j < Nbin; j++) {
+    pa = malloc((Nbin+1)*sizeof(PA));
+    for (j = 0; j < (Nbin+1); j++) {
 	if (gridtype == 0) {
-	    pa[j].ri = rmin + j*dr;
-	    pa[j].ro = rmin + (j+1)*dr;
+	    if (j == 0) {
+		pa[j].ri = 0;
+		pa[j].ro = rmin;
+		}
+	    else {
+		pa[j].ri = rmin + (j-1)*dr;
+		pa[j].ro = rmin + j*dr;
+		}
 	    }
 	else if (gridtype == 1) {
-	    pa[j].ri = exp(log(rmin) + j*dr);
-	    pa[j].ro = exp(log(rmin) + (j+1)*dr);
+	    if (j == 0) {
+		pa[j].ri = 0;
+		pa[j].ro = rmin;
+		}
+	    else {
+		pa[j].ri = exp(log(rmin) + (j-1)*dr);
+		pa[j].ro = exp(log(rmin) + j*dr);
+		}
 	    }
 	pa[j].Ntot = 0;
 	pa[j].Ngas = 0;
@@ -178,7 +191,7 @@ int main(int argc, char **argv) {
 		pos[j] = gp.pos[j]-rcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-	    for (j = 0; j < Nbin; j++) {
+	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
 		    pa[j].Ngas++;
@@ -193,7 +206,7 @@ int main(int argc, char **argv) {
 		pos[j] = dp.pos[j]-rcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-	    for (j = 0; j < Nbin; j++) {
+	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
 		    pa[j].Ndark++;
@@ -209,7 +222,7 @@ int main(int argc, char **argv) {
 		pos[j] = sp.pos[j]-rcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-	    for (j = 0; j < Nbin; j++) {
+	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
 		    pa[j].Nstar++;
@@ -226,7 +239,7 @@ int main(int argc, char **argv) {
 		pos[j] = gpdpp.pos[j]-rcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-	    for (j = 0; j < Nbin; j++) {
+	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
 		    pa[j].Ngas++;
@@ -241,7 +254,7 @@ int main(int argc, char **argv) {
 		pos[j] = dpdpp.pos[j]-rcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-	    for (j = 0; j < Nbin; j++) {
+	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
 		    pa[j].Ndark++;
@@ -256,7 +269,7 @@ int main(int argc, char **argv) {
 		pos[j] = spdpp.pos[j]-rcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-	    for (j = 0; j < Nbin; j++) {
+	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
 		    pa[j].Ntot++;
 		    pa[j].Nstar++;
@@ -269,16 +282,19 @@ int main(int argc, char **argv) {
     /*
     ** Write output
     */
-    for (j = 0; j < Nbin; j++) {
-	if (gridtype == 0) {
+    for (j = 0; j < (Nbin+1); j++) {
+	if (j == 0) {
 	    fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,(pa[j].ro+pa[j].ri)/2.0,pa[j].ro);
 	    }
-	else if (gridtype == 1) {
-	    fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,exp(log(pa[j].ri)+dr/2.0),pa[j].ro);
+	else {
+	    if (gridtype == 0) {
+		fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,(pa[j].ro+pa[j].ri)/2.0,pa[j].ro);
+		}
+	    else if (gridtype == 1) {
+		fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,exp(log(pa[j].ri)+dr/2.0),pa[j].ro);
+		}
 	    }
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot,pa[j].Mgas,pa[j].Mdark,pa[j].Mstar);
-	vol = 4*M_PI*(pa[j].ro*pa[j].ro*pa[j].ro - pa[j].ri*pa[j].ri*pa[j].ri)/3.0;
-	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot/vol,pa[j].Mgas/vol,pa[j].Mdark/vol,pa[j].Mstar/vol);
 	Menctot = 0;
 	Mencgas = 0;
 	Mencdark = 0;
@@ -290,7 +306,20 @@ int main(int argc, char **argv) {
 	    Mencstar += pa[i].Mstar;
 	    }
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",Menctot,Mencgas,Mencdark,Mencstar);
-	fprintf(stdout,"%d %d %d %d\n",pa[j].Ntot,pa[j].Ngas,pa[j].Ndark,pa[j].Nstar);
+	vol = 4*M_PI*(pa[j].ro*pa[j].ro*pa[j].ro - pa[j].ri*pa[j].ri*pa[j].ri)/3.0;
+	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot/vol,pa[j].Mgas/vol,pa[j].Mdark/vol,pa[j].Mstar/vol);
+	fprintf(stdout,"%d %d %d %d ",pa[j].Ntot,pa[j].Ngas,pa[j].Ndark,pa[j].Nstar);
+	Nenctot = 0;
+	Nencgas = 0;
+	Nencdark = 0;
+	Nencstar = 0;
+	for (i = 0; i <= j; i++) {
+	    Nenctot += pa[i].Ntot;
+	    Nencgas += pa[i].Ngas;
+	    Nencdark += pa[i].Ndark;
+	    Nencstar += pa[i].Nstar;
+	    }
+	fprintf(stdout,"%d %d %d %d\n",Nenctot,Nencgas,Nencdark,Nencstar);
 	}
     exit(0);
     }
@@ -308,7 +337,7 @@ void usage(void) {
     fprintf(stderr,"-log           : set this flag for logarithmic grid (default)\n");
     fprintf(stderr,"-rmin <value>  : minimum grid radius [LU]\n");
     fprintf(stderr,"-rmax <value>  : maximum grid radius [LU]\n");
-    fprintf(stderr,"-Nbin <value>  : number of bins\n");
+    fprintf(stderr,"-Nbin <value>  : number of bins between rmin and rmax\n");
     fprintf(stderr,"-rxcen <value> : x-coordinate of centre [LU] (default: 0 LU)\n");
     fprintf(stderr,"-rycen <value> : y-coordinate of centre [LU] (default: 0 LU)\n");
     fprintf(stderr,"-rzcen <value> : z-coordinate of centre [LU] (default: 0 LU)\n");
