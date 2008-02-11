@@ -283,6 +283,7 @@ int main(int argc, char **argv) {
     ** Write output
     */
     for (j = 0; j < (Nbin+1); j++) {
+	vol = 4*M_PI*(pa[j].ro*pa[j].ro*pa[j].ro - pa[j].ri*pa[j].ri*pa[j].ri)/3.0;
 	if (j == 0) {
 	    fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,(pa[j].ro+pa[j].ri)/2.0,pa[j].ro);
 	    }
@@ -306,7 +307,6 @@ int main(int argc, char **argv) {
 	    Mencstar += pa[i].Mstar;
 	    }
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",Menctot,Mencgas,Mencdark,Mencstar);
-	vol = 4*M_PI*(pa[j].ro*pa[j].ro*pa[j].ro - pa[j].ri*pa[j].ri*pa[j].ri)/3.0;
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot/vol,pa[j].Mgas/vol,pa[j].Mdark/vol,pa[j].Mstar/vol);
 	fprintf(stdout,"%d %d %d %d ",pa[j].Ntot,pa[j].Ngas,pa[j].Ndark,pa[j].Nstar);
 	Nenctot = 0;
@@ -320,6 +320,7 @@ int main(int argc, char **argv) {
 	    Nencstar += pa[i].Nstar;
 	    }
 	fprintf(stdout,"%d %d %d %d\n",Nenctot,Nencgas,Nencdark,Nencstar);
+	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Ntot/vol,pa[j].Ngas/vol,pa[j].Ndark/vol,pa[j].Nstar/vol);
 	}
     exit(0);
     }
