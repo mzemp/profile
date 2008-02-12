@@ -26,21 +26,66 @@ typedef struct profilearray {
     double Mgas;
     double Mdark;
     double Mstar;
+    double veltot[3];
+    double vel2tot[3];
+    double velgas[3];
+    double vel2gas[3];
+    double veldark[3];
+    double vel2dark[3];
+    double velstar[3];
+    double vel2star[3];
     } PA;
+
+void calculate_unit_vectors(double pos[3], double erad[3], double ephi[3], double etheta[3]) {
+
+    double dist;
+    double cosphi, sinphi, costheta, sintheta;
+
+    /*
+    ** Calculate cosphi & sinphi
+    */
+    dist = sqrt(pos[0]*pos[0]+pos[1]*pos[1]);
+    cosphi = pos[0]/dist;
+    sinphi = pos[1]/dist;
+    if ((pos[0] == 0) && (pos[1] == 0)) {
+        cosphi = 1;
+        sinphi = 0;
+        }
+    /*
+    ** Calculate costheta & sintheta
+    */
+    dist = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
+    costheta = pos[2]/dist;
+    sintheta = sqrt(1-costheta*costheta);
+    /*
+    ** Calculate unit vectors
+    */
+    erad[0] = sintheta*cosphi;
+    erad[1] = sintheta*sinphi;
+    erad[2] = costheta;
+    ephi[0] = -sinphi;
+    ephi[1] = cosphi;
+    ephi[2] = 0;
+    etheta[0] = -costheta*cosphi;
+    etheta[1] = -costheta*sinphi;
+    etheta[2] = sintheta;
+    }
 
 void usage(void);
 
 int main(int argc, char **argv) {
 
-    int i, j;
+    int i, j, k;
     int Nbin;
     int positionprecision;
     int gridtype;
     double r, dr, rmin, rmax, vol;
     double Menctot, Mencgas, Mencdark, Mencstar;
     int Nenctot, Nencgas, Nencdark, Nencstar;
-    double pos[3];
-    double rcentre[3] = {0,0,0};
+    double pos[3], vel[3];
+    double velproj[3], velmean, vel2mean;
+    double erad[3], ephi[3], etheta[3];
+    double rcentre[3] = {0,0,0}, vcentre[3] = {0,0,0};
     TIPSY_HEADER th;
     GAS_PARTICLE gp;
     DARK_PARTICLE dp;
@@ -126,6 +171,30 @@ int main(int argc, char **argv) {
             rcentre[2] = atof(argv[i]);
             i++;
             }
+        else if (strcmp(argv[i],"-vxcen") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            vcentre[0] = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-vycen") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            vcentre[1] = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-vzcen") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            vcentre[2] = atof(argv[i]);
+            i++;
+            }
 	else if ((strcmp(argv[i],"-h") == 0) || (strcmp(argv[i],"-help") == 0)) {
 	    usage();
 	    }
@@ -178,6 +247,16 @@ int main(int argc, char **argv) {
 	pa[j].Mgas = 0;
 	pa[j].Mdark = 0;
 	pa[j].Mstar = 0;
+	for (i = 0; i < 3; i++) {
+	    pa[j].veltot[i] = 0;
+	    pa[j].velgas[i] = 0;
+	    pa[j].veldark[i] = 0;
+	    pa[j].velstar[i] = 0;
+	    pa[j].vel2tot[i] = 0;
+	    pa[j].vel2gas[i] = 0;
+	    pa[j].vel2dark[i] = 0;
+	    pa[j].vel2star[i] = 0;
+	    }
 	}
     /*
     ** Read in particles and calculate profile
@@ -189,14 +268,25 @@ int main(int argc, char **argv) {
 	    read_tipsy_standard_gas(&xdrs,&gp);
 	    for (j = 0; j < 3; j++) {
 		pos[j] = gp.pos[j]-rcentre[j];
+		vel[j] = gp.vel[j]-vcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    calculate_unit_vectors(pos,erad,ephi,etheta);
+		    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+		    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+		    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
 		    pa[j].Ntot++;
 		    pa[j].Ngas++;
 		    pa[j].Mtot += gp.mass;
 		    pa[j].Mgas += gp.mass;
+		    for (k = 0; k < 3; k++) {
+			pa[j].veltot[k] += velproj[k];
+			pa[j].velgas[k] += velproj[k];
+			pa[j].vel2tot[k] += velproj[k]*velproj[k];
+			pa[j].vel2gas[k] += velproj[k]*velproj[k];
+			}
 		    }
 		}
 	    }
@@ -204,14 +294,25 @@ int main(int argc, char **argv) {
 	    read_tipsy_standard_dark(&xdrs,&dp);
 	    for (j = 0; j < 3; j++) {
 		pos[j] = dp.pos[j]-rcentre[j];
+		vel[j] = dp.vel[j]-vcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    calculate_unit_vectors(pos,erad,ephi,etheta);
+		    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+		    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+		    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
 		    pa[j].Ntot++;
 		    pa[j].Ndark++;
 		    pa[j].Mtot += dp.mass;
 		    pa[j].Mdark += dp.mass;
+		    for (k = 0; k < 3; k++) {
+			pa[j].veltot[k] += velproj[k];
+			pa[j].veldark[k] += velproj[k];
+			pa[j].vel2tot[k] += velproj[k]*velproj[k];
+			pa[j].vel2dark[k] += velproj[k]*velproj[k];
+			}
 		    }
 		}
 	    }
@@ -220,14 +321,25 @@ int main(int argc, char **argv) {
 	    read_tipsy_standard_dark(&xdrs,&dp);
 	    for (j = 0; j < 3; j++) {
 		pos[j] = sp.pos[j]-rcentre[j];
+		vel[j] = sp.vel[j]-vcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    calculate_unit_vectors(pos,erad,ephi,etheta);
+		    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+		    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+		    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
 		    pa[j].Ntot++;
 		    pa[j].Nstar++;
 		    pa[j].Mtot += sp.mass;
 		    pa[j].Mstar += sp.mass;
+		    for (k = 0; k < 3; k++) {
+			pa[j].veltot[k] += velproj[k];
+			pa[j].velstar[k] += velproj[k];
+			pa[j].vel2tot[k] += velproj[k]*velproj[k];
+			pa[j].vel2star[k] += velproj[k]*velproj[k];
+			}
 		    }
 		}
 	    }
@@ -237,14 +349,25 @@ int main(int argc, char **argv) {
 	    read_tipsy_standard_gas_dpp(&xdrs,&gpdpp);
 	    for (j = 0; j < 3; j++) {
 		pos[j] = gpdpp.pos[j]-rcentre[j];
+		vel[j] = gpdpp.vel[j]-vcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    calculate_unit_vectors(pos,erad,ephi,etheta);
+		    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+		    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+		    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
 		    pa[j].Ntot++;
 		    pa[j].Ngas++;
 		    pa[j].Mtot += gpdpp.mass;
 		    pa[j].Mgas += gpdpp.mass;
+		    for (k = 0; k < 3; k++) {
+			pa[j].veltot[k] += velproj[k];
+			pa[j].velgas[k] += velproj[k];
+			pa[j].vel2tot[k] += velproj[k]*velproj[k];
+			pa[j].vel2gas[k] += velproj[k]*velproj[k];
+			}
 		    }
 		}
 	    }
@@ -252,14 +375,25 @@ int main(int argc, char **argv) {
 	    read_tipsy_standard_dark_dpp(&xdrs,&dpdpp);
 	    for (j = 0; j < 3; j++) {
 		pos[j] = dpdpp.pos[j]-rcentre[j];
+		vel[j] = dpdpp.vel[j]-vcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    calculate_unit_vectors(pos,erad,ephi,etheta);
+		    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+		    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+		    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
 		    pa[j].Ntot++;
 		    pa[j].Ndark++;
 		    pa[j].Mtot += dpdpp.mass;
 		    pa[j].Mdark += dpdpp.mass;
+		    for (k = 0; k < 3; k++) {
+			pa[j].veltot[k] += velproj[k];
+			pa[j].veldark[k] += velproj[k];
+			pa[j].vel2tot[k] += velproj[k]*velproj[k];
+			pa[j].vel2dark[k] += velproj[k]*velproj[k];
+			}
 		    }
 		}
 	    }
@@ -267,14 +401,25 @@ int main(int argc, char **argv) {
 	    read_tipsy_standard_star_dpp(&xdrs,&spdpp);
 	    for (j = 0; j < 3; j++) {
 		pos[j] = spdpp.pos[j]-rcentre[j];
+		vel[j] = spdpp.vel[j]-vcentre[j];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 	    for (j = 0; j < (Nbin+1); j++) {
 		if ((pa[j].ri <= r) && (pa[j].ro > r)) {
+		    calculate_unit_vectors(pos,erad,ephi,etheta);
+		    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+		    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+		    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
 		    pa[j].Ntot++;
 		    pa[j].Nstar++;
 		    pa[j].Mtot += spdpp.mass;
 		    pa[j].Mstar += spdpp.mass;
+		    for (k = 0; k < 3; k++) {
+			pa[j].veltot[k] += velproj[k];
+			pa[j].velstar[k] += velproj[k];
+			pa[j].vel2tot[k] += velproj[k]*velproj[k];
+			pa[j].vel2star[k] += velproj[k]*velproj[k];
+			}
 		    }
 		}
 	    }
@@ -285,14 +430,14 @@ int main(int argc, char **argv) {
     for (j = 0; j < (Nbin+1); j++) {
 	vol = 4*M_PI*(pa[j].ro*pa[j].ro*pa[j].ro - pa[j].ri*pa[j].ri*pa[j].ri)/3.0;
 	if (j == 0) {
-	    fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,(pa[j].ro+pa[j].ri)/2.0,pa[j].ro);
+	    fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].ri,(pa[j].ro+pa[j].ri)/2.0,pa[j].ro,vol);
 	    }
 	else {
 	    if (gridtype == 0) {
-		fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,(pa[j].ro+pa[j].ri)/2.0,pa[j].ro);
+		fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].ri,(pa[j].ro+pa[j].ri)/2.0,pa[j].ro,vol);
 		}
 	    else if (gridtype == 1) {
-		fprintf(stdout,"%.6e %.6e %.6e ",pa[j].ri,exp(log(pa[j].ri)+dr/2.0),pa[j].ro);
+		fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].ri,exp(log(pa[j].ri)+dr/2.0),pa[j].ro,vol);
 		}
 	    }
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Mtot,pa[j].Mgas,pa[j].Mdark,pa[j].Mstar);
@@ -319,8 +464,29 @@ int main(int argc, char **argv) {
 	    Nencdark += pa[i].Ndark;
 	    Nencstar += pa[i].Nstar;
 	    }
-	fprintf(stdout,"%d %d %d %d\n",Nenctot,Nencgas,Nencdark,Nencstar);
+	fprintf(stdout,"%d %d %d %d ",Nenctot,Nencgas,Nencdark,Nencstar);
 	fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[j].Ntot/vol,pa[j].Ngas/vol,pa[j].Ndark/vol,pa[j].Nstar/vol);
+	for (i = 0; i < 3; i++) {
+	    velmean = pa[j].veltot[i]/pa[j].Ntot;
+	    vel2mean = pa[j].vel2tot[i]/pa[j].Ntot;
+	    fprintf(stdout,"%.6e %.6e ",velmean,sqrt(vel2mean-velmean*velmean));
+	    }
+	for (i = 0; i < 3; i++) {
+	    velmean = pa[j].velgas[i]/pa[j].Ngas;
+	    vel2mean = pa[j].vel2gas[i]/pa[j].Ngas;
+	    fprintf(stdout,"%.6e %.6e ",velmean,sqrt(vel2mean-velmean*velmean));
+	    }
+	for (i = 0; i < 3; i++) {
+	    velmean = pa[j].veldark[i]/pa[j].Ndark;
+	    vel2mean = pa[j].vel2dark[i]/pa[j].Ndark;
+	    fprintf(stdout,"%.6e %.6e ",velmean,sqrt(vel2mean-velmean*velmean));
+	    }
+	for (i = 0; i < 3; i++) {
+	    velmean = pa[j].velstar[i]/pa[j].Nstar;
+	    vel2mean = pa[j].vel2star[i]/pa[j].Nstar;
+	    fprintf(stdout,"%.6e %.6e ",velmean,sqrt(vel2mean-velmean*velmean));
+	    }
+	fprintf(stdout,"\n");
 	}
     exit(0);
     }
