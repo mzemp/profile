@@ -341,15 +341,15 @@ int main(int argc, char **argv) {
 	    pa[i][j].Mgas = 0;
 	    pa[i][j].Mdark = 0;
 	    pa[i][j].Mstar = 0;
-	    for (i = 0; i < 3; i++) {
-		pa[i][j].veltot[i] = 0;
-		pa[i][j].velgas[i] = 0;
-		pa[i][j].veldark[i] = 0;
-		pa[i][j].velstar[i] = 0;
-		pa[i][j].vel2tot[i] = 0;
-		pa[i][j].vel2gas[i] = 0;
-		pa[i][j].vel2dark[i] = 0;
-		pa[i][j].vel2star[i] = 0;
+	    for (k = 0; k < 3; k++) {
+		pa[i][j].veltot[k] = 0;
+		pa[i][j].velgas[k] = 0;
+		pa[i][j].veldark[k] = 0;
+		pa[i][j].velstar[k] = 0;
+		pa[i][j].vel2tot[k] = 0;
+		pa[i][j].vel2gas[k] = 0;
+		pa[i][j].vel2dark[k] = 0;
+		pa[i][j].vel2star[k] = 0;
 		}
 	    }
 	rcentre = realloc(rcentre,SizeArray*sizeof(double *));
