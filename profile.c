@@ -20,20 +20,34 @@ typedef struct profilearray {
     int Ngas;
     int Ndark;
     int Nstar;
+    int Nenctot;
+    int Nencgas;
+    int Nencdark;
+    int Nencstar;
     double ri;
+    double rm;
     double ro;
+    double vol;
     double Mtot;
     double Mgas;
     double Mdark;
     double Mstar;
+    double Menctot;
+    double Mencgas;
+    double Mencdark;
+    double Mencstar;
     double veltot[3];
-    double vel2tot[3];
+    double vel2tot[6];
     double velgas[3];
-    double vel2gas[3];
+    double vel2gas[6];
     double veldark[3];
-    double vel2dark[3];
+    double vel2dark[6];
     double velstar[3];
-    double vel2star[3];
+    double vel2star[6];
+    double Ltot[3];
+    double Lgas[3];
+    double Ldark[3];
+    double Lstar[3];
     } PA;
 
 void calculate_unit_vectors(double pos[3], double erad[3], double ephi[3], double etheta[3]) {
@@ -106,24 +120,26 @@ int main(int argc, char **argv) {
     int positionprecision;
     int projectionvariant;
     int centretype;
+    int readstatsfile;
     int rmaxfromstats;
     int gridtype;
-    int Nenctot, Nencgas, Nencdark, Nencstar;
     int N, ID, NGroupRead = 0;
     int idummy;
+    int *GroupID = NULL;
     float fdummy;
-    double r, dr, rmin, rmax, vol;
-    double Menctot, Mencgas, Mencdark, Mencstar;
+    double r, dr, rmin, rmax;
     double pos[3], vel[3];
-    double velproj[3], velmean, vel2mean;
+    double velproj[3];
     double erad[3], ephi[3], etheta[3];
     double **rcentre = NULL, **vcentre = NULL;
     double rcentrein[3] = {0,0,0}, vcentrein[3] = {0,0,0};
     double bl[3] = {1,1,1};
-    double radius1, radius2, vd1D, DarkMass;
+    double radius1, radius2, vd1D, DarkMass, rhoenc[2], radius[2], Menc[2];
     double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
     double binfactor;
-    char statsfilename[256];
+    double m, d;
+    double rhocrit0, OmegaM0, Deltavir, G, rholimit, r200b, M200b, rvir, Mvir, rvcmax, Mrvcmax, vcmax;
+    char statsfilename[256], profilesfilename[256], statisticsfilename[256], outputname[256];
     TIPSY_HEADER th;
     GAS_PARTICLE gp;
     DARK_PARTICLE dp;
@@ -133,18 +149,23 @@ int main(int argc, char **argv) {
     STAR_PARTICLE_DPP spdpp;
     PA **pa = NULL;
     XDR xdrs;
-    FILE *statsfile;
+    FILE *statsfile, *profilesfile, *statisticsfile;
 
     positionprecision = 0; /* spp 0, dpp 1 */
     gridtype = 1; /* lin 0, log 1 */
     projectionvariant = 0; /* cartesian 0, spherical 1 */
     centretype = 0; /* com 0, potmin 1, denmax 2 */
+    readstatsfile = 0; /* no stats file 0, read from stats file 1 */
     rmaxfromstats = 0; /* from input 0, from stats file 1 */
+    rhocrit0 = 1;
+    OmegaM0 = 0.3;
+    Deltavir = 200;
+    G = 1;
     rmin = 0;
-    rmax = 0;
+    rmax = 1;
     Nbin = 0;
     dr = 0;
-    binfactor = 3;
+    binfactor = 5;
     /*
     ** Read in arguments
     */
@@ -262,12 +283,53 @@ int main(int argc, char **argv) {
             vcentrein[2] = atof(argv[i]);
             i++;
             }
+        else if (strcmp(argv[i],"-Deltavir") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            Deltavir = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-OmegaM0") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            OmegaM0 = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-rhocrit0") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            rhocrit0 = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-G") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            G = atof(argv[i]);
+            i++;
+            }
         else if (strcmp(argv[i],"-stats") == 0) {
+	    readstatsfile = 1;
             i++;
             if (i >= argc) {
                 usage();
                 }
             strcpy(statsfilename,argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-output") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            strcpy(outputname,argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-com") == 0) {
@@ -337,40 +399,56 @@ int main(int argc, char **argv) {
 	    pa[i][j].Ngas = 0;
 	    pa[i][j].Ndark = 0;
 	    pa[i][j].Nstar = 0;
+	    pa[i][j].Nenctot = 0;
+	    pa[i][j].Nencgas = 0;
+	    pa[i][j].Nencdark = 0;
+	    pa[i][j].Nencstar = 0;
 	    pa[i][j].Mtot = 0;
 	    pa[i][j].Mgas = 0;
 	    pa[i][j].Mdark = 0;
 	    pa[i][j].Mstar = 0;
+	    pa[i][j].Menctot = 0;
+	    pa[i][j].Mencgas = 0;
+	    pa[i][j].Mencdark = 0;
+	    pa[i][j].Mencstar = 0;
 	    for (k = 0; k < 3; k++) {
 		pa[i][j].veltot[k] = 0;
 		pa[i][j].velgas[k] = 0;
 		pa[i][j].veldark[k] = 0;
 		pa[i][j].velstar[k] = 0;
+		pa[i][j].Ltot[k] = 0;
+		pa[i][j].Lgas[k] = 0;
+		pa[i][j].Ldark[k] = 0;
+		pa[i][j].Lstar[k] = 0;
+		}
+	    for (k = 0; k < 6; k++) {
 		pa[i][j].vel2tot[k] = 0;
 		pa[i][j].vel2gas[k] = 0;
 		pa[i][j].vel2dark[k] = 0;
 		pa[i][j].vel2star[k] = 0;
 		}
 	    }
-	rcentre = realloc(rcentre,SizeArray*sizeof(double *));
-	assert(rcentre != NULL);
-	vcentre = realloc(vcentre,SizeArray*sizeof(double *));
-	assert(vcentre != NULL);
-	for (i = 0; i < SizeArray; i++) {
-	    rcentre[i] = realloc(rcentre[i],3*sizeof(double));
-	    assert(rcentre[i] != NULL);
-	    vcentre[i] = realloc(vcentre[i],3*sizeof(double));
-	    assert(vcentre[i] != NULL);
-	    for (j = 0; j < 3; j++) {
-		rcentre[i][j] = 0;
-		vcentre[i][j] = 0;
-		}
+	}
+    rcentre = realloc(rcentre,SizeArray*sizeof(double *));
+    assert(rcentre != NULL);
+    vcentre = realloc(vcentre,SizeArray*sizeof(double *));
+    assert(vcentre != NULL);
+    GroupID = realloc(GroupID,SizeArray*sizeof(int));
+    for (i = 0; i < SizeArray; i++) {
+	GroupID[i] = 0;
+	rcentre[i] = realloc(rcentre[i],3*sizeof(double));
+	assert(rcentre[i] != NULL);
+	vcentre[i] = realloc(vcentre[i],3*sizeof(double));
+	assert(vcentre[i] != NULL);
+	for (j = 0; j < 3; j++) {
+	    rcentre[i][j] = 0;
+	    vcentre[i][j] = 0;
 	    }
 	}
     /*
     ** Set centres, rmin & rmax
     */
-    if (SizeArray == 1) {
+    if ((SizeArray == 1) && (readstatsfile == 0)) {
 	for (j = 0; j < 3; j++) {
 	    rcentre[0][j] = rcentrein[j];
 	    vcentre[0][j] = vcentrein[j];
@@ -412,6 +490,7 @@ int main(int argc, char **argv) {
 	    if (feof(statsfile)) break;
 	    NGroupRead++;
 	    i = NGroupRead-1;
+	    GroupID[i] = ID;
 	    if (centretype == 0) {
 		rcentre[i][0] = rxcom;
 		rcentre[i][1] = rycom;
@@ -431,7 +510,11 @@ int main(int argc, char **argv) {
 	    vcentre[i][1] = vy;
 	    vcentre[i][2] = vz;
 	    if (rmaxfromstats == 1) {
-		rmax = radius1*binfactor;
+		/*
+		** Estimate virial radius; assume isothermal sphere scaling 
+		*/
+		rmax = sqrt((3*DarkMass/(4*M_PI*radius1*radius1*radius1))/(Deltavir*OmegaM0*rhocrit0))*radius1*binfactor;
+		assert(rmax > 0);
 		if (gridtype == 0) {
 		    assert(rmin >= 0);
 		    dr = (rmax-rmin)/Nbin;
@@ -448,11 +531,12 @@ int main(int argc, char **argv) {
 		    else if (gridtype == 1) {
 			pa[i][j].ri = exp(log(rmin) + (j-1)*dr);
 			pa[i][j].ro = exp(log(rmin) + j*dr);
-			}		
+			}
 		    }
 		}
 	    }
 	assert(SizeArray == NGroupRead);
+	fclose(statsfile);
 	}
     /*
     ** Read in particles and calculate profile
@@ -469,28 +553,42 @@ int main(int argc, char **argv) {
 		    vel[j] = gp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-		for (j = 0; j < (Nbin+1); j++) {
-		    if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
-			if (projectionvariant == 0) {
-			    velproj[0] = vel[0];
-			    velproj[1] = vel[1];
-			    velproj[2] = vel[2];
-			    }
-			else if (projectionvariant == 1) {
-			    calculate_unit_vectors(pos,erad,ephi,etheta);
-			    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
-			    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
-			    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
-			    }
-			pa[l][j].Ntot++;
-			pa[l][j].Ngas++;
-			pa[l][j].Mtot += gp.mass;
-			pa[l][j].Mgas += gp.mass;
-			for (k = 0; k < 3; k++) {
-			    pa[l][j].veltot[k] += velproj[k];
-			    pa[l][j].velgas[k] += velproj[k];
-			    pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
-			    pa[l][j].vel2gas[k] += velproj[k]*velproj[k];
+		if (r <= pa[l][Nbin].ro) {
+		    for (j = 0; j < (Nbin+1); j++) {
+			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
+			    if (projectionvariant == 0) {
+				velproj[0] = vel[0];
+				velproj[1] = vel[1];
+				velproj[2] = vel[2];
+				}
+			    else if (projectionvariant == 1) {
+				calculate_unit_vectors(pos,erad,ephi,etheta);
+				velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+				velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+				velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
+				}
+			    pa[l][j].Ntot++;
+			    pa[l][j].Ngas++;
+			    pa[l][j].Mtot += gp.mass;
+			    pa[l][j].Mgas += gp.mass;
+			    for (k = 0; k < 3; k++) {
+				pa[l][j].veltot[k] += velproj[k];
+				pa[l][j].velgas[k] += velproj[k];
+				pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
+				pa[l][j].vel2gas[k] += velproj[k]*velproj[k];
+				}
+			    pa[l][j].vel2tot[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2tot[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2tot[5] += velproj[1]*velproj[2];
+			    pa[l][j].vel2gas[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2gas[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2gas[5] += velproj[1]*velproj[2];
+			    pa[l][j].Ltot[0] += gp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Ltot[1] += gp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Ltot[2] += gp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    pa[l][j].Lgas[0] += gp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Lgas[1] += gp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Lgas[2] += gp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
 			    }
 			}
 		    }
@@ -505,28 +603,42 @@ int main(int argc, char **argv) {
 		    vel[j] = dp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-		for (j = 0; j < (Nbin+1); j++) {
-		    if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
-			if (projectionvariant == 0) {
-			    velproj[0] = vel[0];
-			    velproj[1] = vel[1];
-			    velproj[2] = vel[2];
-			    }
-			else if (projectionvariant == 1) {
-			    calculate_unit_vectors(pos,erad,ephi,etheta);
-			    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
-			    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
-			    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
-			    }
-			pa[l][j].Ntot++;
-			pa[l][j].Ndark++;
-			pa[l][j].Mtot += dp.mass;
-			pa[l][j].Mdark += dp.mass;
-			for (k = 0; k < 3; k++) {
-			    pa[l][j].veltot[k] += velproj[k];
-			    pa[l][j].veldark[k] += velproj[k];
-			    pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
-			    pa[l][j].vel2dark[k] += velproj[k]*velproj[k];
+		if (r <= pa[l][Nbin].ro) {
+		    for (j = 0; j < (Nbin+1); j++) {
+			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
+			    if (projectionvariant == 0) {
+				velproj[0] = vel[0];
+				velproj[1] = vel[1];
+				velproj[2] = vel[2];
+				}
+			    else if (projectionvariant == 1) {
+				calculate_unit_vectors(pos,erad,ephi,etheta);
+				velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+				velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+				velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
+				}
+			    pa[l][j].Ntot++;
+			    pa[l][j].Ndark++;
+			    pa[l][j].Mtot += dp.mass;
+			    pa[l][j].Mdark += dp.mass;
+			    for (k = 0; k < 3; k++) {
+				pa[l][j].veltot[k] += velproj[k];
+				pa[l][j].veldark[k] += velproj[k];
+				pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
+				pa[l][j].vel2dark[k] += velproj[k]*velproj[k];
+				}
+			    pa[l][j].vel2tot[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2tot[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2tot[5] += velproj[1]*velproj[2];
+			    pa[l][j].vel2dark[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2dark[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2dark[5] += velproj[1]*velproj[2];
+			    pa[l][j].Ltot[0] += dp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Ltot[1] += dp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Ltot[2] += dp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    pa[l][j].Ldark[0] += dp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Ldark[1] += dp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Ldark[2] += dp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
 			    }
 			}
 		    }
@@ -541,28 +653,42 @@ int main(int argc, char **argv) {
 		    vel[j] = sp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-		for (j = 0; j < (Nbin+1); j++) {
-		    if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
-			if (projectionvariant == 0) {
-			    velproj[0] = vel[0];
-			    velproj[1] = vel[1];
-			    velproj[2] = vel[2];
-			    }
-			else if (projectionvariant == 1) {
-			    calculate_unit_vectors(pos,erad,ephi,etheta);
-			    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
-			    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
-			    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
-			    }
-			pa[l][j].Ntot++;
-			pa[l][j].Nstar++;
-			pa[l][j].Mtot += sp.mass;
-			pa[l][j].Mstar += sp.mass;
-			for (k = 0; k < 3; k++) {
-			    pa[l][j].veltot[k] += velproj[k];
-			    pa[l][j].velstar[k] += velproj[k];
-			    pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
-			    pa[l][j].vel2star[k] += velproj[k]*velproj[k];
+		if (r <= pa[l][Nbin].ro) {
+		    for (j = 0; j < (Nbin+1); j++) {
+			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
+			    if (projectionvariant == 0) {
+				velproj[0] = vel[0];
+				velproj[1] = vel[1];
+				velproj[2] = vel[2];
+				}
+			    else if (projectionvariant == 1) {
+				calculate_unit_vectors(pos,erad,ephi,etheta);
+				velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+				velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+				velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
+				}
+			    pa[l][j].Ntot++;
+			    pa[l][j].Nstar++;
+			    pa[l][j].Mtot += sp.mass;
+			    pa[l][j].Mstar += sp.mass;
+			    for (k = 0; k < 3; k++) {
+				pa[l][j].veltot[k] += velproj[k];
+				pa[l][j].velstar[k] += velproj[k];
+				pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
+				pa[l][j].vel2star[k] += velproj[k]*velproj[k];
+				}
+			    pa[l][j].vel2tot[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2tot[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2tot[5] += velproj[1]*velproj[2];
+			    pa[l][j].vel2star[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2star[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2star[5] += velproj[1]*velproj[2];
+			    pa[l][j].Ltot[0] += sp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Ltot[1] += sp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Ltot[2] += sp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    pa[l][j].Lstar[0] += sp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Lstar[1] += sp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Lstar[2] += sp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
 			    }
 			}
 		    }
@@ -579,28 +705,42 @@ int main(int argc, char **argv) {
 		    vel[j] = gpdpp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-		for (j = 0; j < (Nbin+1); j++) {
-		    if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
-			if (projectionvariant == 0) {
-			    velproj[0] = vel[0];
-			    velproj[1] = vel[1];
-			    velproj[2] = vel[2];
-			    }
-			else if (projectionvariant == 1) {
-			    calculate_unit_vectors(pos,erad,ephi,etheta);
-			    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
-			    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
-			    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
-			    }
-			pa[l][j].Ntot++;
-			pa[l][j].Ngas++;
-			pa[l][j].Mtot += gpdpp.mass;
-			pa[l][j].Mgas += gpdpp.mass;
-			for (k = 0; k < 3; k++) {
-			    pa[l][j].veltot[k] += velproj[k];
-			    pa[l][j].velgas[k] += velproj[k];
-			    pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
-			    pa[l][j].vel2gas[k] += velproj[k]*velproj[k];
+		if (r <= pa[l][Nbin].ro) {
+		    for (j = 0; j < (Nbin+1); j++) {
+			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
+			    if (projectionvariant == 0) {
+				velproj[0] = vel[0];
+				velproj[1] = vel[1];
+				velproj[2] = vel[2];
+				}
+			    else if (projectionvariant == 1) {
+				calculate_unit_vectors(pos,erad,ephi,etheta);
+				velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+				velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+				velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
+				}
+			    pa[l][j].Ntot++;
+			    pa[l][j].Ngas++;
+			    pa[l][j].Mtot += gpdpp.mass;
+			    pa[l][j].Mgas += gpdpp.mass;
+			    for (k = 0; k < 3; k++) {
+				pa[l][j].veltot[k] += velproj[k];
+				pa[l][j].velgas[k] += velproj[k];
+				pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
+				pa[l][j].vel2gas[k] += velproj[k]*velproj[k];
+				}
+			    pa[l][j].vel2tot[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2tot[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2tot[5] += velproj[1]*velproj[2];
+			    pa[l][j].vel2gas[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2gas[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2gas[5] += velproj[1]*velproj[2];
+			    pa[l][j].Ltot[0] += gpdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Ltot[1] += gpdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Ltot[2] += gpdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    pa[l][j].Lgas[0] += gpdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Lgas[1] += gpdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Lgas[2] += gpdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
 			    }
 			}
 		    }
@@ -615,28 +755,42 @@ int main(int argc, char **argv) {
 			vel[j] = dpdpp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-		for (j = 0; j < (Nbin+1); j++) {
-		    if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
-			if (projectionvariant == 0) {
-			    velproj[0] = vel[0];
-			    velproj[1] = vel[1];
-			    velproj[2] = vel[2];
-			    }
-			else if (projectionvariant == 1) {
-			    calculate_unit_vectors(pos,erad,ephi,etheta);
-			    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
-			    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
-			    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
-			    }
-			pa[l][j].Ntot++;
-			pa[l][j].Ndark++;
-			pa[l][j].Mtot += dpdpp.mass;
-			pa[l][j].Mdark += dpdpp.mass;
-			for (k = 0; k < 3; k++) {
-			    pa[l][j].veltot[k] += velproj[k];
-			    pa[l][j].veldark[k] += velproj[k];
-			    pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
-			    pa[l][j].vel2dark[k] += velproj[k]*velproj[k];
+		if (r <= pa[l][Nbin].ro) {
+		    for (j = 0; j < (Nbin+1); j++) {
+			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
+			    if (projectionvariant == 0) {
+				velproj[0] = vel[0];
+				velproj[1] = vel[1];
+				velproj[2] = vel[2];
+				}
+			    else if (projectionvariant == 1) {
+				calculate_unit_vectors(pos,erad,ephi,etheta);
+				velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+				velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+				velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
+				}
+			    pa[l][j].Ntot++;
+			    pa[l][j].Ndark++;
+			    pa[l][j].Mtot += dpdpp.mass;
+			    pa[l][j].Mdark += dpdpp.mass;
+			    for (k = 0; k < 3; k++) {
+				pa[l][j].veltot[k] += velproj[k];
+				pa[l][j].veldark[k] += velproj[k];
+				pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
+				pa[l][j].vel2dark[k] += velproj[k]*velproj[k];
+				}
+			    pa[l][j].vel2tot[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2tot[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2tot[5] += velproj[1]*velproj[2];
+			    pa[l][j].vel2dark[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2dark[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2dark[5] += velproj[1]*velproj[2];
+			    pa[l][j].Ltot[0] += dpdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Ltot[1] += dpdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Ltot[2] += dpdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    pa[l][j].Ldark[0] += dpdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Ldark[1] += dpdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Ldark[2] += dpdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
 			    }
 			}
 		    }
@@ -651,28 +805,42 @@ int main(int argc, char **argv) {
 		    vel[j] = spdpp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-		for (j = 0; j < (Nbin+1); j++) {
-		    if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
-			if (projectionvariant == 0) {
-			    velproj[0] = vel[0];
-			    velproj[1] = vel[1];
-			    velproj[2] = vel[2];
-			    }
-			else if (projectionvariant == 1) {
-			    calculate_unit_vectors(pos,erad,ephi,etheta);
-			    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
-			    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
-			    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
-			    }
-			pa[l][j].Ntot++;
-			pa[l][j].Nstar++;
-			pa[l][j].Mtot += spdpp.mass;
-			pa[l][j].Mstar += spdpp.mass;
-			for (k = 0; k < 3; k++) {
-			    pa[l][j].veltot[k] += velproj[k];
-			    pa[l][j].velstar[k] += velproj[k];
-			    pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
-			    pa[l][j].vel2star[k] += velproj[k]*velproj[k];
+		if (r <= pa[l][Nbin].ro) {
+		    for (j = 0; j < (Nbin+1); j++) {
+			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
+			    if (projectionvariant == 0) {
+				velproj[0] = vel[0];
+				velproj[1] = vel[1];
+				velproj[2] = vel[2];
+				}
+			    else if (projectionvariant == 1) {
+				calculate_unit_vectors(pos,erad,ephi,etheta);
+				velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
+				velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
+				velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
+				}
+			    pa[l][j].Ntot++;
+			    pa[l][j].Nstar++;
+			    pa[l][j].Mtot += spdpp.mass;
+			    pa[l][j].Mstar += spdpp.mass;
+			    for (k = 0; k < 3; k++) {
+				pa[l][j].veltot[k] += velproj[k];
+				pa[l][j].velstar[k] += velproj[k];
+				pa[l][j].vel2tot[k] += velproj[k]*velproj[k];
+				pa[l][j].vel2star[k] += velproj[k]*velproj[k];
+				}
+			    pa[l][j].vel2tot[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2tot[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2tot[5] += velproj[1]*velproj[2];
+			    pa[l][j].vel2star[3] += velproj[0]*velproj[1];
+			    pa[l][j].vel2star[4] += velproj[0]*velproj[2];
+			    pa[l][j].vel2star[5] += velproj[1]*velproj[2];
+			    pa[l][j].Ltot[0] += spdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Ltot[1] += spdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Ltot[2] += spdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    pa[l][j].Lstar[0] += spdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
+			    pa[l][j].Lstar[1] += spdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
+			    pa[l][j].Lstar[2] += spdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
 			    }
 			}
 		    }
@@ -680,71 +848,220 @@ int main(int argc, char **argv) {
 	    }
 	}
     /*
-    ** Write output
+    ** Write profiles
     */
+    sprintf(profilesfilename,"%s.profiles",outputname);
+    profilesfile = fopen(profilesfilename,"w");
+    assert(profilesfile != NULL);
     for (l = 0; l < SizeArray; l++) {
 	for (j = 0; j < (Nbin+1); j++) {
-	    vol = 4*M_PI*(pa[l][j].ro*pa[l][j].ro*pa[l][j].ro - pa[l][j].ri*pa[l][j].ri*pa[l][j].ri)/3.0;
-	    if (j == 0) {
-		fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[l][j].ri,(pa[l][j].ro+pa[l][j].ri)/2.0,pa[l][j].ro,vol);
+	    fprintf(profilesfile,"%d ",GroupID[l]);
+	    pa[l][j].vol = 4*M_PI*(pa[l][j].ro*pa[l][j].ro*pa[l][j].ro - pa[l][j].ri*pa[l][j].ri*pa[l][j].ri)/3.0;
+	    if (gridtype == 0) {
+		pa[l][j].rm = (pa[l][j].ri+pa[l][j].ro)/2.0;
 		}
-	    else {
-		if (gridtype == 0) {
-		    fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[l][j].ri,(pa[l][j].ro+pa[l][j].ri)/2.0,pa[l][j].ro,vol);
+	    else if (gridtype == 1) {
+		if (j == 0) {
+		    pa[l][j].rm = exp((3*log(pa[l][j+1].ri)-log(pa[l][j+1].ro))/2.0);
 		    }
-		else if (gridtype == 1) {
-		    fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[l][j].ri,exp(log(pa[l][j].ri)+dr/2.0),pa[l][j].ro,vol);
+		else {
+		    pa[l][j].rm = exp((log(pa[l][j].ri)+log(pa[l][j].ro))/2.0);
 		    }
 		}
-	    fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[l][j].Mtot,pa[l][j].Mgas,pa[l][j].Mdark,pa[l][j].Mstar);
-	    Menctot = 0;
-	    Mencgas = 0;
-	    Mencdark = 0;
-	    Mencstar = 0;
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",pa[l][j].ri,pa[l][j].rm,pa[l][j].ro,pa[l][j].vol);
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",pa[l][j].Mtot,pa[l][j].Mgas,pa[l][j].Mdark,pa[l][j].Mstar);
 	    for (i = 0; i <= j; i++) {
-		Menctot += pa[l][i].Mtot;
-		Mencgas += pa[l][i].Mgas;
-		Mencdark += pa[l][i].Mdark;
-		Mencstar += pa[l][i].Mstar;
+		pa[l][j].Menctot += pa[l][i].Mtot;
+		pa[l][j].Mencgas += pa[l][i].Mgas;
+		pa[l][j].Mencdark += pa[l][i].Mdark;
+		pa[l][j].Mencstar += pa[l][i].Mstar;
 		}
-	    fprintf(stdout,"%.6e %.6e %.6e %.6e ",Menctot,Mencgas,Mencdark,Mencstar);
-	    fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[l][j].Mtot/vol,pa[l][j].Mgas/vol,pa[l][j].Mdark/vol,pa[l][j].Mstar/vol);
-	    fprintf(stdout,"%d %d %d %d ",pa[l][j].Ntot,pa[l][j].Ngas,pa[l][j].Ndark,pa[l][j].Nstar);
-	    Nenctot = 0;
-	    Nencgas = 0;
-	    Nencdark = 0;
-	    Nencstar = 0;
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",pa[l][j].Menctot,pa[l][j].Mencgas,pa[l][j].Mencdark,pa[l][j].Mencstar);
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",pa[l][j].Mtot/pa[l][j].vol,pa[l][j].Mgas/pa[l][j].vol,pa[l][j].Mdark/pa[l][j].vol,pa[l][j].Mstar/pa[l][j].vol);
+	    fprintf(profilesfile,"%d %d %d %d ",pa[l][j].Ntot,pa[l][j].Ngas,pa[l][j].Ndark,pa[l][j].Nstar);
 	    for (i = 0; i <= j; i++) {
-		Nenctot += pa[l][i].Ntot;
-		Nencgas += pa[l][i].Ngas;
-		Nencdark += pa[l][i].Ndark;
-		Nencstar += pa[l][i].Nstar;
+		pa[l][j].Nenctot += pa[l][i].Ntot;
+		pa[l][j].Nencgas += pa[l][i].Ngas;
+		pa[l][j].Nencdark += pa[l][i].Ndark;
+		pa[l][j].Nencstar += pa[l][i].Nstar;
 		}
-	    fprintf(stdout,"%d %d %d %d ",Nenctot,Nencgas,Nencdark,Nencstar);
-	    fprintf(stdout,"%.6e %.6e %.6e %.6e ",pa[l][j].Ntot/vol,pa[l][j].Ngas/vol,pa[l][j].Ndark/vol,pa[l][j].Nstar/vol);
+	    fprintf(profilesfile,"%d %d %d %d ",pa[l][j].Nenctot,pa[l][j].Nencgas,pa[l][j].Nencdark,pa[l][j].Nencstar);
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",pa[l][j].Ntot/pa[l][j].vol,pa[l][j].Ngas/pa[l][j].vol,pa[l][j].Ndark/pa[l][j].vol,pa[l][j].Nstar/pa[l][j].vol);
 	    for (i = 0; i < 3; i++) {
-		velmean = pa[l][j].veltot[i]/pa[l][j].Ntot;
-		vel2mean = pa[l][j].vel2tot[i]/pa[l][j].Ntot;
-		fprintf(stdout,"%.6e %.6e ",velmean,sqrt(vel2mean-velmean*velmean));
+		pa[l][j].veltot[i]  /= pa[l][j].Ntot;
+		pa[l][j].velgas[i]  /= pa[l][j].Ngas;
+		pa[l][j].veldark[i] /= pa[l][j].Ndark;
+		pa[l][j].velstar[i] /= pa[l][j].Nstar;
 		}
-	    for (i = 0; i < 3; i++) {
-		velmean = pa[l][j].velgas[i]/pa[l][j].Ngas;
-		vel2mean = pa[l][j].vel2gas[i]/pa[l][j].Ngas;
-		fprintf(stdout,"%.6e %.6e ",velmean,sqrt(vel2mean-velmean*velmean));
-		}
-	    for (i = 0; i < 3; i++) {
-		velmean = pa[l][j].veldark[i]/pa[l][j].Ndark;
-		vel2mean = pa[l][j].vel2dark[i]/pa[l][j].Ndark;
-		fprintf(stdout,"%.6e %.6e ",velmean,sqrt(vel2mean-velmean*velmean));
+	    for (i = 0; i < 6; i++) {
+		pa[l][j].vel2tot[i]  /= pa[l][j].Ntot;
+		pa[l][j].vel2gas[i]  /= pa[l][j].Ngas;
+		pa[l][j].vel2dark[i] /= pa[l][j].Ndark;
+		pa[l][j].vel2star[i] /= pa[l][j].Nstar;
 		}
 	    for (i = 0; i < 3; i++) {
-		velmean = pa[l][j].velstar[i]/pa[l][j].Nstar;
-		vel2mean = pa[l][j].vel2star[i]/pa[l][j].Nstar;
-		fprintf(stdout,"%.6e %.6e ",velmean,sqrt(vel2mean-velmean*velmean));
+		pa[l][j].vel2tot[i]  -= pa[l][j].veltot[i]*pa[l][j].veltot[i];
+		pa[l][j].vel2gas[i]  -= pa[l][j].velgas[i]*pa[l][j].velgas[i];
+		pa[l][j].vel2dark[i] -= pa[l][j].veldark[i]*pa[l][j].veldark[i];
+		pa[l][j].vel2star[i] -= pa[l][j].velstar[i]*pa[l][j].velstar[i];
 		}
-	    fprintf(stdout,"\n");
+	    pa[l][j].vel2tot[3]  -= pa[l][j].veltot[0]*pa[l][j].veltot[1];
+	    pa[l][j].vel2tot[4]  -= pa[l][j].veltot[0]*pa[l][j].veltot[2];
+	    pa[l][j].vel2tot[5]  -= pa[l][j].veltot[1]*pa[l][j].veltot[2];
+	    pa[l][j].vel2gas[3]  -= pa[l][j].velgas[0]*pa[l][j].velgas[1];
+	    pa[l][j].vel2gas[4]  -= pa[l][j].velgas[0]*pa[l][j].velgas[2];
+	    pa[l][j].vel2gas[5]  -= pa[l][j].velgas[1]*pa[l][j].velgas[2];
+	    pa[l][j].vel2dark[3] -= pa[l][j].veldark[0]*pa[l][j].veldark[1];
+	    pa[l][j].vel2dark[4] -= pa[l][j].veldark[0]*pa[l][j].veldark[2];
+	    pa[l][j].vel2dark[5] -= pa[l][j].veldark[1]*pa[l][j].veldark[2];
+	    pa[l][j].vel2star[3] -= pa[l][j].velstar[0]*pa[l][j].velstar[1];
+	    pa[l][j].vel2star[4] -= pa[l][j].velstar[0]*pa[l][j].velstar[2];
+	    pa[l][j].vel2star[5] -= pa[l][j].velstar[1]*pa[l][j].velstar[2];
+	    for (i = 0; i < 3; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].veltot[i]);
+		}
+	    for (i = 0; i < 6; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].vel2tot[i]);
+		}
+	    for (i = 0; i < 3; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].velgas[i]);
+		}
+	    for (i = 0; i < 6; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].vel2gas[i]);
+		}
+	    for (i = 0; i < 3; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].veldark[i]);
+		}
+	    for (i = 0; i < 6; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].vel2dark[i]);
+		}
+	    for (i = 0; i < 3; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].velstar[i]);
+		}
+	    for (i = 0; i < 6; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].vel2star[i]);
+		}
+	    for (i = 0; i < 3; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].Ltot[i]);
+		}
+	    for (i = 0; i < 3; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].Lgas[i]);
+		}
+	    for (i = 0; i < 3; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].Ldark[i]);
+		}
+	    for (i = 0; i < 3; i++) {
+		fprintf(profilesfile,"%.6e ",pa[l][j].Lstar[i]);
+		}
+	    fprintf(profilesfile,"\n");
 	    }
 	}
+    fclose(profilesfile);
+    /*
+    ** Calculate r200b, rvir, M200b, Mvir, vcmax, rvcmax
+    */
+    sprintf(statisticsfilename,"%s.statistics",outputname);
+    statisticsfile = fopen(statisticsfilename,"w");
+    assert(statisticsfile != NULL);
+    for (l = 0; l < SizeArray; l++) {
+	r200b = 0;
+	M200b = 0;
+	rvir = 0;
+	Mvir = 0;
+	rvcmax = 0;
+	Mrvcmax = 0;
+	vcmax = 0;
+	for (j = Nbin; j >= 0; j--) {
+	    radius[0] = pa[l][j-1].ro;
+	    radius[1] = pa[l][j].ro;
+	    rhoenc[0] = 3*pa[l][j-1].Menctot/(4*M_PI*pa[l][j-1].ro*pa[l][j-1].ro*pa[l][j-1].ro);
+	    rhoenc[1] = 3*pa[l][j].Menctot/(4*M_PI*pa[l][j].ro*pa[l][j].ro*pa[l][j].ro);
+	    rholimit = Deltavir*OmegaM0*rhocrit0;
+	    if ((rhoenc[0] >= rholimit) && (rhoenc[1] < rholimit) && (r200b == 0)) {
+		if (gridtype == 0) {
+		    m = (radius[1]-radius[0])/(rhoenc[1]-rhoenc[0]);
+		    d = rholimit-rhoenc[0];
+		    r200b = radius[0] + m*d;
+		    m = (pa[l][j].Menctot-pa[l][j-1].Menctot)/(radius[1]-radius[0]);
+		    d = r200b-radius[0];
+		    M200b = pa[l][j-1].Menctot + m*d;
+		    }
+		else if (gridtype == 1) {
+		    m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
+		    d = log(rholimit)-log(rhoenc[0]);
+		    r200b = exp(log(radius[0]) + m*d);
+		    m = (log(pa[l][j].Menctot)-log(pa[l][j-1].Menctot))/(log(radius[1])-log(radius[0]));
+		    d = log(r200b)-log(radius[0]);
+		    M200b = exp(log(pa[l][j-1].Menctot) + m*d);
+		    }
+		}
+	    rholimit = 178*pow(OmegaM0,0.45)*rhocrit0;
+	    if ((rhoenc[0] >= rholimit) && (rhoenc[1] < rholimit) && (rvir == 0)) {
+		if (gridtype == 0) {
+		    m = (radius[1]-radius[0])/(rhoenc[1]-rhoenc[0]);
+		    d = rholimit-rhoenc[0];
+		    rvir = radius[0] + m*d;
+		    m = (pa[l][j].Menctot-pa[l][j-1].Menctot)/(radius[1]-radius[0]);
+		    d = rvir-radius[0];
+		    Mvir = pa[l][j-1].Menctot + m*d;
+		    }
+		else if (gridtype == 1) {
+		    m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
+		    d = log(rholimit)-log(rhoenc[0]);
+		    rvir = exp(log(radius[0]) + m*d);
+		    m = (log(pa[l][j].Menctot)-log(pa[l][j-1].Menctot))/(log(radius[1])-log(radius[0]));
+		    d = log(rvir)-log(radius[0]);
+		    Mvir = exp(log(pa[l][j-1].Menctot) + m*d);
+		    }
+		}
+	    }
+	for (j = 2; j < (Nbin+1); j++) {
+	    radius[0] = pa[l][j-1].rm;
+	    radius[1] = pa[l][j].rm;
+	    rhoenc[0] = 4*M_PI*(pa[l][j-1].Mtot/pa[l][j-1].vol)*pa[l][j-1].rm*pa[l][j-1].rm*pa[l][j-1].rm;
+	    rhoenc[1] = 4*M_PI*(pa[l][j].Mtot/pa[l][j].vol)*pa[l][j].rm*pa[l][j].rm*pa[l][j].rm;
+	    if (gridtype == 0) {
+		m = (pa[l][j-1].Menctot-pa[l][j-2].Menctot)/(pa[l][j-1].ro-pa[l][j-2].ro);
+		d = radius[0]-pa[l][j-2].ro;
+		Menc[0] = pa[l][j-2].Menctot + m*d;
+		m = (pa[l][j].Menctot-pa[l][j-1].Menctot)/(pa[l][j].ro-pa[l][j-1].ro);
+		d = radius[1]-pa[l][j-1].ro;
+		Menc[1] = pa[l][j-1].Menctot + m*d;
+		}
+	    else if (gridtype == 1) {
+		m = (log(pa[l][j-1].Menctot)-log(pa[l][j-2].Menctot))/(log(pa[l][j-1].ro)-log(pa[l][j-2].ro));
+		d = log(radius[0])-log(pa[l][j-2].ro);
+		Menc[0] = exp(log(pa[l][j-2].Menctot) + m*d);
+		m = (log(pa[l][j].Menctot)-log(pa[l][j-1].Menctot))/(log(pa[l][j].ro)-log(pa[l][j-1].ro));
+		d = log(radius[1])-log(pa[l][j-1].ro);
+		Menc[1] = exp(log(pa[l][j-1].Menctot) + m*d);
+		}
+	    if ((rhoenc[0] >= Menc[0]) && (rhoenc[1] < Menc[1]) && (rvcmax == 0)) {
+		rhoenc[0] -= Menc[0];
+		rhoenc[1] -= Menc[1];
+		if (gridtype == 0) {
+		    m = (radius[1]-radius[0])/(rhoenc[1]-rhoenc[0]);
+		    d = 0 - rhoenc[0];
+		    rvcmax = radius[0] + m*d;
+		    m = (Menc[1]-Menc[0])/(radius[1]-radius[0]);
+		    d = rvcmax-radius[0];
+		    Mrvcmax = Menc[0] + m*d;
+		    vcmax = sqrt(G*Mrvcmax/rvcmax);
+		    }
+		else if (gridtype == 1) {
+		    m = (log(radius[1])-log(radius[0]))/(rhoenc[1]-rhoenc[0]);
+		    d = 0 - rhoenc[0];
+		    rvcmax = exp(log(radius[0]) + m*d);
+		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		    d = log(rvcmax)-log(radius[0]);
+		    Mrvcmax = exp(log(Menc[0]) + m*d);
+		    vcmax = sqrt(G*Mrvcmax/rvcmax);
+		    }
+		}
+	    }
+	fprintf(statisticsfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e\n",GroupID[l],r200b,M200b,rvir,Mvir,rvcmax,Mrvcmax,vcmax);
+	}
+    fclose(statisticsfile);
     exit(0);
     }
 
@@ -760,8 +1077,8 @@ void usage(void) {
     fprintf(stderr,"-lin               : set this flag for linear grid\n");
     fprintf(stderr,"-log               : set this flag for logarithmic grid (default)\n");
     fprintf(stderr,"-pv <value>        : projection variant - 0:along axis, 1:spherical coordinates (default: 0)\n");
-    fprintf(stderr,"-rmin <value>      : minimum grid radius [LU]\n");
-    fprintf(stderr,"-rmax <value>      : maximum grid radius [LU]\n");
+    fprintf(stderr,"-rmin <value>      : minimum grid radius [LU] (default 0 LU)\n");
+    fprintf(stderr,"-rmax <value>      : maximum grid radius [LU] (default 1 LU)\n");
     fprintf(stderr,"-Nbin <value>      : number of bins between rmin and rmax\n");
     fprintf(stderr,"-N <value>         : number of haloes (default: 1)\n");
     fprintf(stderr,"-rxcen <value>     : x-coordinate of centre [LU] (default: 0 LU)\n");
@@ -774,8 +1091,12 @@ void usage(void) {
     fprintf(stderr,"-com               : set this flag for centre-of-mass centres from stats file (default)\n");
     fprintf(stderr,"-potmin            : set this flag for centre-of-mass centres from stats file\n");
     fprintf(stderr,"-denmax            : set this flag for centre-of-mass centres from stats file\n");
-    fprintf(stderr,"-rmaxfromstats     : set this flag for rmax determined from stats file via rmax = binfactor*radius1\n");
-    fprintf(stderr,"-binfactor <value> : factor for rmax determined form stats file via rmax = binfactor*radius1 (default: 3)\n");
+    fprintf(stderr,"-rmaxfromstats     : set this flag for rmax determined from stats file\n");
+    fprintf(stderr,"-binfactor <value> : extra factor for rmax determined form stats file (default: 5)\n");
+    fprintf(stderr,"-rhocrit0 <value>  : critical density of the universe [MU LU^{-3}] (default: 1 MU LU^{-3})\n");
+    fprintf(stderr,"-OmegaM0 <value>   : OmegaM value (default: 0.3)\n");
+    fprintf(stderr,"-Deltavir <value>  : overdensity with respect to background density (default: 200)\n");
+    fprintf(stderr,"-G <value>         : gravitational constant [LU^3 MU^{-1} TU^{-1}] (default: 1 LU^3 MU^{-1} TU^{-1})\n");
     fprintf(stderr,"< <name>           : name of input file in tipsy standard binary format\n");
     fprintf(stderr,"> <name>           : name of output file\n");
     fprintf(stderr,"\n");
