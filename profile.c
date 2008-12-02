@@ -581,11 +581,13 @@ int main(int argc, char **argv) {
 		for (j = 0; j < 3; j++) {
 		    pos[j] = correct_position(rcentre[l][j],gp.pos[j],bl[j]);
 		    pos[j] = pos[j]-rcentre[l][j];
-		    vel[j] = gp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 		if (r <= pa[l][Nbin].ro) {
-		    for (j = 0; j < (Nbin+1); j++) {
+		    for (j = 0; j < 3; j++) {
+			vel[j] = gp.vel[j]-vcentre[l][j];			
+			}
+		    for (j = Nbin; j >=0; j--) {
 			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
 			    if (projectionvariant == 0) {
 				velproj[0] = vel[0];
@@ -632,11 +634,13 @@ int main(int argc, char **argv) {
 		for (j = 0; j < 3; j++) {
 		    pos[j] = correct_position(rcentre[l][j],dp.pos[j],bl[j]);
 		    pos[j] = pos[j]-rcentre[l][j];
-		    vel[j] = dp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 		if (r <= pa[l][Nbin].ro) {
-		    for (j = 0; j < (Nbin+1); j++) {
+		    for (j = 0; j < 3; j++) {
+			vel[j] = dp.vel[j]-vcentre[l][j];
+			}
+		    for (j = Nbin; j >=0; j--) {
 			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
 			    if (projectionvariant == 0) {
 				velproj[0] = vel[0];
@@ -683,11 +687,13 @@ int main(int argc, char **argv) {
 		for (j = 0; j < 3; j++) {
 		    pos[j] = correct_position(rcentre[l][j],sp.pos[j],bl[j]);
 		    pos[j] = pos[j]-rcentre[l][j];
-		    vel[j] = sp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 		if (r <= pa[l][Nbin].ro) {
-		    for (j = 0; j < (Nbin+1); j++) {
+		    for (j = 0; j < 3; j++) {
+			vel[j] = sp.vel[j]-vcentre[l][j];			
+			}
+		    for (j = Nbin; j >=0; j--) {
 			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
 			    if (projectionvariant == 0) {
 				velproj[0] = vel[0];
@@ -736,11 +742,13 @@ int main(int argc, char **argv) {
 		for (j = 0; j < 3; j++) {
 		    pos[j] = correct_position(rcentre[l][j],gpdpp.pos[j],bl[j]);
 		    pos[j] = pos[j]-rcentre[l][j];
-		    vel[j] = gpdpp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 		if (r <= pa[l][Nbin].ro) {
-		    for (j = 0; j < (Nbin+1); j++) {
+		    for (j = 0; j < 3; j++) {
+			vel[j] = gpdpp.vel[j]-vcentre[l][j];
+			}
+		    for (j = Nbin; j >=0; j--) {
 			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
 			    if (projectionvariant == 0) {
 				velproj[0] = vel[0];
@@ -786,12 +794,14 @@ int main(int argc, char **argv) {
 	    for (l = 0; l < SizeArray; l++) {
 		for (j = 0; j < 3; j++) {
 		    pos[j] = correct_position(rcentre[l][j],dpdpp.pos[j],bl[j]);
-			pos[j] = pos[j]-rcentre[l][j];
-			vel[j] = dpdpp.vel[j]-vcentre[l][j];
+		    pos[j] = pos[j]-rcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 		if (r <= pa[l][Nbin].ro) {
-		    for (j = 0; j < (Nbin+1); j++) {
+		    for (j = 0; j < 3; j++) {
+			vel[j] = dpdpp.vel[j]-vcentre[l][j];
+			}
+		    for (j = Nbin; j >=0; j--) {
 			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
 			    if (projectionvariant == 0) {
 				velproj[0] = vel[0];
@@ -838,11 +848,13 @@ int main(int argc, char **argv) {
 		for (j = 0; j < 3; j++) {
 		    pos[j] = correct_position(rcentre[l][j],spdpp.pos[j],bl[j]);
 		    pos[j] = pos[j]-rcentre[l][j];
-		    vel[j] = spdpp.vel[j]-vcentre[l][j];
 		    }
 		r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
 		if (r <= pa[l][Nbin].ro) {
-		    for (j = 0; j < (Nbin+1); j++) {
+		    for (j = 0; j < 3; j++) {
+			vel[j] = spdpp.vel[j]-vcentre[l][j];
+			}
+		    for (j = Nbin; j >=0; j--) {
 			if ((pa[l][j].ri <= r) && (pa[l][j].ro > r)) {
 			    if (projectionvariant == 0) {
 				velproj[0] = vel[0];
