@@ -111,12 +111,18 @@ double put_in_box(double r, double l) {
         }
     }
 
+double Ecosmo(double a, double OmegaM0, double OmegaL0, double OmegaK0) {
+
+    return sqrt(OmegaM0*pow(a,-3) + OmegaL0 + OmegaK0*pow(a,-2));
+    }
+
 void usage(void);
 
 int main(int argc, char **argv) {
 
     int i, j, k, l;
     int Nbin, SizeArray = 1;
+    int verboselevel;
     int positionprecision;
     int projectionvariant;
     int centretype;
@@ -138,7 +144,8 @@ int main(int argc, char **argv) {
     double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
     double binfactor;
     double m, d;
-    double rhocrit0, OmegaM0, Deltavir, G, rholimit, r200b, M200b, rvir, Mvir, rvcmax, Mrvcmax, vcmax;
+    double rhocrit0, OmegaM0, OmegaK0, OmegaL0, OmegaM, rhocrit, E, Delta_bg, Delta_vir, G;
+    double rhoenc_bg, rhoenc_vir, r200b, M200b, rvir, Mvir, rvcmax, Mrvcmax, vcmax;
     char statsfilename[256], profilesfilename[256], statisticsfilename[256], outputname[256];
     TIPSY_HEADER th;
     GAS_PARTICLE gp;
@@ -154,12 +161,16 @@ int main(int argc, char **argv) {
     positionprecision = 0; /* spp 0, dpp 1 */
     gridtype = 1; /* lin 0, log 1 */
     projectionvariant = 0; /* cartesian 0, spherical 1 */
-    centretype = 0; /* com 0, potmin 1, denmax 2 */
+    centretype = 2; /* com 0, potmin 1, denmax 2 */
     readstatsfile = 0; /* no stats file 0, read from stats file 1 */
     rmaxfromstats = 0; /* from input 0, from stats file 1 */
+    verboselevel = 0;
     rhocrit0 = 1;
     OmegaM0 = 0.3;
-    Deltavir = 200;
+    OmegaL0 = 0.7;
+    OmegaK0 = 0;
+    Delta_bg = 200;
+    Delta_vir = 200;
     G = 1;
     rmin = 0;
     rmax = 1;
@@ -185,6 +196,10 @@ int main(int argc, char **argv) {
             }
         else if (strcmp(argv[i],"-log") == 0) {
 	    gridtype = 1;
+            i++;
+            }
+        else if (strcmp(argv[i],"-v") == 0) {
+	    verboselevel = 1;
             i++;
             }
         else if (strcmp(argv[i],"-pv") == 0) {
@@ -283,12 +298,12 @@ int main(int argc, char **argv) {
             vcentrein[2] = atof(argv[i]);
             i++;
             }
-        else if (strcmp(argv[i],"-Deltavir") == 0) {
+        else if (strcmp(argv[i],"-Delta_bg") == 0) {
             i++;
             if (i >= argc) {
                 usage();
                 }
-            Deltavir = atof(argv[i]);
+            Delta_bg = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-OmegaM0") == 0) {
@@ -297,6 +312,22 @@ int main(int argc, char **argv) {
                 usage();
                 }
             OmegaM0 = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-OmegaK0") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            OmegaK0 = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-OmegaL0") == 0) {
+            i++;
+            if (i >= argc) {
+                usage();
+                }
+            OmegaL0 = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-rhocrit0") == 0) {
@@ -513,7 +544,7 @@ int main(int argc, char **argv) {
 		/*
 		** Estimate virial radius; assume isothermal sphere scaling 
 		*/
-		rmax = sqrt((3*DarkMass/(4*M_PI*radius1*radius1*radius1))/(Deltavir*OmegaM0*rhocrit0))*radius1*binfactor;
+		rmax = sqrt((3*DarkMass/(4*M_PI*radius1*radius1*radius1))/(Delta_bg*OmegaM0*rhocrit0))*radius1*binfactor;
 		assert(rmax > 0);
 		if (gridtype == 0) {
 		    assert(rmin >= 0);
@@ -963,6 +994,20 @@ int main(int argc, char **argv) {
     sprintf(statisticsfilename,"%s.statistics",outputname);
     statisticsfile = fopen(statisticsfilename,"w");
     assert(statisticsfile != NULL);
+    /*
+    ** Densities in comoving coordinates 
+    */
+    rhoenc_bg = Delta_bg*OmegaM0*rhocrit0;
+    E = Ecosmo(th.time,OmegaM0,OmegaL0,OmegaK0);
+    OmegaM = OmegaM0/(pow(th.time,3)*E*E);
+    rhocrit = rhocrit0*E*E;
+    if (OmegaK0 == 0) {
+	Delta_vir = 178*pow(OmegaM,0.45);
+	}
+    else if (OmegaL0 == 0) {
+	Delta_vir = 178*pow(OmegaM,0.3);
+	}
+    rhoenc_vir = Delta_vir*rhocrit*pow(th.time,3);
     for (l = 0; l < SizeArray; l++) {
 	r200b = 0;
 	M200b = 0;
@@ -976,11 +1021,10 @@ int main(int argc, char **argv) {
 	    radius[1] = pa[l][j].ro;
 	    rhoenc[0] = 3*pa[l][j-1].Menctot/(4*M_PI*pa[l][j-1].ro*pa[l][j-1].ro*pa[l][j-1].ro);
 	    rhoenc[1] = 3*pa[l][j].Menctot/(4*M_PI*pa[l][j].ro*pa[l][j].ro*pa[l][j].ro);
-	    rholimit = Deltavir*OmegaM0*rhocrit0;
-	    if ((rhoenc[0] >= rholimit) && (rhoenc[1] < rholimit) && (r200b == 0)) {
+	    if ((rhoenc[0] >= rhoenc_bg) && (rhoenc[1] < rhoenc_bg) && (r200b == 0)) {
 		if (gridtype == 0) {
 		    m = (radius[1]-radius[0])/(rhoenc[1]-rhoenc[0]);
-		    d = rholimit-rhoenc[0];
+		    d = rhoenc_bg-rhoenc[0];
 		    r200b = radius[0] + m*d;
 		    m = (pa[l][j].Menctot-pa[l][j-1].Menctot)/(radius[1]-radius[0]);
 		    d = r200b-radius[0];
@@ -988,18 +1032,17 @@ int main(int argc, char **argv) {
 		    }
 		else if (gridtype == 1) {
 		    m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
-		    d = log(rholimit)-log(rhoenc[0]);
+		    d = log(rhoenc_bg)-log(rhoenc[0]);
 		    r200b = exp(log(radius[0]) + m*d);
 		    m = (log(pa[l][j].Menctot)-log(pa[l][j-1].Menctot))/(log(radius[1])-log(radius[0]));
 		    d = log(r200b)-log(radius[0]);
 		    M200b = exp(log(pa[l][j-1].Menctot) + m*d);
 		    }
 		}
-	    rholimit = 178*pow(OmegaM0,0.45)*rhocrit0;
-	    if ((rhoenc[0] >= rholimit) && (rhoenc[1] < rholimit) && (rvir == 0)) {
+	    if ((rhoenc[0] >= rhoenc_vir) && (rhoenc[1] < rhoenc_vir) && (rvir == 0)) {
 		if (gridtype == 0) {
 		    m = (radius[1]-radius[0])/(rhoenc[1]-rhoenc[0]);
-		    d = rholimit-rhoenc[0];
+		    d = rhoenc_vir-rhoenc[0];
 		    rvir = radius[0] + m*d;
 		    m = (pa[l][j].Menctot-pa[l][j-1].Menctot)/(radius[1]-radius[0]);
 		    d = rvir-radius[0];
@@ -1007,7 +1050,7 @@ int main(int argc, char **argv) {
 		    }
 		else if (gridtype == 1) {
 		    m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
-		    d = log(rholimit)-log(rhoenc[0]);
+		    d = log(rhoenc_vir)-log(rhoenc[0]);
 		    rvir = exp(log(radius[0]) + m*d);
 		    m = (log(pa[l][j].Menctot)-log(pa[l][j-1].Menctot))/(log(radius[1])-log(radius[0]));
 		    d = log(rvir)-log(radius[0]);
@@ -1062,6 +1105,21 @@ int main(int argc, char **argv) {
 	fprintf(statisticsfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e\n",GroupID[l],r200b,M200b,rvir,Mvir,rvcmax,Mrvcmax,vcmax);
 	}
     fclose(statisticsfile);
+    if (verboselevel >= 1) {
+        fprintf(stderr,"Used values:\n");
+        fprintf(stderr,"Delta_bg   : %.6e\n",Delta_bg);
+        fprintf(stderr,"Delta_vir  : %.6e\n",Delta_vir);
+	fprintf(stderr,"rhoenc_bg  : %.6e MU LU^{-3} (comoving)\n",rhoenc_bg);
+	fprintf(stderr,"rhoenc_vir : %.6e MU LU^{-3} (comoving)\n",rhoenc_vir);
+        fprintf(stderr,"rhocrit0   : %.6e MU LU^{-3}\n",rhocrit0);
+        fprintf(stderr,"OmegaM0    : %.6e\n",OmegaM0);
+        fprintf(stderr,"OmegaL0    : %.6e\n",OmegaL0);
+        fprintf(stderr,"OmegaK0    : %.6e\n",OmegaK0);
+        fprintf(stderr,"G          : %.6e LU^3 MU^{-1} TU^{-1}\n",G);
+	fprintf(stderr,"a          : %.6e\n",th.time);
+	fprintf(stderr,"E          : %.6e\n",E);
+        fprintf(stderr,"binfactor  : %.6e\n",binfactor);
+        }
     exit(0);
     }
 
@@ -1087,18 +1145,19 @@ void usage(void) {
     fprintf(stderr,"-vxcen <value>     : x-velocity of centre [VU] (default: 0 VU)\n");
     fprintf(stderr,"-vycen <value>     : y-velocity of centre [VU] (default: 0 VU)\n");
     fprintf(stderr,"-vzcen <value>     : z-velocity of centre [VU] (default: 0 VU)\n");
-    fprintf(stderr,"-stats <name>      : name of stats file (only needed for N > 1)\n");
-    fprintf(stderr,"-com               : set this flag for centre-of-mass centres from stats file (default)\n");
+    fprintf(stderr,"-stats <name>      : name of stats file\n");
+    fprintf(stderr,"-com               : set this flag for centre-of-mass centres from stats file\n");
     fprintf(stderr,"-potmin            : set this flag for centre-of-mass centres from stats file\n");
-    fprintf(stderr,"-denmax            : set this flag for centre-of-mass centres from stats file\n");
+    fprintf(stderr,"-denmax            : set this flag for centre-of-mass centres from stats file (default)\n");
     fprintf(stderr,"-rmaxfromstats     : set this flag for rmax determined from stats file\n");
     fprintf(stderr,"-binfactor <value> : extra factor for rmax determined form stats file (default: 5)\n");
     fprintf(stderr,"-rhocrit0 <value>  : critical density of the universe [MU LU^{-3}] (default: 1 MU LU^{-3})\n");
-    fprintf(stderr,"-OmegaM0 <value>   : OmegaM value (default: 0.3)\n");
-    fprintf(stderr,"-Deltavir <value>  : overdensity with respect to background density (default: 200)\n");
+    fprintf(stderr,"-OmegaM0 <value>   : OmegaM0 value (default: 0.3)\n");
+    fprintf(stderr,"-Delta_bg <value>  : overdensity with respect to background density (default: 200)\n");
     fprintf(stderr,"-G <value>         : gravitational constant [LU^3 MU^{-1} TU^{-1}] (default: 1 LU^3 MU^{-1} TU^{-1})\n");
+    fprintf(stderr,"-output <name>     : name of output files (endings .statistics and .profiles appended)\n");
+    fprintf(stderr,"-v                 : more informative output to screen\n");
     fprintf(stderr,"< <name>           : name of input file in tipsy standard binary format\n");
-    fprintf(stderr,"> <name>           : name of output file\n");
     fprintf(stderr,"\n");
     exit(1);
     }
