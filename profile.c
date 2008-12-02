@@ -1153,6 +1153,8 @@ void usage(void) {
     fprintf(stderr,"-binfactor <value> : extra factor for rmax determined form stats file (default: 5)\n");
     fprintf(stderr,"-rhocrit0 <value>  : critical density of the universe [MU LU^{-3}] (default: 1 MU LU^{-3})\n");
     fprintf(stderr,"-OmegaM0 <value>   : OmegaM0 value (default: 0.3)\n");
+    fprintf(stderr,"-OmegaL0 <value>   : OmegaL0 value (default: 0.7)\n");
+    fprintf(stderr,"-OmegaK0 <value>   : OmegaK0 value (default: 0.0)\n");
     fprintf(stderr,"-Delta_bg <value>  : overdensity with respect to background density (default: 200)\n");
     fprintf(stderr,"-G <value>         : gravitational constant [LU^3 MU^{-1} TU^{-1}] (default: 1 LU^3 MU^{-1} TU^{-1})\n");
     fprintf(stderr,"-output <name>     : name of output files (endings .statistics and .profiles appended)\n");
