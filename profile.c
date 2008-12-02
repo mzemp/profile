@@ -620,6 +620,7 @@ int main(int argc, char **argv) {
 			    pa[l][j].Lgas[0] += gp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
 			    pa[l][j].Lgas[1] += gp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
 			    pa[l][j].Lgas[2] += gp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    break;
 			    }
 			}
 		    }
@@ -670,6 +671,7 @@ int main(int argc, char **argv) {
 			    pa[l][j].Ldark[0] += dp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
 			    pa[l][j].Ldark[1] += dp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
 			    pa[l][j].Ldark[2] += dp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    break;
 			    }
 			}
 		    }
@@ -720,6 +722,7 @@ int main(int argc, char **argv) {
 			    pa[l][j].Lstar[0] += sp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
 			    pa[l][j].Lstar[1] += sp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
 			    pa[l][j].Lstar[2] += sp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    break;
 			    }
 			}
 		    }
@@ -772,6 +775,7 @@ int main(int argc, char **argv) {
 			    pa[l][j].Lgas[0] += gpdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
 			    pa[l][j].Lgas[1] += gpdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
 			    pa[l][j].Lgas[2] += gpdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    break;
 			    }
 			}
 		    }
@@ -822,6 +826,7 @@ int main(int argc, char **argv) {
 			    pa[l][j].Ldark[0] += dpdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
 			    pa[l][j].Ldark[1] += dpdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
 			    pa[l][j].Ldark[2] += dpdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    break;
 			    }
 			}
 		    }
@@ -872,6 +877,7 @@ int main(int argc, char **argv) {
 			    pa[l][j].Lstar[0] += spdpp.mass*(pos[1]*vel[2] - pos[2]*vel[1]);
 			    pa[l][j].Lstar[1] += spdpp.mass*(pos[2]*vel[0] - pos[0]*vel[2]);
 			    pa[l][j].Lstar[2] += spdpp.mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			    break;
 			    }
 			}
 		    }
