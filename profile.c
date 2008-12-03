@@ -1081,6 +1081,8 @@ int main(int argc, char **argv) {
 	    radius[1] = pa[l][j].rm;
 	    rhoenc[0] = 4*M_PI*(pa[l][j-1].Mtot/pa[l][j-1].vol)*pa[l][j-1].rm*pa[l][j-1].rm*pa[l][j-1].rm;
 	    rhoenc[1] = 4*M_PI*(pa[l][j].Mtot/pa[l][j].vol)*pa[l][j].rm*pa[l][j].rm*pa[l][j].rm;
+	    Menc[0] = 0;
+	    Menc[1] = 0;
 	    if (gridtype == 0) {
 		m = (pa[l][j-1].Menctot-pa[l][j-2].Menctot)/(pa[l][j-1].ro-pa[l][j-2].ro);
 		d = radius[0]-pa[l][j-2].ro;
