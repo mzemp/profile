@@ -140,7 +140,8 @@ int main(int argc, char **argv) {
     double **rcentre = NULL, **vcentre = NULL;
     double rcentrein[3] = {0,0,0}, vcentrein[3] = {0,0,0};
     double bl[3] = {1,1,1};
-    double radius1, radius2, vd1D, DarkMass, rhoenc[2], radius[2], Menc[2];
+    double radius1, radius2, vd1D, DarkMass;
+    double rhoenc[2], radius[2], Menc[2];
     double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
     double binfactor;
     double m, d;
@@ -1034,11 +1035,13 @@ int main(int argc, char **argv) {
 	rvcmax = 0;
 	Mrvcmax = 0;
 	vcmax = 0;
-	for (j = Nbin; j >= 0; j--) {
+	for (j = Nbin; j > 0; j--) {
 	    radius[0] = pa[l][j-1].ro;
 	    radius[1] = pa[l][j].ro;
 	    rhoenc[0] = 3*pa[l][j-1].Menctot/(4*M_PI*pa[l][j-1].ro*pa[l][j-1].ro*pa[l][j-1].ro);
 	    rhoenc[1] = 3*pa[l][j].Menctot/(4*M_PI*pa[l][j].ro*pa[l][j].ro*pa[l][j].ro);
+	    Menc[0] = 0;
+	    Menc[1] = 0;
 	    if ((rhoenc[0] >= rhoenc_bg) && (rhoenc[1] < rhoenc_bg) && (r200b == 0)) {
 		if (gridtype == 0) {
 		    m = (radius[1]-radius[0])/(rhoenc[1]-rhoenc[0]);
@@ -1081,8 +1084,6 @@ int main(int argc, char **argv) {
 	    radius[1] = pa[l][j].rm;
 	    rhoenc[0] = 4*M_PI*(pa[l][j-1].Mtot/pa[l][j-1].vol)*pa[l][j-1].rm*pa[l][j-1].rm*pa[l][j-1].rm;
 	    rhoenc[1] = 4*M_PI*(pa[l][j].Mtot/pa[l][j].vol)*pa[l][j].rm*pa[l][j].rm*pa[l][j].rm;
-	    Menc[0] = 0;
-	    Menc[1] = 0;
 	    if (gridtype == 0) {
 		m = (pa[l][j-1].Menctot-pa[l][j-2].Menctot)/(pa[l][j-1].ro-pa[l][j-2].ro);
 		d = radius[0]-pa[l][j-2].ro;
