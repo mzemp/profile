@@ -113,7 +113,7 @@ double put_in_box(double r, double l) {
 
 double Ecosmo(double a, double OmegaM0, double OmegaL0, double OmegaK0) {
 
-    return sqrt(OmegaM0*pow(a,-3) + OmegaL0 + OmegaK0*pow(a,-2));
+    return sqrt(OmegaM0*pow(a,-3.0) + OmegaL0 + OmegaK0*pow(a,-2.0));
     }
 
 void usage(void);
@@ -388,6 +388,23 @@ int main(int argc, char **argv) {
 	    }
 	}
     /*
+    ** Calculate cosmology relevant stuff
+    ** Densities in comoving coordinates 
+    */
+    xdrstdio_create(&xdrs,stdin,XDR_DECODE);
+    read_tipsy_standard_header(&xdrs,&th);
+    rhoenc_bg = Delta_bg*OmegaM0*rhocrit0;
+    E = Ecosmo(th.time,OmegaM0,OmegaL0,OmegaK0);
+    OmegaM = OmegaM0/(pow(th.time,3)*E*E);
+    rhocrit = rhocrit0*E*E;
+    if (OmegaK0 == 0) {
+	Delta_vir = 178*pow(OmegaM,0.45);
+	}
+    else if (OmegaL0 == 0) {
+	Delta_vir = 178*pow(OmegaM,0.3);
+	}
+    rhoenc_vir = Delta_vir*rhocrit*pow(th.time,3);
+    /*
     ** Check some things and initialise array
     */
     assert(Nbin > 0);
@@ -545,7 +562,7 @@ int main(int argc, char **argv) {
 		/*
 		** Estimate virial radius; assume isothermal sphere scaling 
 		*/
-		rmax = sqrt((3*DarkMass/(4*M_PI*radius1*radius1*radius1))/(Delta_bg*OmegaM0*rhocrit0))*radius1*binfactor;
+		rmax = sqrt((3*DarkMass/(4*M_PI*radius2*radius2*radius2))/rhoenc_bg)*radius2*binfactor;
 		assert(rmax > 0);
 		if (gridtype == 0) {
 		    assert(rmin >= 0);
@@ -573,8 +590,6 @@ int main(int argc, char **argv) {
     /*
     ** Read in particles and calculate profile
     */
-    xdrstdio_create(&xdrs,stdin,XDR_DECODE);
-    read_tipsy_standard_header(&xdrs,&th);
     if (positionprecision == 0) {
 	for (i = 0; i < th.ngas; i++) {
 	    read_tipsy_standard_gas(&xdrs,&gp);
@@ -1013,20 +1028,6 @@ int main(int argc, char **argv) {
     sprintf(statisticsfilename,"%s.statistics",outputname);
     statisticsfile = fopen(statisticsfilename,"w");
     assert(statisticsfile != NULL);
-    /*
-    ** Densities in comoving coordinates 
-    */
-    rhoenc_bg = Delta_bg*OmegaM0*rhocrit0;
-    E = Ecosmo(th.time,OmegaM0,OmegaL0,OmegaK0);
-    OmegaM = OmegaM0/(pow(th.time,3)*E*E);
-    rhocrit = rhocrit0*E*E;
-    if (OmegaK0 == 0) {
-	Delta_vir = 178*pow(OmegaM,0.45);
-	}
-    else if (OmegaL0 == 0) {
-	Delta_vir = 178*pow(OmegaM,0.3);
-	}
-    rhoenc_vir = Delta_vir*rhocrit*pow(th.time,3);
     for (l = 0; l < SizeArray; l++) {
 	r200b = 0;
 	M200b = 0;
