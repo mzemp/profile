@@ -1169,8 +1169,8 @@ void usage(void) {
     fprintf(stderr,"-vzcen <value>     : z-velocity of centre [VU] (default: 0 VU)\n");
     fprintf(stderr,"-stats <name>      : name of stats file\n");
     fprintf(stderr,"-com               : set this flag for centre-of-mass centres from stats file\n");
-    fprintf(stderr,"-potmin            : set this flag for centre-of-mass centres from stats file\n");
-    fprintf(stderr,"-denmax            : set this flag for centre-of-mass centres from stats file (default)\n");
+    fprintf(stderr,"-potmin            : set this flag for potmin centres from stats file\n");
+    fprintf(stderr,"-denmax            : set this flag for denmax centres from stats file (default)\n");
     fprintf(stderr,"-rmaxfromstats     : set this flag for rmax determined from stats file\n");
     fprintf(stderr,"-binfactor <value> : extra factor for rmax determined form stats file (default: 5)\n");
     fprintf(stderr,"-rhocrit0 <value>  : critical density of the universe [MU LU^{-3}] (default: 1 MU LU^{-3})\n");
