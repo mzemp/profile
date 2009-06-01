@@ -918,6 +918,7 @@ int main(int argc, char **argv) {
     sprintf(profilesfilename,"%s.profiles",outputname);
     profilesfile = fopen(profilesfilename,"w");
     assert(profilesfile != NULL);
+    fprintf(profilesfile,"# GID ri rm ro vol Mtot Mgas Mdark Mstar Menctot Mencgas Mencdark Mencstar rhoMtot rhoMgas rhoMdark rhoMstar Ntot Ngas Ndark Nstar Nenctot Nencgas Nencdark Nencstar rhoNtot rhoNgas rhoNdark rhoNstar veltotx veltoty veltotz vel2totxx vel2totyy vel2totzz vel2totxy vel2totxz vel2totyz velgasx velgasy velgasz vel2gasxx vel2gasyy vel2gaszz vel2gasxy vel2gasxz vel2gasyz veldarkx veldarky veldarkz vel2darkxx vel2darkyy vel2darkzz vel2darkxy vel2darkxz vel2darkyz velstarx velstary velstarz vel2starxx vel2staryy vel2starzz vel2starxy vel2starxz vel2staryz Ltotx Ltoty Ltotz Lgasx Lgasy Lgasz Ldarkx Ldarky Ldarkz Lstarx Lstary Lstarz / total 77 columns\n");
     for (l = 0; l < SizeArray; l++) {
 	for (j = 0; j < (Nbin+1); j++) {
 	    fprintf(profilesfile,"%d ",GroupID[l]);
@@ -1023,11 +1024,12 @@ int main(int argc, char **argv) {
 	}
     fclose(profilesfile);
     /*
-    ** Calculate r200b, rvir, M200b, Mvir, vcmax, rvcmax
+    ** Calculate r200b, M200b, rvir, Mvir, rvcmax, Mrvcmax and vcmax
     */
     sprintf(statisticsfilename,"%s.statistics",outputname);
     statisticsfile = fopen(statisticsfilename,"w");
     assert(statisticsfile != NULL);
+    fprintf(statisticsfile,"# GID r200b M200b rvir Mvir rvcmax Mrvcmax vcmax / total 8 columns\n");
     for (l = 0; l < SizeArray; l++) {
 	r200b = 0;
 	M200b = 0;
@@ -1036,6 +1038,9 @@ int main(int argc, char **argv) {
 	rvcmax = 0;
 	Mrvcmax = 0;
 	vcmax = 0;
+	/*
+	** Calculate r200b, M200b, rvir, Mvir by going from outside in
+	*/
 	for (j = Nbin; j > 0; j--) {
 	    radius[0] = pa[l][j-1].ro;
 	    radius[1] = pa[l][j].ro;
@@ -1080,6 +1085,9 @@ int main(int argc, char **argv) {
 		    }
 		}
 	    }
+	/*
+	** Calcualte vcmax, rvcmax, Mrvcmax by going from inside out
+	*/
 	for (j = 2; j < (Nbin+1); j++) {
 	    radius[0] = pa[l][j-1].rm;
 	    radius[1] = pa[l][j].rm;
@@ -1127,6 +1135,9 @@ int main(int argc, char **argv) {
 	fprintf(statisticsfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e\n",GroupID[l],r200b,M200b,rvir,Mvir,rvcmax,Mrvcmax,vcmax);
 	}
     fclose(statisticsfile);
+    /*
+    ** Some more output if desired
+    */
     if (verboselevel >= 1) {
         fprintf(stderr,"Used values:\n");
         fprintf(stderr,"Delta_bg   : %.6e\n",Delta_bg);
