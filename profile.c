@@ -87,15 +87,18 @@ void calculate_unit_vectors(double pos[3], double erad[3], double ephi[3], doubl
 
 double correct_position(double c, double r, double l) {
 
-    if (c > 0.25*l && r < -0.25*l) {
-        return r + l;
-        }
-    else if (c < -0.25*l && r > 0.25*l) {
-        return r - l;
-        }
+    double d;
+
+    d = r-c;
+    if (d > l/2.0) {
+	return r - l;
+	}
+    else if (d < -l/2.0) {
+	return r + l;
+	}
     else {
-        return r;
-        }
+	return r;
+	}
     }
 
 double put_in_box(double r, double l) {
