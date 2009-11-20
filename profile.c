@@ -90,28 +90,16 @@ double correct_position(double c, double r, double l) {
     double d;
 
     d = r-c;
-    if (d > l/2.0) {
-	return r - l;
-	}
-    else if (d < -l/2.0) {
-	return r + l;
-	}
-    else {
-	return r;
-	}
+    if (d > 0.5*l) return r - l;
+    else if (d < -0.5*l) return r + l;
+    else return r;
     }
 
 double put_in_box(double r, double l) {
 
-    if (r < -l/2.0) {
-        return r + l;
-        }
-    else if (r > l/2.0) {
-        return r - l;
-        }
-    else {
-        return r;
-        }
+    if (r < -0.5*l) return r + l;
+    else if (r > 0.5*l) return r - l;
+    else return r;
     }
 
 double Ecosmo(double a, double OmegaM0, double OmegaL0, double OmegaK0) {
