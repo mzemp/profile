@@ -81,6 +81,7 @@ typedef struct generalinfo {
     double rhocrit0, OmegaM0, OmegaK0, OmegaL0, OmegaM, rhocrit, E, Deltabg, Deltacrit;
     double rmin, rmax;
     double G;
+    double LBox;
     double bc[6];
     double binfactor;
     char outputname[256];
@@ -166,7 +167,7 @@ void read_art_header(FILE *fp, char *ab, ART_HEADER *ah, int *doswap) {
     }
 
 void usage(void);
-void read_halocatalogue_6DFOF(FILE (*), int, int, int, double, double, int, double, double, double (*), HD (*), int (*));
+void read_halocatalogue_6DFOF(FILE (*), int, int, int, double, double, int, double, double, double (*), HD (**), int (*));
 void put_dp_in_bins(HD (*), DARK_PARTICLE (*), GI);
 void calculate_halo_properties(HD (*), GI);
 void write_output(HD (*), GI);
@@ -203,10 +204,12 @@ int main(int argc, char **argv) {
     gi.Deltabg = 200;
     gi.Deltacrit = 0;
     gi.G = 1;
+    gi.LBox = 1;
     gi.rmin = 0;
     gi.rmax = 1;
     gi.Nbin = 0;
     gi.binfactor = 5;
+    gi.NHalo = 0;
 
     /*
     ** Read in arguments
@@ -294,6 +297,12 @@ int main(int argc, char **argv) {
             gi.OmegaL0 = atof(argv[i]);
             i++;
             }
+        else if (strcmp(argv[i],"-LBox") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.LBox = atof(argv[i]);
+            i++;
+            }
         else if (strcmp(argv[i],"-rhocrit0") == 0) {
             i++;
             if (i >= argc) usage();
@@ -319,7 +328,7 @@ int main(int argc, char **argv) {
             i++;
             }
         else if (strcmp(argv[i],"-rmaxfromhalocatalogue") == 0) {
-            gi.rmaxfromhalocatalogue = 1;
+            gi.rmaxfromhalocatalogue = 0;
             i++;
             }
         else if (strcmp(argv[i],"-dataformat") == 0) {
@@ -379,12 +388,12 @@ int main(int argc, char **argv) {
 	gi.Ndark = th.ndark;
 	gi.Nstar = th.nstar;
 	gi.NParticlesPerBlock = 1000000;
-	gi.bc[0] = -0.5;
-	gi.bc[1] = -0.5;
-	gi.bc[2] = -0.5;
-	gi.bc[3] = 0.5;
-	gi.bc[4] = 0.5;
-	gi.bc[5] = 0.5;
+	gi.bc[0] = -0.5*gi.LBox;
+	gi.bc[1] = -0.5*gi.LBox;
+	gi.bc[2] = -0.5*gi.LBox;
+	gi.bc[3] = 0.5*gi.LBox;
+	gi.bc[4] = 0.5*gi.LBox;
+	gi.bc[5] = 0.5*gi.LBox;
 	}
     else if (gi.dataformat == 1) {
 	HeaderFile = fopen(HeaderFileName,"r");
@@ -402,16 +411,16 @@ int main(int argc, char **argv) {
 	gi.bc[0] = 0;
 	gi.bc[1] = 0;
 	gi.bc[2] = 0;
-	gi.bc[3] = 1;
-	gi.bc[4] = 1;
-	gi.bc[5] = 1;
+	gi.bc[3] = gi.LBox;
+	gi.bc[4] = gi.LBox;
+	gi.bc[5] = gi.LBox;
 	}
     else {
 	fprintf(stderr,"Not supported format!\n");
 	exit(1);
 	}
 
-    fprintf(stderr,"banner: %s\n",banner);
+//    fprintf(stderr,"banner: %s\n",banner);
     fprintf(stderr,"a = %g doswap %d \n",gi.acurrent,gi.doswap);
 //    exit(1);
 
@@ -434,20 +443,29 @@ int main(int argc, char **argv) {
 	}
     gi.rhoenccrit = gi.Deltacrit*gi.rhocrit*pow(gi.acurrent,3);
 
+    fprintf(stderr,"a = %g doswap %d \n",gi.acurrent,gi.doswap);
+
     /*
     ** Read halo catalogue
     */
 
-    // initialise HD
     halocataloguefile = fopen(halocataloguefilename,"r");
     assert(halocataloguefile != NULL);
+    fprintf(stderr,"before read %p\n",halocataloguefile);
     if (gi.halocatalogueformat == 0) {
-	read_halocatalogue_6DFOF(halocataloguefile,gi.centretype,gi.gridtype,gi.rmaxfromhalocatalogue,gi.rmin,gi.rmax,gi.Nbin,gi.rhoencbg,gi.binfactor,gi.bc,hd,&gi.NHalo);
+	read_halocatalogue_6DFOF(halocataloguefile,gi.centretype,gi.gridtype,gi.rmaxfromhalocatalogue,gi.rmin,gi.rmax,gi.Nbin,gi.rhoencbg,gi.binfactor,gi.bc,&hd,&gi.NHalo);
 	}
     else if (gi.halocatalogueformat == 1) {
 //	read_halocatalogue_HFIND();
 	}
-    fclose(halocataloguefile);
+    fprintf(stderr,"after read %p\n",halocataloguefile);
+    fprintf(stderr,"After halocatalogue\n");
+    for (i = 0; i < gi.NHalo; i++) {
+	fprintf(stderr,"%d %g %g %g %g %g %g\n",hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
+	}
+
+    assert(halocataloguefile != NULL);
+//    fclose(halocataloguefile);
 
     /*
     ** Harvest data
@@ -469,8 +487,11 @@ int main(int argc, char **argv) {
 		for (j = 0; j < gi.NParticlesInBlock; j++) {
 		    read_tipsy_standard_dark(&xdrs,&dp[j]);
 		    }
+		j = gi.NParticlesInBlock-1;
+		fprintf(stderr,"%d %d %g %g %g\n",i,j,dp[i].pos[0],dp[i].pos[1],dp[i].pos[2]);
 		put_dp_in_bins(hd,dp,gi);
 		}
+	    fprintf(stderr,"Ndark %d = %d\n",gi.Ndark,(gi.NBlock-1)*gi.NParticlesPerBlock+gi.NParticlesInBlock);
 	    free(dp);
 	    }
 	}
@@ -494,23 +515,24 @@ int main(int argc, char **argv) {
     ** Some more output if desired
     */
 
-/*
+
     if (gi.verboselevel >= 1) {
         fprintf(stderr,"Used values:\n");
-        fprintf(stderr,"Delta_bg    : %.6e\n",Deltabg);
-        fprintf(stderr,"Delta_crit  : %.6e\n",Deltacrit);
-	fprintf(stderr,"rhoenc_bg   : %.6e MU LU^{-3} (comoving)\n",rhoencbg);
-	fprintf(stderr,"rhoenc_crit : %.6e MU LU^{-3} (comoving)\n",rhoenccrit);
-        fprintf(stderr,"rhocrit0    : %.6e MU LU^{-3}\n",rhocrit0);
-        fprintf(stderr,"OmegaM0     : %.6e\n",OmegaM0);
-        fprintf(stderr,"OmegaL0     : %.6e\n",OmegaL0);
-        fprintf(stderr,"OmegaK0     : %.6e\n",OmegaK0);
-        fprintf(stderr,"G           : %.6e LU^3 MU^{-1} TU^{-1}\n",G);
-	fprintf(stderr,"a           : %.6e\n",acurrent);
-	fprintf(stderr,"E           : %.6e\n",E);
-        fprintf(stderr,"binfactor   : %.6e\n",binfactor);
+        fprintf(stderr,"Delta_bg    : %.6e\n",gi.Deltabg);
+        fprintf(stderr,"Delta_crit  : %.6e\n",gi.Deltacrit);
+	fprintf(stderr,"rhoenc_bg   : %.6e MU LU^{-3} (comoving)\n",gi.rhoencbg);
+	fprintf(stderr,"rhoenc_crit : %.6e MU LU^{-3} (comoving)\n",gi.rhoenccrit);
+        fprintf(stderr,"rhocrit0    : %.6e MU LU^{-3}\n",gi.rhocrit0);
+        fprintf(stderr,"OmegaM0     : %.6e\n",gi.OmegaM0);
+        fprintf(stderr,"OmegaL0     : %.6e\n",gi.OmegaL0);
+        fprintf(stderr,"OmegaK0     : %.6e\n",gi.OmegaK0);
+        fprintf(stderr,"LBox        : %.6e\n",gi.LBox);
+        fprintf(stderr,"G           : %.6e LU^3 MU^{-1} TU^{-1}\n",gi.G);
+	fprintf(stderr,"a           : %.6e\n",gi.acurrent);
+	fprintf(stderr,"E           : %.6e\n",gi.E);
+        fprintf(stderr,"binfactor   : %.6e\n",gi.binfactor);
         }
-*/
+
     exit(0);
 
     }
@@ -557,7 +579,7 @@ void usage(void) {
     exit(1);
     }
 
-void read_halocatalogue_6DFOF(FILE *halocataloguefile, int centretype, int gridtype, int rmaxfromhalocatalogue, double rmin, double rmax, int Nbin, double rhoencbg, double binfactor, double bc[6], HD *hd, int *NHalo) {
+void read_halocatalogue_6DFOF(FILE *halocataloguefile, int centretype, int gridtype, int rmaxfromhalocatalogue, double rmin, double rmax, int Nbin, double rhoencbg, double binfactor, double bc[6], HD **hdin, int *NHalo) {
 
     int SizeHaloData = 10000;
     int i, j, k, ID, N, idummy, NHaloRead;
@@ -565,7 +587,9 @@ void read_halocatalogue_6DFOF(FILE *halocataloguefile, int centretype, int gridt
     double DarkMass, radius1, radius2, vd1D;
     double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
     double rmaxestimate, dr;
+    HD *hd;
 
+    hd = *hdin;
     assert(Nbin > 0);
     assert(rmin >= 0);
     assert(rmax >= 0);
@@ -667,6 +691,8 @@ void read_halocatalogue_6DFOF(FILE *halocataloguefile, int centretype, int gridt
 		dr = (log(rmax)-log(rmin))/Nbin;
 		}
 	    }
+	hd[i].ps[0].ri = 0;
+	hd[i].ps[0].ro = rmin;
 	for (j = 1; j < (Nbin+1); j++) {
 	    if (gridtype == 0) {
 		hd[i].ps[j].ri = rmin + (j-1)*dr;
@@ -710,6 +736,7 @@ void read_halocatalogue_6DFOF(FILE *halocataloguefile, int centretype, int gridt
 	    hd[i].ps[j].vel2star[k] = 0;
 	    }
 	}
+    *hdin = hd;
     *NHalo = NHaloRead;
     }
 
@@ -723,7 +750,7 @@ void put_dp_in_bins(HD *hd, DARK_PARTICLE *dp, GI gi) {
     for (i = 0; i < gi.NParticlesPerBlock; i++) {
 	for (j = 0; j < gi.NHalo; j++) {
 	    for (k = 0; k < 3; k++) {
-		pos[k] = correct_position(hd[j].rcentre[k],dp[i].pos[k],gi.bc[k+3]-gi.bc[k]);
+		pos[k] = correct_position(hd[j].rcentre[k],dp[i].pos[k],gi.LBox);
 		pos[k] = pos[k]-hd[j].rcentre[k];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
@@ -732,7 +759,7 @@ void put_dp_in_bins(HD *hd, DARK_PARTICLE *dp, GI gi) {
 		    vel[k] = dp[i].vel[k]-hd[j].vcentre[k];
 		    }
 		/*
-		** Go trough bins from outside => larger bin volume further out
+		** Go through bins from outside inwards => larger bin volume further out
 		*/
 		for (l = gi.Nbin; l >=0; l--) {
 		    if ((hd[j].ps[l].ri <= r) && (hd[j].ps[l].ro > r)) {
@@ -953,16 +980,18 @@ void write_output(HD *hd, GI gi) {
     sprintf(statisticsfilename,"%s.statistics",gi.outputname);
     statisticsfile = fopen(statisticsfilename,"w");
     assert(statisticsfile != NULL);
-    fprintf(statisticsfile,"# GID rbg Mbg rcrit Mcrit rvcmax Mrvcmax vcmax / total 8 columns\n");
+    fprintf(statisticsfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mbg/9 rcrit/10 Mcrit/11 rvcmax/12 Mrvcmax/13 vcmax/14\n");
     for (i = 0; i < gi.NHalo; i++) {
-	fprintf(statisticsfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e\n",hd[i].ID,hd[i].rbg,hd[i].Mbg,hd[i].rcrit,hd[i].Mcrit,hd[i].rvcmax,hd[i].Mrvcmax,hd[i].vcmax);
+	fprintf(statisticsfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e\n",
+		hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],
+		hd[i].rbg,hd[i].Mbg,hd[i].rcrit,hd[i].Mcrit,hd[i].rvcmax,hd[i].Mrvcmax,hd[i].vcmax);
 	}
     fclose(statisticsfile);
 
     sprintf(profilesfilename,"%s.profiles",gi.outputname);
     profilesfile = fopen(profilesfilename,"w");
     assert(profilesfile != NULL);
-    fprintf(profilesfile,"# GID ri rm ro vol Mtot Mgas Mdark Mstar Menctot Mencgas Mencdark Mencstar rhoMtot rhoMgas rhoMdark rhoMstar Ntot Ngas Ndark Nstar Nenctot Nencgas Nencdark Nencstar rhoNtot rhoNgas rhoNdark rhoNstar veltotx veltoty veltotz vel2totxx vel2totyy vel2totzz vel2totxy vel2totxz vel2totyz velgasx velgasy velgasz vel2gasxx vel2gasyy vel2gaszz vel2gasxy vel2gasxz vel2gasyz veldarkx veldarky veldarkz vel2darkxx vel2darkyy vel2darkzz vel2darkxy vel2darkxz vel2darkyz velstarx velstary velstarz vel2starxx vel2staryy vel2starzz vel2starxy vel2starxz vel2staryz Ltotx Ltoty Ltotz Lgasx Lgasy Lgasz Ldarkx Ldarky Ldarkz Lstarx Lstary Lstarz / total 77 columns\n");
+    fprintf(profilesfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mtot/6 Mgas/7 Mdark/8 Mstar/9 Menctot/10 Mencgas/11 Mencdark/12 Mencstar/13 rhoMtot/14 rhoMgas/15 rhoMdark/16 rhoMstar/17 Ntot/18 Ngas/19 Ndark/20 Nstar/21 Nenctot/22 Nencgas/23 Nencdark/24 Nencstar/25 rhoNtot/26 rhoNgas/27 rhoNdark/28 rhoNstar/29 veltotx/30 veltoty/31 veltotz/32 vel2totxx/33 vel2totyy/34 vel2totzz/35 vel2totxy/36 vel2totxz/37 vel2totyz/38 velgasx/39 velgasy/40 velgasz/41 vel2gasxx/42 vel2gasyy/43 vel2gaszz/44 vel2gasxy/45 vel2gasxz/46 vel2gasyz/47 veldarkx/48 veldarky/49 veldarkz/50 vel2darkxx/51 vel2darkyy/52 vel2darkzz/53 vel2darkxy/54 vel2darkxz/55 vel2darkyz/56 velstarx/57 velstary/58 velstarz/59 vel2starxx/60 vel2staryy/61 vel2starzz/62 vel2starxy/63 vel2starxz/64 vel2staryz/65 Ltotx/66 Ltoty/67 Ltotz/68 Lgasx/69 Lgasy/70 Lgasz/71 Ldarkx/72 Ldarky/73 Ldarkz/74 Lstarx/75 Lstary/76 Lstarz/77\n");
     
     for (i = 0; i < gi.NHalo; i++) {
 	for (j = 0; j < (gi.Nbin+1); j++) {
