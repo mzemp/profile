@@ -14,6 +14,9 @@
 #include <assert.h>
 #include <iof.h>
 
+#define ART_LEVEL_ARRAY_LENGTH 10
+#define ART_BANNER_LENGTH 45
+
 typedef struct profilestructure {
 
     int Ntot;
@@ -53,13 +56,15 @@ typedef struct profilestructure {
 typedef struct halodata {
 
     int ID;
+    int Nbin;
     double rcentre[3];
     double vcentre[3];
     double rbg, Mbg;
     double rcrit, Mcrit;
     double rvcmax, Mrvcmax, vcmax;
+    double rmin, rmax;
     PS *ps;
-    } HD;
+    } HALO_DATA;
 
 typedef struct generalinfo {
 
@@ -72,20 +77,71 @@ typedef struct generalinfo {
     int dataformat;
     int halocatalogueformat;
     int verboselevel;
-    int doswap;
     int Nbin;
     int NHalo, Ngas, Ndark, Nstar;
     int NParticlesPerBlock, NParticlesInBlock, NBlock;
-    double acurrent;
     double rhoencbg, rhoenccrit;
-    double rhocrit0, OmegaM0, OmegaK0, OmegaL0, OmegaM, rhocrit, E, Deltabg, Deltacrit;
     double rmin, rmax;
-    double G;
-    double LBox;
+    double E, Deltabg, Deltacrit;
     double bc[6];
     double binfactor;
-    char outputname[256];
+    char HaloCatalogueFileName[256];
+    char OutputName[256];
     } GI;
+
+
+// => goes to iof
+typedef struct cosmological_parameters {
+
+    double ascale0;
+    double OmegaM0;
+    double OmegaDM0; 
+    double OmegaB0;
+    double OmegaL0;
+    double OmegaK0;
+    double OmegaR0;
+    double Hubble0;
+    double ascale;
+    double OmegaM;
+    double OmegaDM; 
+    double OmegaB;
+    double OmegaL;
+    double OmegaK;
+    double OmegaR;
+    double Hubble;
+    } COSMOLOGICAL_PARAMETERS;
+
+// => goes to iof
+typedef struct unit_system {
+
+    double GNewton;
+    double rhocrit0;
+    double rhocrit;
+    double LBox;
+    } UNIT_SYSTEM;
+
+
+// => goes to iof
+typedef struct art_data {
+
+    int doswap;
+    int massfromdata;
+    int Lmaxdark, Nrec;
+    int headerincludesstars;
+    int Ngas, Ndark, Nstar;
+    int Nreadgas, Nreaddark, Nreadstar;
+    int Ndarklevel[ART_LEVEL_ARRAY_LENGTH];
+    double shift;
+    double toplevelmassdark, toplevelsoftdark, refinementstepdark;
+    double massdark[ART_LEVEL_ARRAY_LENGTH];
+    double softdark[ART_LEVEL_ARRAY_LENGTH];
+    char HeaderFileName[256], GasFileName[256], DarkFileName[256], StarFileName[256];
+    char Banner[ART_BANNER_LENGTH];
+    ART_HEADER ah;
+    FILE *HeaderFile;
+    FILE *PosXFile, *PosYFile, *PosZFile;
+    FILE *VelXFile, *VelYFile, *VelZFile;
+    } ART_DATA;
 
 void calculate_unit_vectors(double pos[3], double erad[3], double ephi[3], double etheta[3]) {
 
@@ -122,6 +178,8 @@ void calculate_unit_vectors(double pos[3], double erad[3], double ephi[3], doubl
     etheta[2] = sintheta;
     }
 
+
+// => goes to iof
 double correct_position(double c, double r, double l) {
 
     double d;
@@ -147,37 +205,75 @@ double Ecosmo(double a, double OmegaM0, double OmegaL0, double OmegaK0) {
     return sqrt(OmegaM0*pow(a,-3.0) + OmegaL0 + OmegaK0*pow(a,-2.0));
     }
 
-void read_art_header(FILE *fp, char *ab, ART_HEADER *ah, int *doswap) {
+void read_art_header(ART_DATA *ad) {
 
+    int i, L;
     int header, trailer;
 
-    *doswap = 0;
-    assert(fread(&header,sizeof(int),1,fp) == 1);
-    if (header != 45+sizeof(ART_HEADER)) {
-	*doswap = 1;
+    ad->doswap = 0;
+    ad->HeaderFile = fopen(ad->HeaderFileName,"r");
+    assert(ad->HeaderFile != NULL);
+    assert(fread(&header,sizeof(int),1,ad->HeaderFile) == 1);
+    if (header != ART_BANNER_LENGTH+sizeof(ART_HEADER)) {
+	ad->doswap = 1;
 	flip_4byte(&header,sizeof(int),1);
 	}
-    assert(header == 45+sizeof(ART_HEADER));
-    assert(fread(ab,sizeof(char),45,fp) == 45);
-    assert(fread(ah,sizeof(ART_HEADER),1,fp) == 1);
-    if (*doswap) flip_4byte(ah,sizeof(ART_HEADER),1);
-    assert(fread(&trailer,sizeof(int),1,fp) == 1);
-    if (*doswap) flip_4byte(&trailer,sizeof(int),1);
+    assert(header == ART_BANNER_LENGTH+sizeof(ART_HEADER));
+    assert(fread(ad->Banner,sizeof(char),ART_BANNER_LENGTH,ad->HeaderFile) == ART_BANNER_LENGTH);
+    assert(fread(&ad->ah,sizeof(ART_HEADER),1,ad->HeaderFile) == 1);
+    if (ad->doswap) flip_4byte(&ad->ah,sizeof(ART_HEADER),1);
+    assert(fread(&trailer,sizeof(int),1,ad->HeaderFile) == 1);
+    if (ad->doswap) flip_4byte(&trailer,sizeof(int),1);
     assert(header == trailer);
+    fclose(ad->HeaderFile);
+    /*
+    ** Set some derived quantities
+    */
+    ad->Ngas = 0;
+    if (ad->headerincludesstars == 1) {
+	ad->Lmaxdark = ad->ah.Nspecies-2;
+	ad->Ndark = ad->ah.num[ad->Lmaxdark];
+	ad->Nstar = ad->ah.num[ad->ah.Nspecies-1];
+	}
+    else {
+	ad->Lmaxdark = ad->ah.Nspecies-1;
+	ad->Ndark = ad->ah.num[ad->Lmaxdark];
+	ad->Nstar = 0;
+	}
+    ad->Nrec = ad->ah.Nrow*ad->ah.Nrow;
+    if (ad->toplevelmassdark == -1) {
+	ad->massfromdata = 1;
+	ad->toplevelmassdark = ad->ah.mass[ad->Lmaxdark];
+	}
+    assert(ad->toplevelsoftdark >= 0);
+    assert(ad->toplevelmassdark >= 0);
+    for (i = 0; i <= ad->Lmaxdark; i++) {
+	L = ad->Lmaxdark-i;
+	if (i == 0) {
+	    ad->Ndarklevel[L] = ad->ah.num[i];
+	    }
+	else {
+	    ad->Ndarklevel[L] = ad->ah.num[i]-ad->ah.num[i-1];
+	    }
+	if (ad->massfromdata == 1) {
+	    ad->massdark[L] = ad->ah.mass[i];
+	    }
+	}
     }
 
 void usage(void);
-void read_halocatalogue_6DFOF(FILE (*), int, int, int, double, double, int, double, double, double (*), HD (**), int (*));
-void put_dp_in_bins(HD (*), DARK_PARTICLE (*), GI);
-void calculate_halo_properties(HD (*), GI);
-void write_output(HD (*), GI);
+void read_halocatalogue_6DFOF(GI (*), HALO_DATA (**));
+void read_art_record_dark(ART_DATA, DARK_PARTICLE (*));
+void put_dp_in_bins(HALO_DATA (*), DARK_PARTICLE (*), UNIT_SYSTEM, GI);
+void calculate_halo_properties(HALO_DATA (*), COSMOLOGICAL_PARAMETERS, UNIT_SYSTEM, GI);
+void write_output(HALO_DATA (*), GI);
 
 int main(int argc, char **argv) {
 
     int i, j;
-    char halocataloguefilename[256];
-    char HeaderFileName[256], DataFileName[256], banner[45];
     GI gi;
+    COSMOLOGICAL_PARAMETERS cp;
+    UNIT_SYSTEM us;
     TIPSY_HEADER th;
     GAS_PARTICLE *gp = NULL;
     DARK_PARTICLE *dp = NULL;
@@ -185,31 +281,54 @@ int main(int argc, char **argv) {
     GAS_PARTICLE_DPP *gpdpp = NULL;
     DARK_PARTICLE_DPP *dpdpp = NULL;
     STAR_PARTICLE_DPP *spdpp = NULL;
-    ART_HEADER ah;
-    HD *hd = NULL;
+    HALO_DATA *hd = NULL;
+    ART_DATA ad;
     FILE *halocataloguefile;
     XDR xdrs;
-    FILE *HeaderFile;
-    FILE *PosXFile, *PosYFile, *PosZFile;
-    FILE *VelXFile, *VelYFile, *VelZFile;
 
     /*
     ** Set some default values
     */
 
-    gi.rhocrit0 = 1;
-    gi.OmegaM0 = 0.3;
-    gi.OmegaL0 = 0.7;
-    gi.OmegaK0 = 0;
+    cp.ascale0 = 1;
+    cp.OmegaM0 = 0.3;
+    cp.OmegaDM0 = 0.26;
+    cp.OmegaB0 = 0.04;
+    cp.OmegaL0 = 0.7;
+    cp.OmegaK0 = 0;
+    cp.OmegaR0 = 0;
+    cp.Hubble0 = sqrt(8.0*M_PI/3.0);
+
+    us.GNewton = 1;
+    us.rhocrit0 = 1;
+    us.LBox = 1;
+
     gi.Deltabg = 200;
     gi.Deltacrit = 0;
-    gi.G = 1;
-    gi.LBox = 1;
     gi.rmin = 0;
     gi.rmax = 1;
     gi.Nbin = 0;
     gi.binfactor = 5;
     gi.NHalo = 0;
+
+    ad.doswap = 0;
+    ad.massfromdata = 0;
+    ad.headerincludesstars = 0;
+    ad.Ngas = 0;
+    ad.Ndark = 0;
+    ad.Nstar = 0;
+    ad.Nreadgas = 0;
+    ad.Nreaddark = 0;
+    ad.Nreadstar = 0;
+    ad.refinementstepdark = 2;
+    ad.toplevelmassdark = -1;
+    ad.toplevelsoftdark = 0;
+    ad.shift = 0;
+    for (i = 0; i < ART_LEVEL_ARRAY_LENGTH; i++) {
+	ad.Ndarklevel[i] = 0;
+	ad.massdark[i] = 0;
+	ad.softdark[i] = 0;
+	}
 
     /*
     ** Read in arguments
@@ -282,37 +401,37 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i],"-OmegaM0") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.OmegaM0 = atof(argv[i]);
+            cp.OmegaM0 = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-OmegaK0") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.OmegaK0 = atof(argv[i]);
+            cp.OmegaK0 = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-OmegaL0") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.OmegaL0 = atof(argv[i]);
+            cp.OmegaL0 = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-LBox") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.LBox = atof(argv[i]);
+            us.LBox = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-rhocrit0") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.rhocrit0 = atof(argv[i]);
+            us.rhocrit0 = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-G") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.G = atof(argv[i]);
+            us.GNewton = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-com") == 0) {
@@ -347,25 +466,37 @@ int main(int argc, char **argv) {
 	    gi.readhalocataloguefile = 1;
             i++;
             if (i >= argc) usage();
-            strcpy(halocataloguefilename,argv[i]);
+            strcpy(gi.HaloCatalogueFileName,argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-output") == 0) {
             i++;
             if (i >= argc) usage();
-            strcpy(gi.outputname,argv[i]);
+            strcpy(gi.OutputName,argv[i]);
             i++;
             }
-        else if (strcmp(argv[i],"-header") == 0) {
+        else if (strcmp(argv[i],"-headerfile") == 0) {
             i++;
             if (i >= argc) usage();
-            strcpy(HeaderFileName,argv[i]);
+            strcpy(ad.HeaderFileName,argv[i]);
             i++;
             }
-        else if (strcmp(argv[i],"-data") == 0) {
+        else if (strcmp(argv[i],"-gasfile") == 0) {
             i++;
             if (i >= argc) usage();
-            strcpy(DataFileName,argv[i]);
+            strcpy(ad.GasFileName,argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-darkfile") == 0) {
+            i++;
+            if (i >= argc) usage();
+            strcpy(ad.DarkFileName,argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-starfile") == 0) {
+            i++;
+            if (i >= argc) usage();
+            strcpy(ad.StarFileName,argv[i]);
             i++;
             }
 	else if ((strcmp(argv[i],"-h") == 0) || (strcmp(argv[i],"-help") == 0)) {
@@ -383,94 +514,98 @@ int main(int argc, char **argv) {
     if (gi.dataformat == 0) {
 	xdrstdio_create(&xdrs,stdin,XDR_DECODE);
 	read_tipsy_standard_header(&xdrs,&th);
-	gi.acurrent = th.time;
+	cp.ascale = th.time;
 	gi.Ngas = th.ngas;
 	gi.Ndark = th.ndark;
 	gi.Nstar = th.nstar;
 	gi.NParticlesPerBlock = 1000000;
-	gi.bc[0] = -0.5*gi.LBox;
-	gi.bc[1] = -0.5*gi.LBox;
-	gi.bc[2] = -0.5*gi.LBox;
-	gi.bc[3] = 0.5*gi.LBox;
-	gi.bc[4] = 0.5*gi.LBox;
-	gi.bc[5] = 0.5*gi.LBox;
+	gi.bc[0] = -0.5*us.LBox;
+	gi.bc[1] = -0.5*us.LBox;
+	gi.bc[2] = -0.5*us.LBox;
+	gi.bc[3] = 0.5*us.LBox;
+	gi.bc[4] = 0.5*us.LBox;
+	gi.bc[5] = 0.5*us.LBox;
 	}
     else if (gi.dataformat == 1) {
-	HeaderFile = fopen(HeaderFileName,"r");
-	assert(HeaderFile != NULL);
-	read_art_header(HeaderFile,banner,&ah,&gi.doswap);
-	fclose(HeaderFile);
-	gi.acurrent = ah.aunin;
-	gi.OmegaM0 = ah.OmM0;
-	gi.OmegaL0 = ah.OmL0;
-	gi.OmegaK0 = ah.OmK0;
-	gi.Ngas = 0;
-	gi.Ndark = 0;
-	gi.Nstar = 0;
-	gi.NParticlesPerBlock = ah.Nrow*ah.Nrow;
+	read_art_header(&ad);
+	cp.ascale = ad.ah.aunin;
+	gi.Ngas = ad.Ngas;
+	gi.Ndark = ad.Ndark;
+	gi.Nstar = ad.Nstar;
+	cp.OmegaM0 = ad.ah.OmM0;
+	cp.OmegaB0 = ad.ah.OmB0;
+	cp.OmegaDM0 = cp.OmegaM0 - cp.OmegaB0;
+	cp.OmegaL0 = ad.ah.OmL0;
+	cp.OmegaK0 = ad.ah.OmK0;
+	gi.NParticlesPerBlock = ad.Nrec;
 	gi.bc[0] = 0;
 	gi.bc[1] = 0;
 	gi.bc[2] = 0;
-	gi.bc[3] = gi.LBox;
-	gi.bc[4] = gi.LBox;
-	gi.bc[5] = gi.LBox;
+	gi.bc[3] = us.LBox;
+	gi.bc[4] = us.LBox;
+	gi.bc[5] = us.LBox;
 	}
     else {
 	fprintf(stderr,"Not supported format!\n");
 	exit(1);
 	}
 
-//    fprintf(stderr,"banner: %s\n",banner);
-    fprintf(stderr,"a = %g doswap %d \n",gi.acurrent,gi.doswap);
+    fprintf(stderr,"a = %g doswap %d Nrec %d %d B %s Ndark %d\n",cp.ascale,ad.doswap,ad.Nrec,ad.ah.Nrow,ad.Banner,ad.Ndark);
+
+    for (i = 0; i < 10; i++) {
+	fprintf(stderr,"i %d Ndarklvel %d massdark %g softdark %g num %d\n",i,ad.Ndarklevel[i],ad.massdark[i],ad.softdark[i],ad.ah.num[i]);
+	}
+
 //    exit(1);
 
     /*
-    ** Calculate cosmology relevant stuff
+    ** Calculate cosmology relevant stuff => write function for this
     ** Densities in comoving coordinates 
     */
 
-    gi.rhoencbg = gi.Deltabg*gi.OmegaM0*gi.rhocrit0;
-    gi.E = Ecosmo(gi.acurrent,gi.OmegaM0,gi.OmegaL0,gi.OmegaK0);
-    gi.OmegaM = gi.OmegaM0/(pow(gi.acurrent,3)*gi.E*gi.E);
-    gi.rhocrit = gi.rhocrit0*gi.E*gi.E;
+    gi.rhoencbg = gi.Deltabg*cp.OmegaM0*us.rhocrit0;
+    gi.E = Ecosmo(cp.ascale,cp.OmegaM0,cp.OmegaL0,cp.OmegaK0);
+    cp.OmegaM = cp.OmegaM0/(pow(cp.ascale,3)*gi.E*gi.E);
+    us.rhocrit = us.rhocrit0*gi.E*gi.E;
     if (gi.Deltacrit == 0) {
-	if (gi.OmegaK0 == 0) {
-	    gi.Deltacrit = 178*pow(gi.OmegaM,0.45);
+	if (cp.OmegaK0 == 0) {
+	    gi.Deltacrit = 178*pow(cp.OmegaM,0.45);
 	    }
-	else if (gi.OmegaL0 == 0) {
-	    gi.Deltacrit = 178*pow(gi.OmegaM,0.3);
+	else if (cp.OmegaL0 == 0) {
+	    gi.Deltacrit = 178*pow(cp.OmegaM,0.3);
 	    }
 	}
-    gi.rhoenccrit = gi.Deltacrit*gi.rhocrit*pow(gi.acurrent,3);
+    gi.rhoenccrit = gi.Deltacrit*us.rhocrit*pow(cp.ascale,3);
 
-    fprintf(stderr,"a = %g doswap %d \n",gi.acurrent,gi.doswap);
+    fprintf(stderr,"a = %g doswap %d \n",cp.ascale,ad.doswap);
 
     /*
     ** Read halo catalogue
     */
 
-    halocataloguefile = fopen(halocataloguefilename,"r");
-    assert(halocataloguefile != NULL);
-    fprintf(stderr,"before read %p\n",halocataloguefile);
     if (gi.halocatalogueformat == 0) {
-	read_halocatalogue_6DFOF(halocataloguefile,gi.centretype,gi.gridtype,gi.rmaxfromhalocatalogue,gi.rmin,gi.rmax,gi.Nbin,gi.rhoencbg,gi.binfactor,gi.bc,&hd,&gi.NHalo);
+//	read_halocatalogue_generic(gi,&hd);
 	}
     else if (gi.halocatalogueformat == 1) {
-//	read_halocatalogue_HFIND();
-	}
-    fprintf(stderr,"after read %p\n",halocataloguefile);
-    fprintf(stderr,"After halocatalogue\n");
-    for (i = 0; i < gi.NHalo; i++) {
-	fprintf(stderr,"%d %g %g %g %g %g %g\n",hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
+	read_halocatalogue_6DFOF(&gi,&hd);
 	}
 
-    assert(halocataloguefile != NULL);
-//    fclose(halocataloguefile);
+
+    fprintf(stderr,"After halocatalogue\n");
+    fprintf(stderr,"file> %s NHalo %d\n",gi.HaloCatalogueFileName,gi.NHalo);
+    for (i = 0; i < gi.NHalo; i++) {
+	fprintf(stderr,"%d %g %g %g %g %g %g %g %g %d\n",hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],hd[i].rmin,hd[i].rmax,hd[i].Nbin);
+	}
+
+    exit(1);
 
     /*
     ** Harvest data
     */
     if (gi.dataformat == 0) {
+	assert(gi.Ngas == 0);
+	assert(gi.Nstar == 0);
+	assert(gi.positionprecision == 0);
 	if (gi.positionprecision == 0) {
 	    /*
 	    ** Dark Matter
@@ -488,22 +623,62 @@ int main(int argc, char **argv) {
 		    read_tipsy_standard_dark(&xdrs,&dp[j]);
 		    }
 		j = gi.NParticlesInBlock-1;
-		fprintf(stderr,"%d %d %g %g %g\n",i,j,dp[i].pos[0],dp[i].pos[1],dp[i].pos[2]);
-		put_dp_in_bins(hd,dp,gi);
+		fprintf(stderr,"%d %d %g %g %g\n",i,j,dp[j].pos[0],dp[j].pos[1],dp[j].pos[2]);
+
+		put_dp_in_bins(hd,dp,us,gi);
 		}
 	    fprintf(stderr,"Ndark %d = %d\n",gi.Ndark,(gi.NBlock-1)*gi.NParticlesPerBlock+gi.NParticlesInBlock);
 	    free(dp);
 	    }
 	}
     else if (gi.dataformat == 1) {
-	
+	/*
+	** Dark Matter
+	*/
+	ad.PosXFile = fopen(ad.DarkFileName,"r");
+	assert(ad.PosXFile != NULL);
+	ad.PosYFile = fopen(ad.DarkFileName,"r");
+	assert(ad.PosYFile != NULL);
+	ad.PosZFile = fopen(ad.DarkFileName,"r");
+	assert(ad.PosZFile != NULL);
+	ad.VelXFile = fopen(ad.DarkFileName,"r");
+	assert(ad.VelXFile != NULL);
+	ad.VelYFile = fopen(ad.DarkFileName,"r");
+	assert(ad.VelYFile != NULL);
+	ad.VelZFile = fopen(ad.DarkFileName,"r");
+	assert(ad.VelZFile != NULL);
+	dp = realloc(dp,gi.NParticlesPerBlock*sizeof(DARK_PARTICLE));
+	gi.NBlock = (gi.Ndark+gi.NParticlesPerBlock-1)/gi.NParticlesPerBlock;
+	for (i = 0; i < gi.NBlock; i++) {
+	    if (i == gi.NBlock-1) {
+		gi.NParticlesInBlock = gi.Ndark-((gi.NBlock-1)*gi.NParticlesPerBlock);
+		}
+	    else {
+		gi.NParticlesInBlock = gi.NParticlesPerBlock;
+		}
+	    read_art_record_dark(ad,dp);
+	    j = gi.NParticlesInBlock-1;
+	    fprintf(stderr,"%d %d %g %g %g\n",i,j,dp[j].pos[0],dp[j].pos[1],dp[j].pos[2]);
+	    put_dp_in_bins(hd,dp,us,gi);
+	    }
+	fprintf(stderr,"Ndark %d = %d\n",gi.Ndark,(gi.NBlock-1)*gi.NParticlesPerBlock+gi.NParticlesInBlock);
+	fclose(ad.PosXFile);
+	fclose(ad.PosYFile);
+	fclose(ad.PosZFile);
+	fclose(ad.VelXFile);
+	fclose(ad.VelYFile);
+	fclose(ad.VelZFile);
+	/*
+	** Stars
+	*/
+
 	}
 
     /*
     ** Calculate halo properties
     */
  
-    calculate_halo_properties(hd,gi); 
+    calculate_halo_properties(hd,cp,us,gi); 
 
     /*
     ** Write output
@@ -522,13 +697,13 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Delta_crit  : %.6e\n",gi.Deltacrit);
 	fprintf(stderr,"rhoenc_bg   : %.6e MU LU^{-3} (comoving)\n",gi.rhoencbg);
 	fprintf(stderr,"rhoenc_crit : %.6e MU LU^{-3} (comoving)\n",gi.rhoenccrit);
-        fprintf(stderr,"rhocrit0    : %.6e MU LU^{-3}\n",gi.rhocrit0);
-        fprintf(stderr,"OmegaM0     : %.6e\n",gi.OmegaM0);
-        fprintf(stderr,"OmegaL0     : %.6e\n",gi.OmegaL0);
-        fprintf(stderr,"OmegaK0     : %.6e\n",gi.OmegaK0);
-        fprintf(stderr,"LBox        : %.6e\n",gi.LBox);
-        fprintf(stderr,"G           : %.6e LU^3 MU^{-1} TU^{-1}\n",gi.G);
-	fprintf(stderr,"a           : %.6e\n",gi.acurrent);
+        fprintf(stderr,"rhocrit0    : %.6e MU LU^{-3}\n",us.rhocrit0);
+        fprintf(stderr,"OmegaM0     : %.6e\n",cp.OmegaM0);
+        fprintf(stderr,"OmegaL0     : %.6e\n",cp.OmegaL0);
+        fprintf(stderr,"OmegaK0     : %.6e\n",cp.OmegaK0);
+        fprintf(stderr,"LBox        : %.6e\n",us.LBox);
+        fprintf(stderr,"G           : %.6e LU^3 MU^{-1} TU^{-1}\n",us.GNewton);
+	fprintf(stderr,"a           : %.6e\n",cp.ascale);
 	fprintf(stderr,"E           : %.6e\n",gi.E);
         fprintf(stderr,"binfactor   : %.6e\n",gi.binfactor);
         }
@@ -579,83 +754,93 @@ void usage(void) {
     exit(1);
     }
 
-void read_halocatalogue_6DFOF(FILE *halocataloguefile, int centretype, int gridtype, int rmaxfromhalocatalogue, double rmin, double rmax, int Nbin, double rhoencbg, double binfactor, double bc[6], HD **hdin, int *NHalo) {
+void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = 10000;
     int i, j, k, ID, N, idummy, NHaloRead;
     float fdummy;
     double DarkMass, radius1, radius2, vd1D;
     double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
-    double rmaxestimate, dr;
-    HD *hd;
+    double dr;
+    HALO_DATA *hd;
+    FILE *HaloCatalogueFile = NULL;
+
+    fprintf(stderr,"pointer1 %p\n",HaloCatalogueFile);
+
+    HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
+    assert(HaloCatalogueFile != NULL);
+
+    fprintf(stderr,"pointer1 %p\n",HaloCatalogueFile);
 
     hd = *hdin;
-    assert(Nbin > 0);
-    assert(rmin >= 0);
-    assert(rmax >= 0);
-    assert(rmax > rmin);
+    assert(gi->Nbin > 0);
+    assert(gi->rmin >= 0);
+    assert(gi->rmax >= 0);
+    assert(gi->rmax > gi->rmin);
     dr = 0;
     NHaloRead = 0;
-    hd = realloc(hd,SizeHaloData*sizeof(HD));
+    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
     assert(hd != NULL);
     for (i = 0; i < SizeHaloData; i++) {
-	hd[i].ps = realloc(hd[i].ps,(Nbin+1)*sizeof(PS));
+	hd[i].Nbin = gi->Nbin;
+	hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
 	assert(hd[i].ps != NULL);
 	}
-    while (1) {
-	fscanf(halocataloguefile,"%i",&idummy); ID = idummy;
-	fscanf(halocataloguefile,"%i",&idummy); N = idummy;
-	fscanf(halocataloguefile,"%g",&fdummy); DarkMass = fdummy;
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy); radius1 = fdummy; /* (sum_j rmax[j]-rmin[j])/6 */
-	fscanf(halocataloguefile,"%g",&fdummy); radius2 = fdummy; /* dispersion in coordinates */
-	fscanf(halocataloguefile,"%g",&fdummy); vd1D = fdummy;
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy); rxcom = put_in_box(fdummy,bc[0],bc[3]);
-	fscanf(halocataloguefile,"%g",&fdummy); rycom = put_in_box(fdummy,bc[1],bc[4]);
-	fscanf(halocataloguefile,"%g",&fdummy); rzcom = put_in_box(fdummy,bc[2],bc[5]);
-	fscanf(halocataloguefile,"%g",&fdummy); rxpotmin = put_in_box(fdummy,bc[0],bc[3]);
-	fscanf(halocataloguefile,"%g",&fdummy); rypotmin = put_in_box(fdummy,bc[1],bc[4]);
-	fscanf(halocataloguefile,"%g",&fdummy); rzpotmin = put_in_box(fdummy,bc[2],bc[5]);
-	fscanf(halocataloguefile,"%g",&fdummy); rxdenmax = put_in_box(fdummy,bc[0],bc[3]);
-	fscanf(halocataloguefile,"%g",&fdummy); rydenmax = put_in_box(fdummy,bc[1],bc[4]);
-	fscanf(halocataloguefile,"%g",&fdummy); rzdenmax = put_in_box(fdummy,bc[2],bc[5]);
-	fscanf(halocataloguefile,"%g",&fdummy); vx = fdummy;
-	fscanf(halocataloguefile,"%g",&fdummy); vy = fdummy;
-	fscanf(halocataloguefile,"%g",&fdummy); vz = fdummy;
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy);
-	fscanf(halocataloguefile,"%g",&fdummy);
-	if (feof(halocataloguefile)) break;
+    while (NHaloRead < 2) {
+	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
+	fscanf(HaloCatalogueFile,"%i",&idummy); N = idummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy); DarkMass = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); radius1 = fdummy; /* (sum_j rmax[j]-rmin[j])/6 */
+	fscanf(HaloCatalogueFile,"%g",&fdummy); radius2 = fdummy; /* dispersion in coordinates */
+	fscanf(HaloCatalogueFile,"%g",&fdummy); vd1D = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rxcom = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rycom = put_in_box(fdummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rzcom = put_in_box(fdummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rxpotmin = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rypotmin = put_in_box(fdummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rzpotmin = put_in_box(fdummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rxdenmax = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rydenmax = put_in_box(fdummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rzdenmax = put_in_box(fdummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); vx = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy); vy = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy); vz = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	if (feof(HaloCatalogueFile)) break;
 	NHaloRead++;
 	if (SizeHaloData < NHaloRead){
 	    SizeHaloData += 10000; 
-	    hd = realloc(hd,SizeHaloData*sizeof(HD));
+	    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
 	    assert(hd != NULL);
 	    for (i = 0; i < SizeHaloData; i++) {
-		hd[i].ps = realloc(hd[i].ps,(Nbin+1)*sizeof(PS));
+		hd[i].Nbin = gi->Nbin;
+		hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
 		assert(hd[i].ps != NULL);
 		}
 	    }
 	i = NHaloRead-1;
 	hd[i].ID = ID;
-	if (centretype == 0) {
+	if (gi->centretype == 0) {
 	    hd[i].rcentre[0] = rxcom;
 	    hd[i].rcentre[1] = rycom;
 	    hd[i].rcentre[2] = rzcom;
 	    }
-	else if (centretype == 1) {
+	else if (gi->centretype == 1) {
 	    hd[i].rcentre[0] = rxpotmin;
 	    hd[i].rcentre[1] = rypotmin;
 	    hd[i].rcentre[2] = rzpotmin;
 	    }
-	else if (centretype == 2) {
+	else if (gi->centretype == 2) {
 	    hd[i].rcentre[0] = rxdenmax;
 	    hd[i].rcentre[1] = rydenmax;
 	    hd[i].rcentre[2] = rzdenmax;
@@ -670,37 +855,33 @@ void read_halocatalogue_6DFOF(FILE *halocataloguefile, int centretype, int gridt
 	hd[i].rvcmax = 0;
 	hd[i].Mrvcmax = 0;
 	hd[i].vcmax = 0;
-	if (rmaxfromhalocatalogue == 1) {
+	hd[i].rmin = gi->rmin;
+	if (gi->rmaxfromhalocatalogue == 1) {
 	    /*
 	    ** Estimate maximum radius; assume isothermal sphere scaling 
 	    */
-	    rmaxestimate = sqrt((3*DarkMass/(4*M_PI*radius2*radius2*radius2))/rhoencbg)*radius2*binfactor;
-	    assert(rmaxestimate > 0);
-	    if (gridtype == 0) {
-		dr = (rmaxestimate-rmin)/Nbin;
-		}
-	    else if (gridtype == 1) {
-		dr = (log(rmaxestimate)-log(rmin))/Nbin;
-		}
+	    hd[i].rmax = sqrt((3*DarkMass/(4*M_PI*radius2*radius2*radius2))/gi->rhoencbg)*radius2*gi->binfactor;
+	    assert(hd[i].rmax > 0);
 	    }
 	else {
-	    if (gridtype == 0) {
-		dr = (rmax-rmin)/Nbin;
-		}
-	    else if (gridtype == 1) {
-		dr = (log(rmax)-log(rmin))/Nbin;
-		}
+	    hd[i].rmax = gi->rmax;
+	    }
+	if (gi->gridtype == 0) {
+	    dr = (hd[i].rmax-hd[i].rmin)/hd[i].Nbin;
+	    }
+	else if (gi->gridtype == 1) {
+	    dr = (log(hd[i].rmax)-log(hd[i].rmin))/hd[i].Nbin;
 	    }
 	hd[i].ps[0].ri = 0;
-	hd[i].ps[0].ro = rmin;
-	for (j = 1; j < (Nbin+1); j++) {
-	    if (gridtype == 0) {
-		hd[i].ps[j].ri = rmin + (j-1)*dr;
-		hd[i].ps[j].ro = rmin + j*dr;
+	hd[i].ps[0].ro = hd[i].rmin;
+	for (j = 1; j < (hd[i].Nbin+1); j++) {
+	    if (gi->gridtype == 0) {
+		hd[i].ps[j].ri = hd[i].rmin + (j-1)*dr;
+		hd[i].ps[j].ro = hd[i].rmin + j*dr;
 		}
-	    else if (gridtype == 1) {
-		hd[i].ps[j].ri = exp(log(rmin) + (j-1)*dr);
-		hd[i].ps[j].ro = exp(log(rmin) + j*dr);
+	    else if (gi->gridtype == 1) {
+		hd[i].ps[j].ri = exp(log(hd[i].rmin) + (j-1)*dr);
+		hd[i].ps[j].ro = exp(log(hd[i].rmin) + j*dr);
 		}
 	    }
 	hd[i].ps[j].Ntot = 0;
@@ -736,11 +917,94 @@ void read_halocatalogue_6DFOF(FILE *halocataloguefile, int centretype, int gridt
 	    hd[i].ps[j].vel2star[k] = 0;
 	    }
 	}
+    if (HaloCatalogueFile == NULL) fprintf(stderr,"Pointer is NULL\n");
+    fprintf(stderr,"pointer2 %p\n",HaloCatalogueFile);
+//    rewind(HaloCatalogueFile);
+    fprintf(stderr,"pointer3 %p\n",HaloCatalogueFile);
+    fclose(HaloCatalogueFile);
     *hdin = hd;
-    *NHalo = NHaloRead;
+    gi->NHalo = NHaloRead;
+
+    fprintf(stderr,"file> %s NHalo %d\n",gi->HaloCatalogueFileName,gi->NHalo);
+    for (i = 0; i < gi->NHalo; i++) {
+	fprintf(stderr,"%d %g %g %g %g %g %g %g %g %d\n",hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],hd[i].rmin,hd[i].rmax,hd[i].Nbin);
+	}
+
     }
 
-void put_dp_in_bins(HD *hd, DARK_PARTICLE *dp, GI gi) {
+void read_art_record_dark(ART_DATA ad, DARK_PARTICLE *dp) {
+
+    int j, k;
+    int L = 0;
+    double rx, ry, rz;
+    double vx, vy, vz;
+    
+    /*
+    ** Get file pointers ready
+    */
+    
+    assert(fseek(ad.PosYFile,1*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    assert(fseek(ad.PosZFile,2*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    assert(fseek(ad.VelXFile,3*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    assert(fseek(ad.VelYFile,4*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    assert(fseek(ad.VelZFile,5*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+
+    /*
+    ** Go through record
+    */
+    
+    for (j = 0; j < ad.Nrec; j++) {
+
+	assert(fread(&rx,sizeof(float),1,ad.PosXFile) == 1);
+	assert(fread(&ry,sizeof(float),1,ad.PosYFile) == 1);
+	assert(fread(&rz,sizeof(float),1,ad.PosZFile) == 1);
+	assert(fread(&vx,sizeof(float),1,ad.VelXFile) == 1);
+	assert(fread(&vy,sizeof(float),1,ad.VelYFile) == 1);
+	assert(fread(&vz,sizeof(float),1,ad.VelZFile) == 1);
+
+	if (ad.doswap) flip_4byte(&rx,sizeof(float),1);
+	if (ad.doswap) flip_4byte(&ry,sizeof(float),1);
+	if (ad.doswap) flip_4byte(&rz,sizeof(float),1);
+	if (ad.doswap) flip_4byte(&vx,sizeof(float),1);
+	if (ad.doswap) flip_4byte(&vy,sizeof(float),1);
+	if (ad.doswap) flip_4byte(&vz,sizeof(float),1);
+
+	/*
+	** Determine current level
+	*/
+
+	for (k = ad.Lmaxdark; k >=0; k--) {
+	    if (ad.ah.num[k] > ad.Nreaddark) L = ad.Lmaxdark-k;
+	    }
+
+	/*
+	** Set particle properties
+	*/
+
+	dp[j].pos[0] = rx+ad.shift;
+	dp[j].pos[1] = ry+ad.shift;
+	dp[j].pos[2] = rz+ad.shift;
+	dp[j].vel[0] = vx;
+	dp[j].vel[1] = vy;
+	dp[j].vel[2] = vz;
+	dp[j].mass = ad.massdark[L];
+	dp[j].eps = ad.softdark[L];
+	dp[j].phi = 0;
+	ad.Nreaddark++;
+	}
+
+    /*
+    ** Move all pointers to the end of the record
+    */
+
+    assert(fseek(ad.PosXFile,5*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    assert(fseek(ad.PosYFile,4*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    assert(fseek(ad.PosZFile,3*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    assert(fseek(ad.VelXFile,2*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    assert(fseek(ad.VelYFile,1*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    }
+
+void put_dp_in_bins(HALO_DATA *hd, DARK_PARTICLE *dp, UNIT_SYSTEM us, GI gi) {
 
     int i, j, k, l;
     double pos[3], vel[3], velproj[3];
@@ -750,7 +1014,7 @@ void put_dp_in_bins(HD *hd, DARK_PARTICLE *dp, GI gi) {
     for (i = 0; i < gi.NParticlesPerBlock; i++) {
 	for (j = 0; j < gi.NHalo; j++) {
 	    for (k = 0; k < 3; k++) {
-		pos[k] = correct_position(hd[j].rcentre[k],dp[i].pos[k],gi.LBox);
+		pos[k] = correct_position(hd[j].rcentre[k],dp[i].pos[k],us.LBox);
 		pos[k] = pos[k]-hd[j].rcentre[k];
 		}
 	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
@@ -804,7 +1068,7 @@ void put_dp_in_bins(HD *hd, DARK_PARTICLE *dp, GI gi) {
 	}
     }
 
-void calculate_halo_properties(HD *hd, GI gi) {
+void calculate_halo_properties(HALO_DATA *hd, COSMOLOGICAL_PARAMETERS cp, UNIT_SYSTEM us, GI gi) {
 
     int i, j, k;
     double radius[2], rhoenc[2], Menc[2];
@@ -955,7 +1219,7 @@ void calculate_halo_properties(HD *hd, GI gi) {
 		    m = (Menc[1]-Menc[0])/(radius[1]-radius[0]);
 		    d = hd[i].rvcmax-radius[0];
 		    hd[i].Mrvcmax = Menc[0] + m*d;
-		    hd[i].vcmax = sqrt(gi.G*hd[i].Mrvcmax/hd[i].rvcmax);
+		    hd[i].vcmax = sqrt(us.GNewton*hd[i].Mrvcmax/hd[i].rvcmax);
 		    }
 		else if (gi.gridtype == 1) {
 		    m = (log(radius[1])-log(radius[0]))/(rhoenc[1]-rhoenc[0]);
@@ -964,20 +1228,20 @@ void calculate_halo_properties(HD *hd, GI gi) {
 		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		    d = log(hd[i].rvcmax)-log(radius[0]);
 		    hd[i].Mrvcmax = exp(log(Menc[0]) + m*d);
-		    hd[i].vcmax = sqrt(gi.G*hd[i].Mrvcmax/hd[i].rvcmax);
+		    hd[i].vcmax = sqrt(us.GNewton*hd[i].Mrvcmax/hd[i].rvcmax);
 		    }
 		}
 	    }
 	}
     }
 
-void write_output(HD *hd, GI gi) {
+void write_output(HALO_DATA *hd, GI gi) {
 
     int i, j, k;
     char statisticsfilename[256], profilesfilename[256];
     FILE *statisticsfile, *profilesfile;
 
-    sprintf(statisticsfilename,"%s.statistics",gi.outputname);
+    sprintf(statisticsfilename,"%s.statistics",gi.OutputName);
     statisticsfile = fopen(statisticsfilename,"w");
     assert(statisticsfile != NULL);
     fprintf(statisticsfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mbg/9 rcrit/10 Mcrit/11 rvcmax/12 Mrvcmax/13 vcmax/14\n");
@@ -988,7 +1252,7 @@ void write_output(HD *hd, GI gi) {
 	}
     fclose(statisticsfile);
 
-    sprintf(profilesfilename,"%s.profiles",gi.outputname);
+    sprintf(profilesfilename,"%s.profiles",gi.OutputName);
     profilesfile = fopen(profilesfilename,"w");
     assert(profilesfile != NULL);
     fprintf(profilesfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mtot/6 Mgas/7 Mdark/8 Mstar/9 Menctot/10 Mencgas/11 Mencdark/12 Mencstar/13 rhoMtot/14 rhoMgas/15 rhoMdark/16 rhoMstar/17 Ntot/18 Ngas/19 Ndark/20 Nstar/21 Nenctot/22 Nencgas/23 Nencdark/24 Nencstar/25 rhoNtot/26 rhoNgas/27 rhoNdark/28 rhoNstar/29 veltotx/30 veltoty/31 veltotz/32 vel2totxx/33 vel2totyy/34 vel2totzz/35 vel2totxy/36 vel2totxz/37 vel2totyz/38 velgasx/39 velgasy/40 velgasz/41 vel2gasxx/42 vel2gasyy/43 vel2gaszz/44 vel2gasxy/45 vel2gasxz/46 vel2gasyz/47 veldarkx/48 veldarky/49 veldarkz/50 vel2darkxx/51 vel2darkyy/52 vel2darkzz/53 vel2darkxy/54 vel2darkxz/55 vel2darkyz/56 velstarx/57 velstary/58 velstarz/59 vel2starxx/60 vel2staryy/61 vel2starzz/62 vel2starxy/63 vel2starxz/64 vel2staryz/65 Ltotx/66 Ltoty/67 Ltotz/68 Lgasx/69 Lgasy/70 Lgasz/71 Ldarkx/72 Ldarky/73 Ldarkz/74 Lstarx/75 Lstary/76 Lstarz/77\n");
