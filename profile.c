@@ -17,7 +17,7 @@
 #define ART_LEVEL_ARRAY_LENGTH 10
 #define ART_BANNER_LENGTH 45
 
-typedef struct profilestructure {
+typedef struct profile_structure {
 
     int Ntot;
     int Ngas;
@@ -53,7 +53,7 @@ typedef struct profilestructure {
     double Lstar[3];
     } PS;
 
-typedef struct halodata {
+typedef struct halo_data {
 
     int ID;
     int Nbin;
@@ -66,7 +66,7 @@ typedef struct halodata {
     PS *ps;
     } HALO_DATA;
 
-typedef struct generalinfo {
+typedef struct general_info {
 
     int positionprecision;
     int gridtype;
@@ -190,6 +190,7 @@ double correct_position(double c, double r, double l) {
     else return r;
     }
 
+// => goes to iof
 double put_in_box(double r, double lmin, double lmax) {
 
     double l;
@@ -214,12 +215,12 @@ void read_art_header(ART_DATA *ad) {
     ad->HeaderFile = fopen(ad->HeaderFileName,"r");
     assert(ad->HeaderFile != NULL);
     assert(fread(&header,sizeof(int),1,ad->HeaderFile) == 1);
-    if (header != ART_BANNER_LENGTH+sizeof(ART_HEADER)) {
+    if (header != sizeof(ad->Banner)+sizeof(ART_HEADER)) {
 	ad->doswap = 1;
 	flip_4byte(&header,sizeof(int),1);
 	}
-    assert(header == ART_BANNER_LENGTH+sizeof(ART_HEADER));
-    assert(fread(ad->Banner,sizeof(char),ART_BANNER_LENGTH,ad->HeaderFile) == ART_BANNER_LENGTH);
+    assert(header == sizeof(ad->Banner)+sizeof(ART_HEADER));
+    assert(fread(ad->Banner,sizeof(char),sizeof(ad->Banner),ad->HeaderFile) == sizeof(ad->Banner));
     assert(fread(&ad->ah,sizeof(ART_HEADER),1,ad->HeaderFile) == 1);
     if (ad->doswap) flip_4byte(&ad->ah,sizeof(ART_HEADER),1);
     assert(fread(&trailer,sizeof(int),1,ad->HeaderFile) == 1);
@@ -262,7 +263,9 @@ void read_art_header(ART_DATA *ad) {
     }
 
 void usage(void);
+void read_halocatalogue_generic(GI (*), HALO_DATA (**));
 void read_halocatalogue_6DFOF(GI (*), HALO_DATA (**));
+void initialise_halo_profile (GI (*), HALO_DATA (*));
 void read_art_record_dark(ART_DATA, DARK_PARTICLE (*));
 void put_dp_in_bins(HALO_DATA (*), DARK_PARTICLE (*), UNIT_SYSTEM, GI);
 void calculate_halo_properties(HALO_DATA (*), COSMOLOGICAL_PARAMETERS, UNIT_SYSTEM, GI);
@@ -283,7 +286,6 @@ int main(int argc, char **argv) {
     STAR_PARTICLE_DPP *spdpp = NULL;
     HALO_DATA *hd = NULL;
     ART_DATA ad;
-    FILE *halocataloguefile;
     XDR xdrs;
 
     /*
@@ -308,6 +310,7 @@ int main(int argc, char **argv) {
     gi.rmin = 0;
     gi.rmax = 1;
     gi.Nbin = 0;
+    gi.gridtype = 1;
     gi.binfactor = 5;
     gi.NHalo = 0;
 
@@ -550,8 +553,7 @@ int main(int argc, char **argv) {
 	exit(1);
 	}
 
-    fprintf(stderr,"a = %g doswap %d Nrec %d %d B %s Ndark %d\n",cp.ascale,ad.doswap,ad.Nrec,ad.ah.Nrow,ad.Banner,ad.Ndark);
-
+    fprintf(stderr,"a = %g doswap %d Nrec %d %d B %s Ndark %d Lmax %d\n",cp.ascale,ad.doswap,ad.Nrec,ad.ah.Nrow,ad.Banner,ad.Ndark,ad.Lmaxdark);
     for (i = 0; i < 10; i++) {
 	fprintf(stderr,"i %d Ndarklvel %d massdark %g softdark %g num %d\n",i,ad.Ndarklevel[i],ad.massdark[i],ad.softdark[i],ad.ah.num[i]);
 	}
@@ -584,7 +586,7 @@ int main(int argc, char **argv) {
     */
 
     if (gi.halocatalogueformat == 0) {
-//	read_halocatalogue_generic(gi,&hd);
+	read_halocatalogue_generic(&gi,&hd);
 	}
     else if (gi.halocatalogueformat == 1) {
 	read_halocatalogue_6DFOF(&gi,&hd);
@@ -592,9 +594,13 @@ int main(int argc, char **argv) {
 
 
     fprintf(stderr,"After halocatalogue\n");
-    fprintf(stderr,"file> %s NHalo %d\n",gi.HaloCatalogueFileName,gi.NHalo);
+    fprintf(stderr,"file: %s NHalo %d\n",gi.HaloCatalogueFileName,gi.NHalo);
     for (i = 0; i < gi.NHalo; i++) {
 	fprintf(stderr,"%d %g %g %g %g %g %g %g %g %d\n",hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],hd[i].rmin,hd[i].rmax,hd[i].Nbin);
+/*	for(j = 0; j < gi.Nbin+1; j++) {
+	    fprintf(stderr,"j %d ri %g ro %g\n",j,hd[i].ps[j].ri,hd[i].ps[j].ro);
+	    }
+*/
 	}
 
     exit(1);
@@ -754,24 +760,18 @@ void usage(void) {
     exit(1);
     }
 
-void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
+void read_halocatalogue_generic(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = 10000;
-    int i, j, k, ID, N, idummy, NHaloRead;
+    int i, ID, idummy, NHaloRead;
     float fdummy;
-    double DarkMass, radius1, radius2, vd1D;
-    double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
+    double rx, ry, rz, vx, vy, vz, rmin, rmax;
     double dr;
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL;
 
-    fprintf(stderr,"pointer1 %p\n",HaloCatalogueFile);
-
     HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
     assert(HaloCatalogueFile != NULL);
-
-    fprintf(stderr,"pointer1 %p\n",HaloCatalogueFile);
-
     hd = *hdin;
     assert(gi->Nbin > 0);
     assert(gi->rmin >= 0);
@@ -786,7 +786,80 @@ void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
 	hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
 	assert(hd[i].ps != NULL);
 	}
-    while (NHaloRead < 2) {
+    while (1) {
+	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rx = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); ry = put_in_box(fdummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rz = put_in_box(fdummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%g",&fdummy); vx = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy); vy = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy); vz = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rmin = fdummy;
+	fscanf(HaloCatalogueFile,"%g",&fdummy); rmax = fdummy;
+	if (feof(HaloCatalogueFile)) break;
+	NHaloRead++;
+	if (SizeHaloData < NHaloRead){
+	    SizeHaloData += 10000; 
+	    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
+	    assert(hd != NULL);
+	    for (i = 0; i < SizeHaloData; i++) {
+		hd[i].Nbin = gi->Nbin;
+		hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
+		assert(hd[i].ps != NULL);
+		}
+	    }
+	i = NHaloRead-1;
+	hd[i].ID = ID;
+	hd[i].rcentre[0] = rx;
+	hd[i].rcentre[1] = ry;
+	hd[i].rcentre[2] = rz;
+	hd[i].vcentre[0] = vx;
+	hd[i].vcentre[1] = vy;
+	hd[i].vcentre[2] = vz;
+	hd[i].rmin = rmin;
+	hd[i].rmax = rmax;
+	hd[i].rbg = 0;
+	hd[i].Mbg = 0;
+	hd[i].rcrit = 0;
+	hd[i].Mcrit = 0;
+	hd[i].rvcmax = 0;
+	hd[i].Mrvcmax = 0;
+	hd[i].vcmax = 0;
+	initialise_halo_profile(gi,&hd[i]);
+	}
+    fclose(HaloCatalogueFile);
+    *hdin = hd;
+    gi->NHalo = NHaloRead;
+    }
+
+void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
+
+    int SizeHaloData = 10000;
+    int i, ID, N, idummy, NHaloRead;
+    float fdummy;
+    double DarkMass, radius1, radius2, vd1D;
+    double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
+    double dr;
+    HALO_DATA *hd;
+    FILE *HaloCatalogueFile = NULL;
+
+    HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
+    assert(HaloCatalogueFile != NULL);
+    hd = *hdin;
+    assert(gi->Nbin > 0);
+    assert(gi->rmin >= 0);
+    assert(gi->rmax >= 0);
+    assert(gi->rmax > gi->rmin);
+    dr = 0;
+    NHaloRead = 0;
+    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
+    assert(hd != NULL);
+    for (i = 0; i < SizeHaloData; i++) {
+	hd[i].Nbin = gi->Nbin;
+	hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
+	assert(hd[i].ps != NULL);
+	}
+    while (1) {
 	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
 	fscanf(HaloCatalogueFile,"%i",&idummy); N = idummy;
 	fscanf(HaloCatalogueFile,"%g",&fdummy); DarkMass = fdummy;
@@ -848,13 +921,6 @@ void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
 	hd[i].vcentre[0] = vx;
 	hd[i].vcentre[1] = vy;
 	hd[i].vcentre[2] = vz;
-	hd[i].rbg = 0;
-	hd[i].Mbg = 0;
-	hd[i].rcrit = 0;
-	hd[i].Mcrit = 0;
-	hd[i].rvcmax = 0;
-	hd[i].Mrvcmax = 0;
-	hd[i].vcmax = 0;
 	hd[i].rmin = gi->rmin;
 	if (gi->rmaxfromhalocatalogue == 1) {
 	    /*
@@ -866,71 +932,77 @@ void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
 	else {
 	    hd[i].rmax = gi->rmax;
 	    }
-	if (gi->gridtype == 0) {
-	    dr = (hd[i].rmax-hd[i].rmin)/hd[i].Nbin;
-	    }
-	else if (gi->gridtype == 1) {
-	    dr = (log(hd[i].rmax)-log(hd[i].rmin))/hd[i].Nbin;
-	    }
-	hd[i].ps[0].ri = 0;
-	hd[i].ps[0].ro = hd[i].rmin;
-	for (j = 1; j < (hd[i].Nbin+1); j++) {
-	    if (gi->gridtype == 0) {
-		hd[i].ps[j].ri = hd[i].rmin + (j-1)*dr;
-		hd[i].ps[j].ro = hd[i].rmin + j*dr;
-		}
-	    else if (gi->gridtype == 1) {
-		hd[i].ps[j].ri = exp(log(hd[i].rmin) + (j-1)*dr);
-		hd[i].ps[j].ro = exp(log(hd[i].rmin) + j*dr);
-		}
-	    }
-	hd[i].ps[j].Ntot = 0;
-	hd[i].ps[j].Ngas = 0;
-	hd[i].ps[j].Ndark = 0;
-	hd[i].ps[j].Nstar = 0;
-	hd[i].ps[j].Nenctot = 0;
-	hd[i].ps[j].Nencgas = 0;
-	hd[i].ps[j].Nencdark = 0;
-	hd[i].ps[j].Nencstar = 0;
-	hd[i].ps[j].Mtot = 0;
-	hd[i].ps[j].Mgas = 0;
-	hd[i].ps[j].Mdark = 0;
-	hd[i].ps[j].Mstar = 0;
-	hd[i].ps[j].Menctot = 0;
-	hd[i].ps[j].Mencgas = 0;
-	hd[i].ps[j].Mencdark = 0;
-	hd[i].ps[j].Mencstar = 0;
-	for (k = 0; k < 3; k++) {
-	    hd[i].ps[j].veltot[k] = 0;
-	    hd[i].ps[j].velgas[k] = 0;
-	    hd[i].ps[j].veldark[k] = 0;
-	    hd[i].ps[j].velstar[k] = 0;
-	    hd[i].ps[j].Ltot[k] = 0;
-	    hd[i].ps[j].Lgas[k] = 0;
-	    hd[i].ps[j].Ldark[k] = 0;
-	    hd[i].ps[j].Lstar[k] = 0;
-	    }
-	for (k = 0; k < 6; k++) {
-	    hd[i].ps[j].vel2tot[k] = 0;
-	    hd[i].ps[j].vel2gas[k] = 0;
-	    hd[i].ps[j].vel2dark[k] = 0;
-	    hd[i].ps[j].vel2star[k] = 0;
-	    }
+	hd[i].rbg = 0;
+	hd[i].Mbg = 0;
+	hd[i].rcrit = 0;
+	hd[i].Mcrit = 0;
+	hd[i].rvcmax = 0;
+	hd[i].Mrvcmax = 0;
+	hd[i].vcmax = 0;
+	initialise_halo_profile(gi,&hd[i]);
 	}
-    if (HaloCatalogueFile == NULL) fprintf(stderr,"Pointer is NULL\n");
-    fprintf(stderr,"pointer2 %p\n",HaloCatalogueFile);
-//    rewind(HaloCatalogueFile);
-    fprintf(stderr,"pointer3 %p\n",HaloCatalogueFile);
     fclose(HaloCatalogueFile);
     *hdin = hd;
     gi->NHalo = NHaloRead;
-
-    fprintf(stderr,"file> %s NHalo %d\n",gi->HaloCatalogueFileName,gi->NHalo);
-    for (i = 0; i < gi->NHalo; i++) {
-	fprintf(stderr,"%d %g %g %g %g %g %g %g %g %d\n",hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],hd[i].rmin,hd[i].rmax,hd[i].Nbin);
-	}
-
     }
+
+void initialise_halo_profile (GI *gi, HALO_DATA *hd){
+
+    int j, k;
+    double dr = 0;
+
+    if (gi->gridtype == 0) {
+	dr = (hd->rmax-hd->rmin)/hd->Nbin;
+	}
+    else if (gi->gridtype == 1) {
+	dr = (log(hd->rmax)-log(hd->rmin))/hd->Nbin;
+	}
+    hd->ps[0].ri = 0;
+    hd->ps[0].ro = hd->rmin;
+    for (j = 1; j < (hd->Nbin+1); j++) {
+	if (gi->gridtype == 0) {
+	    hd->ps[j].ri = hd->rmin + (j-1)*dr;
+	    hd->ps[j].ro = hd->rmin + j*dr;
+	    }
+	else if (gi->gridtype == 1) {
+	    hd->ps[j].ri = exp(log(hd->rmin) + (j-1)*dr);
+	    hd->ps[j].ro = exp(log(hd->rmin) + j*dr);
+	    }
+	hd->ps[j].Ntot = 0;
+	hd->ps[j].Ngas = 0;
+	hd->ps[j].Ndark = 0;
+	hd->ps[j].Nstar = 0;
+	hd->ps[j].Nenctot = 0;
+	hd->ps[j].Nencgas = 0;
+	hd->ps[j].Nencdark = 0;
+	hd->ps[j].Nencstar = 0;
+	hd->ps[j].Mtot = 0;
+	hd->ps[j].Mgas = 0;
+	hd->ps[j].Mdark = 0;
+	hd->ps[j].Mstar = 0;
+	hd->ps[j].Menctot = 0;
+	hd->ps[j].Mencgas = 0;
+	hd->ps[j].Mencdark = 0;
+	hd->ps[j].Mencstar = 0;
+	for (k = 0; k < 3; k++) {
+	    hd->ps[j].veltot[k] = 0;
+	    hd->ps[j].velgas[k] = 0;
+	    hd->ps[j].veldark[k] = 0;
+	    hd->ps[j].velstar[k] = 0;
+	    hd->ps[j].Ltot[k] = 0;
+	    hd->ps[j].Lgas[k] = 0;
+	    hd->ps[j].Ldark[k] = 0;
+	    hd->ps[j].Lstar[k] = 0;
+	    }
+	for (k = 0; k < 6; k++) {
+	    hd->ps[j].vel2tot[k] = 0;
+	    hd->ps[j].vel2gas[k] = 0;
+	    hd->ps[j].vel2dark[k] = 0;
+	    hd->ps[j].vel2star[k] = 0;
+	    }
+	}
+    }
+
 
 void read_art_record_dark(ART_DATA ad, DARK_PARTICLE *dp) {
 
