@@ -39,14 +39,14 @@ typedef struct profile_structure {
     double Mencgas;
     double Mencdark;
     double Mencstar;
-    double veltot[3];
-    double vel2tot[6];
-    double velgas[3];
-    double vel2gas[6];
-    double veldark[3];
-    double vel2dark[6];
-    double velstar[3];
-    double vel2star[6];
+    double vtot[3];
+    double v2tot[6];
+    double vgas[3];
+    double v2gas[6];
+    double vdark[3];
+    double v2dark[6];
+    double vstar[3];
+    double v2star[6];
     double Ltot[3];
     double Lgas[3];
     double Ldark[3];
@@ -78,8 +78,11 @@ typedef struct general_info {
     int halocatalogueformat;
     int verboselevel;
     int Nbin;
-    int NHalo, Ngas, Ndark, Nstar;
-    int NParticlesPerBlock, NParticlesInBlock, NBlock;
+    int Nhalo;
+    int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
+    int Nparticleperblockstar, Nparticleinblockstar, Nblockdtar;
+    int Nparticleread;
+    int Nrecordread;
     double rhoencbg, rhoenccrit;
     double rmin, rmax;
     double E, Deltabg, Deltacrit;
@@ -89,6 +92,11 @@ typedef struct general_info {
     char OutputName[256];
     } GI;
 
+typedef struct coordinates {
+
+    double r[3];
+    double v[3];
+    } COORDINATES;
 
 // => goes to iof
 typedef struct cosmological_parameters {
@@ -126,22 +134,38 @@ typedef struct art_data {
 
     int doswap;
     int massfromdata;
-    int Lmaxdark, Nrec;
     int headerincludesstars;
+    int Lmaxdark;
+    int Nparticleperrecord;
+    int Nrecord;
     int Ngas, Ndark, Nstar;
-    int Nreadgas, Nreaddark, Nreadstar;
     int Ndarklevel[ART_LEVEL_ARRAY_LENGTH];
     double shift;
     double toplevelmassdark, toplevelsoftdark, refinementstepdark;
     double massdark[ART_LEVEL_ARRAY_LENGTH];
     double softdark[ART_LEVEL_ARRAY_LENGTH];
-    char HeaderFileName[256], GasFileName[256], DarkFileName[256], StarFileName[256];
+    char HeaderFileName[256], CoordinatesDataFileName[256];
     char Banner[ART_BANNER_LENGTH];
     ART_HEADER ah;
-    FILE *HeaderFile;
-    FILE *PosXFile, *PosYFile, *PosZFile;
-    FILE *VelXFile, *VelYFile, *VelZFile;
+    FILE *HeaderFile, *CoordinatesDataFile;
     } ART_DATA;
+
+typedef struct profile_dark_particle {
+
+    double r[3];
+    double v[3];
+    double mass;
+    } PROFILE_DARK_PARTICLE;
+
+typedef struct profile_star_particle {
+
+    double r[3];
+    double v[3];
+    double mass;
+    double tform;
+    double Z_II;
+    double Z_Ia;
+    } PROFILE_STAR_PARTICLE;
 
 void calculate_unit_vectors(double pos[3], double erad[3], double ephi[3], double etheta[3]) {
 
@@ -217,14 +241,15 @@ void read_art_header(ART_DATA *ad) {
     assert(fread(&header,sizeof(int),1,ad->HeaderFile) == 1);
     if (header != sizeof(ad->Banner)+sizeof(ART_HEADER)) {
 	ad->doswap = 1;
-	flip_4byte(&header,sizeof(int),1);
+	reorder(&header,sizeof(int),1);
 	}
+    fprintf(stderr,"doswap %d size banner %lu size header %lu\n",ad->doswap,sizeof(ad->Banner),sizeof(ART_HEADER));
     assert(header == sizeof(ad->Banner)+sizeof(ART_HEADER));
     assert(fread(ad->Banner,sizeof(char),sizeof(ad->Banner),ad->HeaderFile) == sizeof(ad->Banner));
     assert(fread(&ad->ah,sizeof(ART_HEADER),1,ad->HeaderFile) == 1);
-    if (ad->doswap) flip_4byte(&ad->ah,sizeof(ART_HEADER),1);
+    if (ad->doswap) reorder(&ad->ah,4,sizeof(ART_HEADER)/4);
     assert(fread(&trailer,sizeof(int),1,ad->HeaderFile) == 1);
-    if (ad->doswap) flip_4byte(&trailer,sizeof(int),1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
     assert(header == trailer);
     fclose(ad->HeaderFile);
     /*
@@ -241,7 +266,8 @@ void read_art_header(ART_DATA *ad) {
 	ad->Ndark = ad->ah.num[ad->Lmaxdark];
 	ad->Nstar = 0;
 	}
-    ad->Nrec = ad->ah.Nrow*ad->ah.Nrow;
+    ad->Nparticleperrecord = ad->ah.Nrow*ad->ah.Nrow;
+    ad->Nrecord = (ad->Ndark+ad->Nstar+ad->Nparticleperrecord-1)/ad->Nparticleperrecord;
     if (ad->toplevelmassdark == -1) {
 	ad->massfromdata = 1;
 	ad->toplevelmassdark = ad->ah.mass[ad->Lmaxdark];
@@ -266,26 +292,31 @@ void usage(void);
 void read_halocatalogue_generic(GI (*), HALO_DATA (**));
 void read_halocatalogue_6DFOF(GI (*), HALO_DATA (**));
 void initialise_halo_profile (GI (*), HALO_DATA (*));
-void read_art_record_dark(ART_DATA, DARK_PARTICLE (*));
-void put_dp_in_bins(HALO_DATA (*), DARK_PARTICLE (*), UNIT_SYSTEM, GI);
+void read_art_coordinates_record(ART_DATA, COORDINATES (*));
+void put_pdp_in_bins(HALO_DATA (*), PROFILE_DARK_PARTICLE (*), UNIT_SYSTEM, GI);
 void calculate_halo_properties(HALO_DATA (*), COSMOLOGICAL_PARAMETERS, UNIT_SYSTEM, GI);
 void write_output(HALO_DATA (*), GI);
 
 int main(int argc, char **argv) {
 
-    int i, j;
+    int i, j, k, l;
+    int L;
+    int Nparticleread;
     GI gi;
     COSMOLOGICAL_PARAMETERS cp;
     UNIT_SYSTEM us;
     TIPSY_HEADER th;
-    GAS_PARTICLE *gp = NULL;
-    DARK_PARTICLE *dp = NULL;
-    STAR_PARTICLE *sp = NULL;
-    GAS_PARTICLE_DPP *gpdpp = NULL;
-    DARK_PARTICLE_DPP *dpdpp = NULL;
-    STAR_PARTICLE_DPP *spdpp = NULL;
-    HALO_DATA *hd = NULL;
+    GAS_PARTICLE gp;
+    DARK_PARTICLE dp;
+    STAR_PARTICLE sp;
+    GAS_PARTICLE_DPP gpdpp;
+    DARK_PARTICLE_DPP dpdpp;
+    STAR_PARTICLE_DPP spdpp;
     ART_DATA ad;
+    COORDINATES *ac = NULL;
+    HALO_DATA *hd = NULL;
+    PROFILE_DARK_PARTICLE *pdp = NULL;
+    PROFILE_STAR_PARTICLE *psp = NULL;
     XDR xdrs;
 
     /*
@@ -312,17 +343,19 @@ int main(int argc, char **argv) {
     gi.Nbin = 0;
     gi.gridtype = 1;
     gi.binfactor = 5;
-    gi.NHalo = 0;
-
+    gi.Nhalo = 0;
+    gi.Nparticleperblockdark = 10000000;
+    gi.Nparticleinblockdark = 0;
+    gi.Nblockdark = 0;
+    gi.Nparticleperblockstar = 10000000;
+    gi.Nparticleinblockstar = 0;
+    gi.Nblockstar = 0;
     ad.doswap = 0;
     ad.massfromdata = 0;
     ad.headerincludesstars = 0;
     ad.Ngas = 0;
     ad.Ndark = 0;
     ad.Nstar = 0;
-    ad.Nreadgas = 0;
-    ad.Nreaddark = 0;
-    ad.Nreadstar = 0;
     ad.refinementstepdark = 2;
     ad.toplevelmassdark = -1;
     ad.toplevelsoftdark = 0;
@@ -484,6 +517,15 @@ int main(int argc, char **argv) {
             strcpy(ad.HeaderFileName,argv[i]);
             i++;
             }
+        else if (strcmp(argv[i],"-coordinatesdatafile") == 0) {
+            i++;
+            if (i >= argc) usage();
+            strcpy(ad.CoordinatesDataFileName,argv[i]);
+            i++;
+            }
+
+
+/*
         else if (strcmp(argv[i],"-gasfile") == 0) {
             i++;
             if (i >= argc) usage();
@@ -502,6 +544,7 @@ int main(int argc, char **argv) {
             strcpy(ad.StarFileName,argv[i]);
             i++;
             }
+*/
 	else if ((strcmp(argv[i],"-h") == 0) || (strcmp(argv[i],"-help") == 0)) {
 	    usage();
 	    }
@@ -518,10 +561,6 @@ int main(int argc, char **argv) {
 	xdrstdio_create(&xdrs,stdin,XDR_DECODE);
 	read_tipsy_standard_header(&xdrs,&th);
 	cp.ascale = th.time;
-	gi.Ngas = th.ngas;
-	gi.Ndark = th.ndark;
-	gi.Nstar = th.nstar;
-	gi.NParticlesPerBlock = 1000000;
 	gi.bc[0] = -0.5*us.LBox;
 	gi.bc[1] = -0.5*us.LBox;
 	gi.bc[2] = -0.5*us.LBox;
@@ -532,15 +571,11 @@ int main(int argc, char **argv) {
     else if (gi.dataformat == 1) {
 	read_art_header(&ad);
 	cp.ascale = ad.ah.aunin;
-	gi.Ngas = ad.Ngas;
-	gi.Ndark = ad.Ndark;
-	gi.Nstar = ad.Nstar;
 	cp.OmegaM0 = ad.ah.OmM0;
 	cp.OmegaB0 = ad.ah.OmB0;
 	cp.OmegaDM0 = cp.OmegaM0 - cp.OmegaB0;
 	cp.OmegaL0 = ad.ah.OmL0;
 	cp.OmegaK0 = ad.ah.OmK0;
-	gi.NParticlesPerBlock = ad.Nrec;
 	gi.bc[0] = 0;
 	gi.bc[1] = 0;
 	gi.bc[2] = 0;
@@ -553,7 +588,7 @@ int main(int argc, char **argv) {
 	exit(1);
 	}
 
-    fprintf(stderr,"a = %g doswap %d Nrec %d %d B %s Ndark %d Lmax %d\n",cp.ascale,ad.doswap,ad.Nrec,ad.ah.Nrow,ad.Banner,ad.Ndark,ad.Lmaxdark);
+    fprintf(stderr,"a = %g doswap %d Nparticleperrecord %d %d B %s Ndark %d Lmax %d\n",cp.ascale,ad.doswap,ad.Nparticleperrecord,ad.ah.Nrow,ad.Banner,ad.Ndark,ad.Lmaxdark);
     for (i = 0; i < 10; i++) {
 	fprintf(stderr,"i %d Ndarklvel %d massdark %g softdark %g num %d\n",i,ad.Ndarklevel[i],ad.massdark[i],ad.softdark[i],ad.ah.num[i]);
 	}
@@ -594,8 +629,8 @@ int main(int argc, char **argv) {
 
 
     fprintf(stderr,"After halocatalogue\n");
-    fprintf(stderr,"file: %s NHalo %d\n",gi.HaloCatalogueFileName,gi.NHalo);
-    for (i = 0; i < gi.NHalo; i++) {
+    fprintf(stderr,"file: %s Nhalo %d\n",gi.HaloCatalogueFileName,gi.Nhalo);
+    for (i = 0; i < gi.Nhalo; i++) {
 	fprintf(stderr,"%d %g %g %g %g %g %g %g %g %d\n",hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],hd[i].rmin,hd[i].rmax,hd[i].Nbin);
 /*	for(j = 0; j < gi.Nbin+1; j++) {
 	    fprintf(stderr,"j %d ri %g ro %g\n",j,hd[i].ps[j].ri,hd[i].ps[j].ro);
@@ -609,75 +644,118 @@ int main(int argc, char **argv) {
     ** Harvest data
     */
     if (gi.dataformat == 0) {
-	assert(gi.Ngas == 0);
-	assert(gi.Nstar == 0);
+	assert(ad.Ngas == 0);
+	assert(ad.Nstar == 0);
 	assert(gi.positionprecision == 0);
 	if (gi.positionprecision == 0) {
 	    /*
 	    ** Dark Matter
 	    */
-	    dp = realloc(dp,gi.NParticlesPerBlock*sizeof(DARK_PARTICLE));
-	    gi.NBlock = (gi.Ndark+gi.NParticlesPerBlock-1)/gi.NParticlesPerBlock;
-	    for (i = 0; i < gi.NBlock; i++) {
-		if (i == gi.NBlock-1) {
-		    gi.NParticlesInBlock = gi.Ndark-((gi.NBlock-1)*gi.NParticlesPerBlock);
+	    pdp = realloc(pdp,gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
+	    assert(pdp != NULL);
+	    gi.Nblockdark = (ad.Ndark+gi.Nparticleperblockdark-1)/gi.Nparticleperblockdark;
+	    for (i = 0; i < gi.Nblockdark; i++) {
+		if (i == gi.Nblockdark-1) {
+		    gi.Nparticleinblockdark = ad.Ndark-((gi.Nblockdark-1)*gi.Nparticleperblockdark);
 		    }
 		else {
-		    gi.NParticlesInBlock = gi.NParticlesPerBlock;
+		    gi.Nparticleinblockdark = gi.Nparticleperblockdark;
 		    }
-		for (j = 0; j < gi.NParticlesInBlock; j++) {
-		    read_tipsy_standard_dark(&xdrs,&dp[j]);
+		for (j = 0; j < gi.Nparticleinblockdark; j++) {
+		    read_tipsy_standard_dark(&xdrs,&dp);
+		    for (k = 0; k < 3; k++) {
+			pdp[j].r[k] = dp.pos[k];
+			pdp[j].v[k] = dp.vel[k];
+			}
+		    pdp[j].mass = dp.mass;
 		    }
-		j = gi.NParticlesInBlock-1;
-		fprintf(stderr,"%d %d %g %g %g\n",i,j,dp[j].pos[0],dp[j].pos[1],dp[j].pos[2]);
+		put_pdp_in_bins(hd,pdp,us,gi);
 
-		put_dp_in_bins(hd,dp,us,gi);
+		j = gi.Nparticleinblockdark-1;
+		fprintf(stderr,"%d %d %g %g %g\n",i,j,pdp[j].r[0],pdp[j].r[1],pdp[j].r[2]);
+
 		}
-	    fprintf(stderr,"Ndark %d = %d\n",gi.Ndark,(gi.NBlock-1)*gi.NParticlesPerBlock+gi.NParticlesInBlock);
-	    free(dp);
+
+	    fprintf(stderr,"Ndark %d = %d\n",ad.Ndark,(gi.Nblockdark-1)*gi.Nparticleperblockdark+gi.Nparticleinblockdark);
+
+	    free(pdp);
 	    }
 	}
     else if (gi.dataformat == 1) {
 	/*
-	** Dark Matter
+	** Dark Matter and Stars
 	*/
-	ad.PosXFile = fopen(ad.DarkFileName,"r");
-	assert(ad.PosXFile != NULL);
-	ad.PosYFile = fopen(ad.DarkFileName,"r");
-	assert(ad.PosYFile != NULL);
-	ad.PosZFile = fopen(ad.DarkFileName,"r");
-	assert(ad.PosZFile != NULL);
-	ad.VelXFile = fopen(ad.DarkFileName,"r");
-	assert(ad.VelXFile != NULL);
-	ad.VelYFile = fopen(ad.DarkFileName,"r");
-	assert(ad.VelYFile != NULL);
-	ad.VelZFile = fopen(ad.DarkFileName,"r");
-	assert(ad.VelZFile != NULL);
-	dp = realloc(dp,gi.NParticlesPerBlock*sizeof(DARK_PARTICLE));
-	gi.NBlock = (gi.Ndark+gi.NParticlesPerBlock-1)/gi.NParticlesPerBlock;
-	for (i = 0; i < gi.NBlock; i++) {
-	    if (i == gi.NBlock-1) {
-		gi.NParticlesInBlock = gi.Ndark-((gi.NBlock-1)*gi.NParticlesPerBlock);
-		}
-	    else {
-		gi.NParticlesInBlock = gi.NParticlesPerBlock;
-		}
-	    read_art_record_dark(ad,dp);
-	    j = gi.NParticlesInBlock-1;
-	    fprintf(stderr,"%d %d %g %g %g\n",i,j,dp[j].pos[0],dp[j].pos[1],dp[j].pos[2]);
-	    put_dp_in_bins(hd,dp,us,gi);
-	    }
-	fprintf(stderr,"Ndark %d = %d\n",gi.Ndark,(gi.NBlock-1)*gi.NParticlesPerBlock+gi.NParticlesInBlock);
-	fclose(ad.PosXFile);
-	fclose(ad.PosYFile);
-	fclose(ad.PosZFile);
-	fclose(ad.VelXFile);
-	fclose(ad.VelYFile);
-	fclose(ad.VelZFile);
-	/*
-	** Stars
-	*/
+	ad.CoordinatesDataFile = fopen(ad.CoordinatesDataFileName,"r");
+	assert(ad.CoordinatesDataFile != NULL);
+	ac = realloc(ac,ad.Nparticleperrecord*sizeof(COORDINATES));
+	assert(ac != NULL);
+	int Nparticleread, Nrecordread;
+	Nparticleread = 0;
+	Nrecordread = 0;
+	pdp = realloc(pdp,gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
+	assert(pdp != NULL);
+	psp = realloc(psp,gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
+	assert(psp != NULL);
+//	gi.NBlocksStar = (gi.Nstar+gi.NParticlesPerBlockStar-1)/gi.NParticlesPerBlockStar;
+//	gi.NBlocksDark = (ad.Ndark+gi.NParticlesPerBlockDark-1)/gi.NParticlesPerBlockDark;
 
+	int Icurrentblockdark, Icurrentblockstar;
+	Icurrentblockdark = 0;
+	Icurrentblockstar = 0;
+
+	for (i = 0; i < ad.Nrecord; i++) {
+	    read_art_coordinates_record(ad,ac);
+	    for (j = 0; j < ad.Nparticleperrecord; j++) {
+		if (Nparticleread < ad.Ndark) {
+		    /*
+		    ** Dark Matter
+		    */
+		    for (k = 0; k < 3; k++) {
+			pdp[Icurrentblockdark].r[k] = ac[j].r[k] + ad.shift;
+			pdp[Icurrentblockdark].v[k] = ac[j].v[k];
+			}
+		    for (k = ad.Lmaxdark; k >=0; k--) {
+			if (ad.ah.num[k] >= Nparticleread) L = ad.Lmaxdark-k;
+			}
+		    pdp[Icurrentblockdark].mass = ad.massdark[L];
+		    Nparticleread++;
+		    Icurrentblockdark++;
+		    if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == ad.Ndark)) {
+			/*
+			** Block is full or we reached end of dark matter particles
+			*/
+			gi.Nparticleinblockdark = Icurrentblockdark;
+			put_pdp_in_bins(hd,pdp,us,gi);
+			Icurrentblockdark = 0;
+			}
+		    }
+		else {
+		    /*
+		    ** Stars
+		    */
+		    assert(Nparticleread < ad.Ndark+ad.Nstar);
+		    for (k = 0; k < 3; k++) {
+			psp[Icurrentblockstar].r[k] = ac[j].r[k] + ad.shift;
+			psp[Icurrentblockstar].v[k] = ac[j].v[k];
+			}
+		    /*
+		    ** Get other star properties
+		    */
+
+
+		    Nparticleread++;
+		    Icurrentblockstar++;
+		    if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == ad.Ndark+ad.Nstar)) {
+			/*
+			** Block is full or we reached end of star particles
+			*/
+			gi.Nparticleinblockstar = Icurrentblockstar;
+			put_psp_in_bins(hd,psp,us,gi);
+			Icurrentblockstar = 0;
+			}
+		    }
+		}
+	    }
 	}
 
     /*
@@ -763,7 +841,7 @@ void usage(void) {
 void read_halocatalogue_generic(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = 10000;
-    int i, ID, idummy, NHaloRead;
+    int i, ID, idummy, NhaloRead;
     float fdummy;
     double rx, ry, rz, vx, vy, vz, rmin, rmax;
     double dr;
@@ -778,7 +856,7 @@ void read_halocatalogue_generic(GI *gi, HALO_DATA **hdin) {
     assert(gi->rmax >= 0);
     assert(gi->rmax > gi->rmin);
     dr = 0;
-    NHaloRead = 0;
+    NhaloRead = 0;
     hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
     assert(hd != NULL);
     for (i = 0; i < SizeHaloData; i++) {
@@ -797,8 +875,8 @@ void read_halocatalogue_generic(GI *gi, HALO_DATA **hdin) {
 	fscanf(HaloCatalogueFile,"%g",&fdummy); rmin = fdummy;
 	fscanf(HaloCatalogueFile,"%g",&fdummy); rmax = fdummy;
 	if (feof(HaloCatalogueFile)) break;
-	NHaloRead++;
-	if (SizeHaloData < NHaloRead){
+	NhaloRead++;
+	if (SizeHaloData < NhaloRead){
 	    SizeHaloData += 10000; 
 	    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
 	    assert(hd != NULL);
@@ -808,7 +886,7 @@ void read_halocatalogue_generic(GI *gi, HALO_DATA **hdin) {
 		assert(hd[i].ps != NULL);
 		}
 	    }
-	i = NHaloRead-1;
+	i = NhaloRead-1;
 	hd[i].ID = ID;
 	hd[i].rcentre[0] = rx;
 	hd[i].rcentre[1] = ry;
@@ -829,13 +907,13 @@ void read_halocatalogue_generic(GI *gi, HALO_DATA **hdin) {
 	}
     fclose(HaloCatalogueFile);
     *hdin = hd;
-    gi->NHalo = NHaloRead;
+    gi->Nhalo = NhaloRead;
     }
 
 void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = 10000;
-    int i, ID, N, idummy, NHaloRead;
+    int i, ID, N, idummy, NhaloRead;
     float fdummy;
     double DarkMass, radius1, radius2, vd1D;
     double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
@@ -851,7 +929,7 @@ void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
     assert(gi->rmax >= 0);
     assert(gi->rmax > gi->rmin);
     dr = 0;
-    NHaloRead = 0;
+    NhaloRead = 0;
     hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
     assert(hd != NULL);
     for (i = 0; i < SizeHaloData; i++) {
@@ -890,8 +968,8 @@ void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
 	fscanf(HaloCatalogueFile,"%g",&fdummy);
 	fscanf(HaloCatalogueFile,"%g",&fdummy);
 	if (feof(HaloCatalogueFile)) break;
-	NHaloRead++;
-	if (SizeHaloData < NHaloRead){
+	NhaloRead++;
+	if (SizeHaloData < NhaloRead){
 	    SizeHaloData += 10000; 
 	    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
 	    assert(hd != NULL);
@@ -901,7 +979,7 @@ void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
 		assert(hd[i].ps != NULL);
 		}
 	    }
-	i = NHaloRead-1;
+	i = NhaloRead-1;
 	hd[i].ID = ID;
 	if (gi->centretype == 0) {
 	    hd[i].rcentre[0] = rxcom;
@@ -943,7 +1021,7 @@ void read_halocatalogue_6DFOF(GI *gi, HALO_DATA **hdin) {
 	}
     fclose(HaloCatalogueFile);
     *hdin = hd;
-    gi->NHalo = NHaloRead;
+    gi->Nhalo = NhaloRead;
     }
 
 void initialise_halo_profile (GI *gi, HALO_DATA *hd){
@@ -985,153 +1063,118 @@ void initialise_halo_profile (GI *gi, HALO_DATA *hd){
 	hd->ps[j].Mencdark = 0;
 	hd->ps[j].Mencstar = 0;
 	for (k = 0; k < 3; k++) {
-	    hd->ps[j].veltot[k] = 0;
-	    hd->ps[j].velgas[k] = 0;
-	    hd->ps[j].veldark[k] = 0;
-	    hd->ps[j].velstar[k] = 0;
+	    hd->ps[j].vtot[k] = 0;
+	    hd->ps[j].vgas[k] = 0;
+	    hd->ps[j].vdark[k] = 0;
+	    hd->ps[j].vstar[k] = 0;
 	    hd->ps[j].Ltot[k] = 0;
 	    hd->ps[j].Lgas[k] = 0;
 	    hd->ps[j].Ldark[k] = 0;
 	    hd->ps[j].Lstar[k] = 0;
 	    }
 	for (k = 0; k < 6; k++) {
-	    hd->ps[j].vel2tot[k] = 0;
-	    hd->ps[j].vel2gas[k] = 0;
-	    hd->ps[j].vel2dark[k] = 0;
-	    hd->ps[j].vel2star[k] = 0;
+	    hd->ps[j].v2tot[k] = 0;
+	    hd->ps[j].v2gas[k] = 0;
+	    hd->ps[j].v2dark[k] = 0;
+	    hd->ps[j].v2star[k] = 0;
 	    }
 	}
     }
 
 
-void read_art_record_dark(ART_DATA ad, DARK_PARTICLE *dp) {
+void read_art_coordinates_record(ART_DATA ad, COORDINATES *coordinates) {
 
-    int j, k;
-    int L = 0;
-    double rx, ry, rz;
-    double vx, vy, vz;
+    int i;
+    double ddummy;
     
-    /*
-    ** Get file pointers ready
-    */
-    
-    assert(fseek(ad.PosYFile,1*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-    assert(fseek(ad.PosZFile,2*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-    assert(fseek(ad.VelXFile,3*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-    assert(fseek(ad.VelYFile,4*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-    assert(fseek(ad.VelZFile,5*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-
-    /*
-    ** Go through record
-    */
-    
-    for (j = 0; j < ad.Nrec; j++) {
-
-	assert(fread(&rx,sizeof(float),1,ad.PosXFile) == 1);
-	assert(fread(&ry,sizeof(float),1,ad.PosYFile) == 1);
-	assert(fread(&rz,sizeof(float),1,ad.PosZFile) == 1);
-	assert(fread(&vx,sizeof(float),1,ad.VelXFile) == 1);
-	assert(fread(&vy,sizeof(float),1,ad.VelYFile) == 1);
-	assert(fread(&vz,sizeof(float),1,ad.VelZFile) == 1);
-
-	if (ad.doswap) flip_4byte(&rx,sizeof(float),1);
-	if (ad.doswap) flip_4byte(&ry,sizeof(float),1);
-	if (ad.doswap) flip_4byte(&rz,sizeof(float),1);
-	if (ad.doswap) flip_4byte(&vx,sizeof(float),1);
-	if (ad.doswap) flip_4byte(&vy,sizeof(float),1);
-	if (ad.doswap) flip_4byte(&vz,sizeof(float),1);
-
-	/*
-	** Determine current level
-	*/
-
-	for (k = ad.Lmaxdark; k >=0; k--) {
-	    if (ad.ah.num[k] > ad.Nreaddark) L = ad.Lmaxdark-k;
-	    }
-
-	/*
-	** Set particle properties
-	*/
-
-	dp[j].pos[0] = rx+ad.shift;
-	dp[j].pos[1] = ry+ad.shift;
-	dp[j].pos[2] = rz+ad.shift;
-	dp[j].vel[0] = vx;
-	dp[j].vel[1] = vy;
-	dp[j].vel[2] = vz;
-	dp[j].mass = ad.massdark[L];
-	dp[j].eps = ad.softdark[L];
-	dp[j].phi = 0;
-	ad.Nreaddark++;
+    for (i = 0; i < ad.Nparticleperrecord; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
+	coordinates[i].r[0] = ddummy;
 	}
-
-    /*
-    ** Move all pointers to the end of the record
-    */
-
-    assert(fseek(ad.PosXFile,5*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-    assert(fseek(ad.PosYFile,4*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-    assert(fseek(ad.PosZFile,3*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-    assert(fseek(ad.VelXFile,2*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
-    assert(fseek(ad.VelYFile,1*ad.Nrec*sizeof(float),SEEK_CUR) == 0);
+    for (i = 0; i < ad.Nparticleperrecord; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
+	coordinates[i].r[1] = ddummy;
+	}
+    for (i = 0; i < ad.Nparticleperrecord; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
+	coordinates[i].r[2] = ddummy;
+	}
+    for (i = 0; i < ad.Nparticleperrecord; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
+	coordinates[i].v[0] = ddummy;
+	}
+    for (i = 0; i < ad.Nparticleperrecord; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
+	coordinates[i].v[1] = ddummy;
+	}
+    for (i = 0; i < ad.Nparticleperrecord; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
+	coordinates[i].v[2] = ddummy;
+	}
     }
 
-void put_dp_in_bins(HALO_DATA *hd, DARK_PARTICLE *dp, UNIT_SYSTEM us, GI gi) {
+void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, UNIT_SYSTEM us, GI gi) {
 
     int i, j, k, l;
-    double pos[3], vel[3], velproj[3];
+    double r[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
-    double r;
+    double d;
 
-    for (i = 0; i < gi.NParticlesPerBlock; i++) {
-	for (j = 0; j < gi.NHalo; j++) {
+    for (i = 0; i < gi.Nparticleinblockdark; i++) {
+	for (j = 0; j < gi.Nhalo; j++) {
 	    for (k = 0; k < 3; k++) {
-		pos[k] = correct_position(hd[j].rcentre[k],dp[i].pos[k],us.LBox);
-		pos[k] = pos[k]-hd[j].rcentre[k];
+		r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],us.LBox);
+		r[k] = r[k]-hd[j].rcentre[k];
 		}
-	    r = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-	    if (r <= hd[j].ps[gi.Nbin].ro) {
+	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+	    if (d <= hd[j].ps[gi.Nbin].ro) {
 		for (k = 0; k < 3; k++) {
-		    vel[k] = dp[i].vel[k]-hd[j].vcentre[k];
+		    v[k] = pdp[i].v[k]-hd[j].vcentre[k];
 		    }
 		/*
 		** Go through bins from outside inwards => larger bin volume further out
 		*/
 		for (l = gi.Nbin; l >=0; l--) {
-		    if ((hd[j].ps[l].ri <= r) && (hd[j].ps[l].ro > r)) {
+		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
 			if (gi.projectionvariant == 0) {
-			    velproj[0] = vel[0];
-			    velproj[1] = vel[1];
-			    velproj[2] = vel[2];
+			    vproj[0] = v[0];
+			    vproj[1] = v[1];
+			    vproj[2] = v[2];
 			    }
 			else if (gi.projectionvariant == 1) {
-			    calculate_unit_vectors(pos,erad,ephi,etheta);
-			    velproj[0] = vel[0]*erad[0]+vel[1]*erad[1]+vel[2]*erad[2];
-			    velproj[1] = vel[0]*ephi[0]+vel[1]*ephi[1]+vel[2]*ephi[2];
-			    velproj[2] = vel[0]*etheta[0]+vel[1]*etheta[1]+vel[2]*etheta[2];
+			    calculate_unit_vectors(r,erad,ephi,etheta);
+			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
 			    }
 			hd[j].ps[l].Ntot++;
 			hd[j].ps[l].Ndark++;
-			hd[j].ps[l].Mtot += dp[i].mass;
-			hd[j].ps[l].Mdark += dp[i].mass;
+			hd[j].ps[l].Mtot += pdp[i].mass;
+			hd[j].ps[l].Mdark += pdp[i].mass;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].veltot[k] += velproj[k];
-			    hd[j].ps[l].veldark[k] += velproj[k];
-			    hd[j].ps[l].vel2tot[k] += velproj[k]*velproj[k];
-			    hd[j].ps[l].vel2dark[k] += velproj[k]*velproj[k];
+			    hd[j].ps[l].vtot[k] += vproj[k];
+			    hd[j].ps[l].vdark[k] += vproj[k];
+			    hd[j].ps[l].v2tot[k] += vproj[k]*vproj[k];
+			    hd[j].ps[l].v2dark[k] += vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].vel2tot[3] += velproj[0]*velproj[1];
-			hd[j].ps[l].vel2tot[4] += velproj[0]*velproj[2];
-			hd[j].ps[l].vel2tot[5] += velproj[1]*velproj[2];
-			hd[j].ps[l].vel2dark[3] += velproj[0]*velproj[1];
-			hd[j].ps[l].vel2dark[4] += velproj[0]*velproj[2];
-			hd[j].ps[l].vel2dark[5] += velproj[1]*velproj[2];
-			hd[j].ps[l].Ltot[0] += dp[i].mass*(pos[1]*vel[2] - pos[2]*vel[1]);
-			hd[j].ps[l].Ltot[1] += dp[i].mass*(pos[2]*vel[0] - pos[0]*vel[2]);
-			hd[j].ps[l].Ltot[2] += dp[i].mass*(pos[0]*vel[1] - pos[1]*vel[0]);
-			hd[j].ps[l].Ldark[0] += dp[i].mass*(pos[1]*vel[2] - pos[2]*vel[1]);
-			hd[j].ps[l].Ldark[1] += dp[i].mass*(pos[2]*vel[0] - pos[0]*vel[2]);
-			hd[j].ps[l].Ldark[2] += dp[i].mass*(pos[0]*vel[1] - pos[1]*vel[0]);
+			hd[j].ps[l].v2tot[3]  += vproj[0]*vproj[1];
+			hd[j].ps[l].v2tot[4]  += vproj[0]*vproj[2];
+			hd[j].ps[l].v2tot[5]  += vproj[1]*vproj[2];
+			hd[j].ps[l].v2dark[3] += vproj[0]*vproj[1];
+			hd[j].ps[l].v2dark[4] += vproj[0]*vproj[2];
+			hd[j].ps[l].v2dark[5] += vproj[1]*vproj[2];
+			hd[j].ps[l].Ltot[0]  += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].Ltot[1]  += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].Ltot[2]  += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].Ldark[0] += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].Ldark[1] += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].Ldark[2] += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
 			break;
 			}
 		    }
@@ -1146,7 +1189,7 @@ void calculate_halo_properties(HALO_DATA *hd, COSMOLOGICAL_PARAMETERS cp, UNIT_S
     double radius[2], rhoenc[2], Menc[2];
     double m, d;
     
-    for (i = 0; i < gi.NHalo; i++) {
+    for (i = 0; i < gi.Nhalo; i++) {
 	
 	/*
 	** Calculate derived properties
@@ -1176,35 +1219,35 @@ void calculate_halo_properties(HALO_DATA *hd, COSMOLOGICAL_PARAMETERS cp, UNIT_S
 		hd[i].ps[j].Mencstar += hd[i].ps[k].Mstar;
 		}
 	    for (k = 0; k < 3; k++) {
-		hd[i].ps[j].veltot[k]  /= hd[i].ps[j].Ntot;
-		hd[i].ps[j].velgas[k]  /= hd[i].ps[j].Ngas;
-		hd[i].ps[j].veldark[k] /= hd[i].ps[j].Ndark;
-		hd[i].ps[j].velstar[k] /= hd[i].ps[j].Nstar;
+		hd[i].ps[j].vtot[k]  /= hd[i].ps[j].Ntot;
+		hd[i].ps[j].vgas[k]  /= hd[i].ps[j].Ngas;
+		hd[i].ps[j].vdark[k] /= hd[i].ps[j].Ndark;
+		hd[i].ps[j].vstar[k] /= hd[i].ps[j].Nstar;
 		}
 	    for (k = 0; k < 6; k++) {
-		hd[i].ps[j].vel2tot[k]  /= hd[i].ps[j].Ntot;
-		hd[i].ps[j].vel2gas[k]  /= hd[i].ps[j].Ngas;
-		hd[i].ps[j].vel2dark[k] /= hd[i].ps[j].Ndark;
-		hd[i].ps[j].vel2star[k] /= hd[i].ps[j].Nstar;
+		hd[i].ps[j].v2tot[k]  /= hd[i].ps[j].Ntot;
+		hd[i].ps[j].v2gas[k]  /= hd[i].ps[j].Ngas;
+		hd[i].ps[j].v2dark[k] /= hd[i].ps[j].Ndark;
+		hd[i].ps[j].v2star[k] /= hd[i].ps[j].Nstar;
 		}
 	    for (k = 0; k < 3; k++) {
-		hd[i].ps[j].vel2tot[k]  -= hd[i].ps[j].veltot[k]*hd[i].ps[j].veltot[k];
-		hd[i].ps[j].vel2gas[k]  -= hd[i].ps[j].velgas[k]*hd[i].ps[j].velgas[k];
-		hd[i].ps[j].vel2dark[k] -= hd[i].ps[j].veldark[k]*hd[i].ps[j].veldark[k];
-		hd[i].ps[j].vel2star[k] -= hd[i].ps[j].velstar[k]*hd[i].ps[j].velstar[k];
+		hd[i].ps[j].v2tot[k]  -= hd[i].ps[j].vtot[k]*hd[i].ps[j].vtot[k];
+		hd[i].ps[j].v2gas[k]  -= hd[i].ps[j].vgas[k]*hd[i].ps[j].vgas[k];
+		hd[i].ps[j].v2dark[k] -= hd[i].ps[j].vdark[k]*hd[i].ps[j].vdark[k];
+		hd[i].ps[j].v2star[k] -= hd[i].ps[j].vstar[k]*hd[i].ps[j].vstar[k];
 		}
-	    hd[i].ps[j].vel2tot[3]  -= hd[i].ps[j].veltot[0]*hd[i].ps[j].veltot[1];
-	    hd[i].ps[j].vel2tot[4]  -= hd[i].ps[j].veltot[0]*hd[i].ps[j].veltot[2];
-	    hd[i].ps[j].vel2tot[5]  -= hd[i].ps[j].veltot[1]*hd[i].ps[j].veltot[2];
-	    hd[i].ps[j].vel2gas[3]  -= hd[i].ps[j].velgas[0]*hd[i].ps[j].velgas[1];
-	    hd[i].ps[j].vel2gas[4]  -= hd[i].ps[j].velgas[0]*hd[i].ps[j].velgas[2];
-	    hd[i].ps[j].vel2gas[5]  -= hd[i].ps[j].velgas[1]*hd[i].ps[j].velgas[2];
-	    hd[i].ps[j].vel2dark[3] -= hd[i].ps[j].veldark[0]*hd[i].ps[j].veldark[1];
-	    hd[i].ps[j].vel2dark[4] -= hd[i].ps[j].veldark[0]*hd[i].ps[j].veldark[2];
-	    hd[i].ps[j].vel2dark[5] -= hd[i].ps[j].veldark[1]*hd[i].ps[j].veldark[2];
-	    hd[i].ps[j].vel2star[3] -= hd[i].ps[j].velstar[0]*hd[i].ps[j].velstar[1];
-	    hd[i].ps[j].vel2star[4] -= hd[i].ps[j].velstar[0]*hd[i].ps[j].velstar[2];
-	    hd[i].ps[j].vel2star[5] -= hd[i].ps[j].velstar[1]*hd[i].ps[j].velstar[2];
+	    hd[i].ps[j].v2tot[3]  -= hd[i].ps[j].vtot[0]*hd[i].ps[j].vtot[1];
+	    hd[i].ps[j].v2tot[4]  -= hd[i].ps[j].vtot[0]*hd[i].ps[j].vtot[2];
+	    hd[i].ps[j].v2tot[5]  -= hd[i].ps[j].vtot[1]*hd[i].ps[j].vtot[2];
+	    hd[i].ps[j].v2gas[3]  -= hd[i].ps[j].vgas[0]*hd[i].ps[j].vgas[1];
+	    hd[i].ps[j].v2gas[4]  -= hd[i].ps[j].vgas[0]*hd[i].ps[j].vgas[2];
+	    hd[i].ps[j].v2gas[5]  -= hd[i].ps[j].vgas[1]*hd[i].ps[j].vgas[2];
+	    hd[i].ps[j].v2dark[3] -= hd[i].ps[j].vdark[0]*hd[i].ps[j].vdark[1];
+	    hd[i].ps[j].v2dark[4] -= hd[i].ps[j].vdark[0]*hd[i].ps[j].vdark[2];
+	    hd[i].ps[j].v2dark[5] -= hd[i].ps[j].vdark[1]*hd[i].ps[j].vdark[2];
+	    hd[i].ps[j].v2star[3] -= hd[i].ps[j].vstar[0]*hd[i].ps[j].vstar[1];
+	    hd[i].ps[j].v2star[4] -= hd[i].ps[j].vstar[0]*hd[i].ps[j].vstar[2];
+	    hd[i].ps[j].v2star[5] -= hd[i].ps[j].vstar[1]*hd[i].ps[j].vstar[2];
 	    }
 	
 	/*
@@ -1317,7 +1360,7 @@ void write_output(HALO_DATA *hd, GI gi) {
     statisticsfile = fopen(statisticsfilename,"w");
     assert(statisticsfile != NULL);
     fprintf(statisticsfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mbg/9 rcrit/10 Mcrit/11 rvcmax/12 Mrvcmax/13 vcmax/14\n");
-    for (i = 0; i < gi.NHalo; i++) {
+    for (i = 0; i < gi.Nhalo; i++) {
 	fprintf(statisticsfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e\n",
 		hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],
 		hd[i].rbg,hd[i].Mbg,hd[i].rcrit,hd[i].Mcrit,hd[i].rvcmax,hd[i].Mrvcmax,hd[i].vcmax);
@@ -1327,9 +1370,9 @@ void write_output(HALO_DATA *hd, GI gi) {
     sprintf(profilesfilename,"%s.profiles",gi.OutputName);
     profilesfile = fopen(profilesfilename,"w");
     assert(profilesfile != NULL);
-    fprintf(profilesfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mtot/6 Mgas/7 Mdark/8 Mstar/9 Menctot/10 Mencgas/11 Mencdark/12 Mencstar/13 rhoMtot/14 rhoMgas/15 rhoMdark/16 rhoMstar/17 Ntot/18 Ngas/19 Ndark/20 Nstar/21 Nenctot/22 Nencgas/23 Nencdark/24 Nencstar/25 rhoNtot/26 rhoNgas/27 rhoNdark/28 rhoNstar/29 veltotx/30 veltoty/31 veltotz/32 vel2totxx/33 vel2totyy/34 vel2totzz/35 vel2totxy/36 vel2totxz/37 vel2totyz/38 velgasx/39 velgasy/40 velgasz/41 vel2gasxx/42 vel2gasyy/43 vel2gaszz/44 vel2gasxy/45 vel2gasxz/46 vel2gasyz/47 veldarkx/48 veldarky/49 veldarkz/50 vel2darkxx/51 vel2darkyy/52 vel2darkzz/53 vel2darkxy/54 vel2darkxz/55 vel2darkyz/56 velstarx/57 velstary/58 velstarz/59 vel2starxx/60 vel2staryy/61 vel2starzz/62 vel2starxy/63 vel2starxz/64 vel2staryz/65 Ltotx/66 Ltoty/67 Ltotz/68 Lgasx/69 Lgasy/70 Lgasz/71 Ldarkx/72 Ldarky/73 Ldarkz/74 Lstarx/75 Lstary/76 Lstarz/77\n");
+    fprintf(profilesfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mtot/6 Mgas/7 Mdark/8 Mstar/9 Menctot/10 Mencgas/11 Mencdark/12 Mencstar/13 rhoMtot/14 rhoMgas/15 rhoMdark/16 rhoMstar/17 Ntot/18 Ngas/19 Ndark/20 Nstar/21 Nenctot/22 Nencgas/23 Nencdark/24 Nencstar/25 rhoNtot/26 rhoNgas/27 rhoNdark/28 rhoNstar/29 vtotx/30 vtoty/31 vtotz/32 v2totxx/33 v2totyy/34 v2totzz/35 v2totxy/36 v2totxz/37 v2totyz/38 vgasx/39 vgasy/40 vgasz/41 v2gasxx/42 v2gasyy/43 v2gaszz/44 v2gasxy/45 v2gasxz/46 v2gasyz/47 vdarkx/48 vdarky/49 vdarkz/50 v2darkxx/51 v2darkyy/52 v2darkzz/53 v2darkxy/54 v2darkxz/55 v2darkyz/56 vstarx/57 vstary/58 vstarz/59 v2starxx/60 v2staryy/61 v2starzz/62 v2starxy/63 v2starxz/64 v2staryz/65 Ltotx/66 Ltoty/67 Ltotz/68 Lgasx/69 Lgasy/70 Lgasz/71 Ldarkx/72 Ldarky/73 Ldarkz/74 Lstarx/75 Lstary/76 Lstarz/77\n");
     
-    for (i = 0; i < gi.NHalo; i++) {
+    for (i = 0; i < gi.Nhalo; i++) {
 	for (j = 0; j < (gi.Nbin+1); j++) {
 	    fprintf(profilesfile,"%d ",hd[i].ID);
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
@@ -1339,14 +1382,14 @@ void write_output(HALO_DATA *hd, GI gi) {
 	    fprintf(profilesfile,"%d %d %d %d ",hd[i].ps[j].Ntot,hd[i].ps[j].Ngas,hd[i].ps[j].Ndark,hd[i].ps[j].Nstar);
 	    fprintf(profilesfile,"%d %d %d %d ",hd[i].ps[j].Nenctot,hd[i].ps[j].Nencgas,hd[i].ps[j].Nencdark,hd[i].ps[j].Nencstar);
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Ntot/hd[i].ps[j].vol,hd[i].ps[j].Ngas/hd[i].ps[j].vol,hd[i].ps[j].Ndark/hd[i].ps[j].vol,hd[i].ps[j].Nstar/hd[i].ps[j].vol);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].veltot[k]);
-	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vel2tot[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].velgas[k]);
-	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vel2gas[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].veldark[k]);
-	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vel2dark[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].velstar[k]);
-	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vel2star[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vtot[k]);
+	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2tot[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vgas[k]);
+	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2gas[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vdark[k]);
+	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2dark[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vstar[k]);
+	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2star[k]);
 	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].Ltot[k]);
 	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].Lgas[k]);
 	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].Ldark[k]);
