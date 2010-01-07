@@ -80,7 +80,7 @@ typedef struct general_info {
     int Nbin;
     int Nhalo;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
-    int Nparticleperblockstar, Nparticleinblockstar, Nblockdtar;
+    int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
     int Nparticleread;
     int Nrecordread;
     double rhoencbg, rhoenccrit;
@@ -134,7 +134,7 @@ typedef struct art_data {
 
     int doswap;
     int massfromdata;
-    int headerincludesstars;
+    int gascontained, darkcontained, starcontained;
     int Lmaxdark;
     int Nparticleperrecord;
     int Nrecord;
@@ -144,10 +144,10 @@ typedef struct art_data {
     double toplevelmassdark, toplevelsoftdark, refinementstepdark;
     double massdark[ART_LEVEL_ARRAY_LENGTH];
     double softdark[ART_LEVEL_ARRAY_LENGTH];
-    char HeaderFileName[256], CoordinatesDataFileName[256];
+    char HeaderFileName[256], CoordinatesDataFileName[256], StarPropertiesFileName[256];
     char Banner[ART_BANNER_LENGTH];
     ART_HEADER ah;
-    FILE *HeaderFile, *CoordinatesDataFile;
+    FILE *HeaderFile, *CoordinatesDataFile, *StarPropertiesFile;
     } ART_DATA;
 
 typedef struct profile_dark_particle {
@@ -256,7 +256,7 @@ void read_art_header(ART_DATA *ad) {
     ** Set some derived quantities
     */
     ad->Ngas = 0;
-    if (ad->headerincludesstars == 1) {
+    if (ad->starcontained == 1) {
 	ad->Lmaxdark = ad->ah.Nspecies-2;
 	ad->Ndark = ad->ah.num[ad->Lmaxdark];
 	ad->Nstar = ad->ah.num[ad->ah.Nspecies-1];
@@ -294,6 +294,7 @@ void read_halocatalogue_6DFOF(GI (*), HALO_DATA (**));
 void initialise_halo_profile (GI (*), HALO_DATA (*));
 void read_art_coordinates_record(ART_DATA, COORDINATES (*));
 void put_pdp_in_bins(HALO_DATA (*), PROFILE_DARK_PARTICLE (*), UNIT_SYSTEM, GI);
+void put_psp_in_bins(HALO_DATA (*), PROFILE_STAR_PARTICLE (*), UNIT_SYSTEM, GI);
 void calculate_halo_properties(HALO_DATA (*), COSMOLOGICAL_PARAMETERS, UNIT_SYSTEM, GI);
 void write_output(HALO_DATA (*), GI);
 
@@ -301,7 +302,8 @@ int main(int argc, char **argv) {
 
     int i, j, k, l;
     int L;
-    int Nparticleread;
+    int Nparticleread, Nrecordread;
+    int Icurrentblockdark, Icurrentblockstar;
     GI gi;
     COSMOLOGICAL_PARAMETERS cp;
     UNIT_SYSTEM us;
@@ -352,7 +354,9 @@ int main(int argc, char **argv) {
     gi.Nblockstar = 0;
     ad.doswap = 0;
     ad.massfromdata = 0;
-    ad.headerincludesstars = 0;
+    ad.gascontained = 0;
+    ad.darkcontained = 0;
+    ad.starcontained = 0;
     ad.Ngas = 0;
     ad.Ndark = 0;
     ad.Nstar = 0;
@@ -518,9 +522,17 @@ int main(int argc, char **argv) {
             i++;
             }
         else if (strcmp(argv[i],"-coordinatesdatafile") == 0) {
+	    ad.darkcontained = 1;
             i++;
             if (i >= argc) usage();
             strcpy(ad.CoordinatesDataFileName,argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-starpropertiesfile") == 0) {
+	    ad.starcontained = 1;
+            i++;
+            if (i >= argc) usage();
+            strcpy(ad.StarPropertiesFileName,argv[i]);
             i++;
             }
 
@@ -536,12 +548,6 @@ int main(int argc, char **argv) {
             i++;
             if (i >= argc) usage();
             strcpy(ad.DarkFileName,argv[i]);
-            i++;
-            }
-        else if (strcmp(argv[i],"-starfile") == 0) {
-            i++;
-            if (i >= argc) usage();
-            strcpy(ad.StarFileName,argv[i]);
             i++;
             }
 */
@@ -638,7 +644,8 @@ int main(int argc, char **argv) {
 */
 	}
 
-    exit(1);
+    fprintf(stderr,"Ndark %d Nstar %d\n",ad.Ndark,ad.Nstar);
+//    exit(1);
 
     /*
     ** Harvest data
@@ -653,31 +660,26 @@ int main(int argc, char **argv) {
 	    */
 	    pdp = realloc(pdp,gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
 	    assert(pdp != NULL);
-	    gi.Nblockdark = (ad.Ndark+gi.Nparticleperblockdark-1)/gi.Nparticleperblockdark;
-	    for (i = 0; i < gi.Nblockdark; i++) {
-		if (i == gi.Nblockdark-1) {
-		    gi.Nparticleinblockdark = ad.Ndark-((gi.Nblockdark-1)*gi.Nparticleperblockdark);
+	    Nparticleread = 0;
+	    Icurrentblockdark = 0;
+	    for (i = 0; i < ad.Ndark; i++) {
+		read_tipsy_standard_dark(&xdrs,&dp);
+		for (k = 0; k < 3; k++) {
+		    pdp[Icurrentblockdark].r[k] = dp.pos[k];
+		    pdp[Icurrentblockdark].v[k] = dp.vel[k];
 		    }
-		else {
-		    gi.Nparticleinblockdark = gi.Nparticleperblockdark;
+		pdp[Icurrentblockdark].mass = dp.mass;
+		Nparticleread++;
+		Icurrentblockdark++;
+		if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == ad.Ndark)) {
+		    /*
+		    ** Block is full or we reached end of dark matter particles
+		    */
+		    gi.Nparticleinblockdark = Icurrentblockdark;
+		    put_pdp_in_bins(hd,pdp,us,gi);
+		    Icurrentblockdark = 0;
 		    }
-		for (j = 0; j < gi.Nparticleinblockdark; j++) {
-		    read_tipsy_standard_dark(&xdrs,&dp);
-		    for (k = 0; k < 3; k++) {
-			pdp[j].r[k] = dp.pos[k];
-			pdp[j].v[k] = dp.vel[k];
-			}
-		    pdp[j].mass = dp.mass;
-		    }
-		put_pdp_in_bins(hd,pdp,us,gi);
-
-		j = gi.Nparticleinblockdark-1;
-		fprintf(stderr,"%d %d %g %g %g\n",i,j,pdp[j].r[0],pdp[j].r[1],pdp[j].r[2]);
-
 		}
-
-	    fprintf(stderr,"Ndark %d = %d\n",ad.Ndark,(gi.Nblockdark-1)*gi.Nparticleperblockdark+gi.Nparticleinblockdark);
-
 	    free(pdp);
 	    }
 	}
@@ -689,22 +691,17 @@ int main(int argc, char **argv) {
 	assert(ad.CoordinatesDataFile != NULL);
 	ac = realloc(ac,ad.Nparticleperrecord*sizeof(COORDINATES));
 	assert(ac != NULL);
-	int Nparticleread, Nrecordread;
-	Nparticleread = 0;
-	Nrecordread = 0;
 	pdp = realloc(pdp,gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
 	assert(pdp != NULL);
 	psp = realloc(psp,gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
 	assert(psp != NULL);
-//	gi.NBlocksStar = (gi.Nstar+gi.NParticlesPerBlockStar-1)/gi.NParticlesPerBlockStar;
-//	gi.NBlocksDark = (ad.Ndark+gi.NParticlesPerBlockDark-1)/gi.NParticlesPerBlockDark;
-
-	int Icurrentblockdark, Icurrentblockstar;
+	Nparticleread = 0;
+	Nrecordread = 0;
 	Icurrentblockdark = 0;
 	Icurrentblockstar = 0;
-
 	for (i = 0; i < ad.Nrecord; i++) {
 	    read_art_coordinates_record(ad,ac);
+	    fprintf(stderr,"i %d Nrecord %d\n",i,ad.Nrecord);
 	    for (j = 0; j < ad.Nparticleperrecord; j++) {
 		if (Nparticleread < ad.Ndark) {
 		    /*
@@ -729,11 +726,10 @@ int main(int argc, char **argv) {
 			Icurrentblockdark = 0;
 			}
 		    }
-		else {
+		else if (Nparticleread < ad.Ndark+ad.Nstar) {
 		    /*
 		    ** Stars
 		    */
-		    assert(Nparticleread < ad.Ndark+ad.Nstar);
 		    for (k = 0; k < 3; k++) {
 			psp[Icurrentblockstar].r[k] = ac[j].r[k] + ad.shift;
 			psp[Icurrentblockstar].v[k] = ac[j].v[k];
@@ -1085,37 +1081,40 @@ void initialise_halo_profile (GI *gi, HALO_DATA *hd){
 void read_art_coordinates_record(ART_DATA ad, COORDINATES *coordinates) {
 
     int i;
-    double ddummy;
-    
+    float fdummy;
+
+    assert(ad.CoordinatesDataFile != NULL);
     for (i = 0; i < ad.Nparticleperrecord; i++) {
-	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
-	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
-	coordinates[i].r[0] = ddummy;
+	assert(fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile) == 1);
+//	fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile);
+//	fprintf(stderr,"%f %d",fdummy,ad.doswap);
+	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
+	coordinates[i].r[0] = fdummy;
 	}
     for (i = 0; i < ad.Nparticleperrecord; i++) {
-	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
-	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
-	coordinates[i].r[1] = ddummy;
+	assert(fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
+	coordinates[i].r[1] = fdummy;
 	}
     for (i = 0; i < ad.Nparticleperrecord; i++) {
-	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
-	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
-	coordinates[i].r[2] = ddummy;
+	assert(fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
+	coordinates[i].r[2] = fdummy;
 	}
     for (i = 0; i < ad.Nparticleperrecord; i++) {
-	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
-	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
-	coordinates[i].v[0] = ddummy;
+	assert(fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
+	coordinates[i].v[0] = fdummy;
 	}
     for (i = 0; i < ad.Nparticleperrecord; i++) {
-	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
-	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
-	coordinates[i].v[1] = ddummy;
+	assert(fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
+	coordinates[i].v[1] = fdummy;
 	}
     for (i = 0; i < ad.Nparticleperrecord; i++) {
-	assert(fread(&ddummy,sizeof(double),1,ad.CoordinatesDataFile) == 1);
-	if (ad.doswap) reorder(&ddummy,sizeof(double),1);
-	coordinates[i].v[2] = ddummy;
+	assert(fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile) == 1);
+	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
+	coordinates[i].v[2] = fdummy;
 	}
     }
 
@@ -1140,7 +1139,7 @@ void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, UNIT_SYSTEM us, 
 		/*
 		** Go through bins from outside inwards => larger bin volume further out
 		*/
-		for (l = gi.Nbin; l >=0; l--) {
+		for (l = hd[j].Nbin; l >=0; l--) {
 		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
 			if (gi.projectionvariant == 0) {
 			    vproj[0] = v[0];
@@ -1182,6 +1181,11 @@ void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, UNIT_SYSTEM us, 
 	    }
 	}
     }
+
+void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *pdp, UNIT_SYSTEM us, GI gi) {
+
+    }
+
 
 void calculate_halo_properties(HALO_DATA *hd, COSMOLOGICAL_PARAMETERS cp, UNIT_SYSTEM us, GI gi) {
 
