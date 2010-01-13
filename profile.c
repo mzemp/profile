@@ -98,6 +98,15 @@ typedef struct coordinates {
     double v[3];
     } COORDINATES;
 
+typedef struct star_properties {
+
+    double mass;
+    double initialmass;
+    double tform;
+    double metallicitySNII;
+    double metallicitySNIa;
+    } STAR_PROPERTIES;
+
 // => goes to iof
 typedef struct cosmological_parameters {
 
@@ -140,10 +149,12 @@ typedef struct art_data {
     int Nrecord;
     int Ngas, Ndark, Nstar;
     int Ndarklevel[ART_LEVEL_ARRAY_LENGTH];
+    int Nstarproperties;
     double shift;
     double toplevelmassdark, toplevelsoftdark, refinementstepdark;
     double massdark[ART_LEVEL_ARRAY_LENGTH];
     double softdark[ART_LEVEL_ARRAY_LENGTH];
+    double totalstellarmass, totalstellarinitialmass;
     char HeaderFileName[256], CoordinatesDataFileName[256], StarPropertiesFileName[256];
     char Banner[ART_BANNER_LENGTH];
     ART_HEADER ah;
@@ -163,8 +174,8 @@ typedef struct profile_star_particle {
     double v[3];
     double mass;
     double tform;
-    double Z_II;
-    double Z_Ia;
+    double metallicitySNII;
+    double metallicitySNIa;
     } PROFILE_STAR_PARTICLE;
 
 void calculate_unit_vectors(double pos[3], double erad[3], double ephi[3], double etheta[3]) {
@@ -236,14 +247,15 @@ void read_art_header(ART_DATA *ad) {
     int header, trailer;
 
     ad->doswap = 0;
-    ad->HeaderFile = fopen(ad->HeaderFileName,"r");
-    assert(ad->HeaderFile != NULL);
+    if (ad->HeaderFile == NULL) {
+	ad->HeaderFile = fopen(ad->HeaderFileName,"r");
+	assert(ad->HeaderFile != NULL);
+	}
     assert(fread(&header,sizeof(int),1,ad->HeaderFile) == 1);
     if (header != sizeof(ad->Banner)+sizeof(ART_HEADER)) {
 	ad->doswap = 1;
 	reorder(&header,sizeof(int),1);
 	}
-    fprintf(stderr,"doswap %d size banner %lu size header %lu\n",ad->doswap,sizeof(ad->Banner),sizeof(ART_HEADER));
     assert(header == sizeof(ad->Banner)+sizeof(ART_HEADER));
     assert(fread(ad->Banner,sizeof(char),sizeof(ad->Banner),ad->HeaderFile) == sizeof(ad->Banner));
     assert(fread(&ad->ah,sizeof(ART_HEADER),1,ad->HeaderFile) == 1);
@@ -259,7 +271,7 @@ void read_art_header(ART_DATA *ad) {
     if (ad->starcontained == 1) {
 	ad->Lmaxdark = ad->ah.Nspecies-2;
 	ad->Ndark = ad->ah.num[ad->Lmaxdark];
-	ad->Nstar = ad->ah.num[ad->ah.Nspecies-1];
+	ad->Nstar = ad->ah.num[ad->ah.Nspecies-1] - ad->Ndark;
 	}
     else {
 	ad->Lmaxdark = ad->ah.Nspecies-1;
@@ -288,11 +300,98 @@ void read_art_header(ART_DATA *ad) {
 	}
     }
 
+void read_art_header_star(ART_DATA *ad) {
+
+    int header, trailer;
+    int idummy;
+    double ddummy;
+
+    if (ad->StarPropertiesFile == NULL) {
+	ad->StarPropertiesFile = fopen(ad->StarPropertiesFileName,"r");
+	assert(ad->StarPropertiesFile != NULL);
+	}
+
+    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
+    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
+    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+
+    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&idummy,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&idummy,sizeof(int),1);
+    assert(idummy == ad->Nstar);
+    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+
+    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
+    ad->totalstellarmass = ddummy;
+    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
+    ad->totalstellarinitialmass = ddummy;
+    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    }
+
+void read_art_header_gas(ART_DATA *ad) {
+
+    int header, trailer;
+    int idummy;
+    double ddummy;
+
+    if (ad->StarPropertiesFile == NULL) {
+	ad->StarPropertiesFile = fopen(ad->StarPropertiesFileName,"r");
+	assert(ad->StarPropertiesFile != NULL);
+	}
+
+    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
+    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
+    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+
+    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&idummy,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&idummy,sizeof(int),1);
+    assert(idummy == ad->Nstar);
+    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+
+    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
+    ad->totalstellarmass = ddummy;
+    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
+    ad->totalstellarinitialmass = ddummy;
+    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    }
+
 void usage(void);
 void read_halocatalogue_generic(GI (*), HALO_DATA (**));
 void read_halocatalogue_6DFOF(GI (*), HALO_DATA (**));
 void initialise_halo_profile (GI (*), HALO_DATA (*));
 void read_art_coordinates_record(ART_DATA, COORDINATES (*));
+void read_art_star_properties(ART_DATA, int, STAR_PROPERTIES (*));
 void put_pdp_in_bins(HALO_DATA (*), PROFILE_DARK_PARTICLE (*), UNIT_SYSTEM, GI);
 void put_psp_in_bins(HALO_DATA (*), PROFILE_STAR_PARTICLE (*), UNIT_SYSTEM, GI);
 void calculate_halo_properties(HALO_DATA (*), COSMOLOGICAL_PARAMETERS, UNIT_SYSTEM, GI);
@@ -300,8 +399,8 @@ void write_output(HALO_DATA (*), GI);
 
 int main(int argc, char **argv) {
 
-    int i, j, k, l;
-    int L;
+    int i, j, k;
+    int L = -1;
     int Nparticleread, Nrecordread;
     int Icurrentblockdark, Icurrentblockstar;
     GI gi;
@@ -315,6 +414,7 @@ int main(int argc, char **argv) {
     DARK_PARTICLE_DPP dpdpp;
     STAR_PARTICLE_DPP spdpp;
     ART_DATA ad;
+    STAR_PROPERTIES starprop;
     COORDINATES *ac = NULL;
     HALO_DATA *hd = NULL;
     PROFILE_DARK_PARTICLE *pdp = NULL;
@@ -352,6 +452,7 @@ int main(int argc, char **argv) {
     gi.Nparticleperblockstar = 10000000;
     gi.Nparticleinblockstar = 0;
     gi.Nblockstar = 0;
+
     ad.doswap = 0;
     ad.massfromdata = 0;
     ad.gascontained = 0;
@@ -369,6 +470,10 @@ int main(int argc, char **argv) {
 	ad.massdark[i] = 0;
 	ad.softdark[i] = 0;
 	}
+    ad.Nstarproperties = 5;
+    ad.HeaderFile = NULL;
+    ad.CoordinatesDataFile = NULL;
+    ad.StarPropertiesFile = NULL;
 
     /*
     ** Read in arguments
@@ -699,6 +804,10 @@ int main(int argc, char **argv) {
 	Nrecordread = 0;
 	Icurrentblockdark = 0;
 	Icurrentblockstar = 0;
+	/*
+	** Read Stars Header
+	*/
+	read_art_header_star(&ad);
 	for (i = 0; i < ad.Nrecord; i++) {
 	    read_art_coordinates_record(ad,ac);
 	    fprintf(stderr,"i %d Nrecord %d\n",i,ad.Nrecord);
@@ -737,8 +846,11 @@ int main(int argc, char **argv) {
 		    /*
 		    ** Get other star properties
 		    */
-
-
+		    read_art_star_properties(ad,(Nparticleread-ad.Ndark+1),&starprop);
+		    psp[Icurrentblockstar].mass = starprop.mass;
+		    psp[Icurrentblockstar].tform = starprop.tform;
+		    psp[Icurrentblockstar].metallicitySNII = starprop.metallicitySNII;
+		    psp[Icurrentblockstar].metallicitySNIa = starprop.metallicitySNIa;
 		    Nparticleread++;
 		    Icurrentblockstar++;
 		    if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == ad.Ndark+ad.Nstar)) {
@@ -1086,8 +1198,6 @@ void read_art_coordinates_record(ART_DATA ad, COORDINATES *coordinates) {
     assert(ad.CoordinatesDataFile != NULL);
     for (i = 0; i < ad.Nparticleperrecord; i++) {
 	assert(fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile) == 1);
-//	fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile);
-//	fprintf(stderr,"%f %d",fdummy,ad.doswap);
 	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
 	coordinates[i].r[0] = fdummy;
 	}
@@ -1115,6 +1225,41 @@ void read_art_coordinates_record(ART_DATA ad, COORDINATES *coordinates) {
 	assert(fread(&fdummy,sizeof(float),1,ad.CoordinatesDataFile) == 1);
 	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
 	coordinates[i].v[2] = fdummy;
+	}
+    }
+
+void read_art_star_properties(ART_DATA ad, int index, STAR_PROPERTIES *sp) {
+
+    int header, trailer;
+    int i;
+    long int seekamount;
+    float fdummy;
+
+    assert(index > 0);
+    assert(index <= ad.Nstar);
+
+    seekamount = 6*sizeof(int) + 4*sizeof(double) + 1*sizeof(int);
+    assert(fseek(ad.StarPropertiesFile,seekamount,SEEK_SET) == 0);
+
+    for (i = 0; i < ad.Nstarproperties; i++) {
+	assert(fread(&header,sizeof(int),1,ad.StarPropertiesFile) == 1);
+	if (ad.doswap) reorder(&trailer,sizeof(int),1);
+	seekamount = (index-1)*sizeof(float);
+	assert(fseek(ad.StarPropertiesFile,seekamount,SEEK_CUR) == 0);
+
+	assert(fread(&fdummy,sizeof(float),1,ad.StarPropertiesFile) == 1);
+	if (ad.doswap) reorder(&fdummy,sizeof(float),1);
+	if (i == 0) sp->mass = fdummy;
+	else if (i == 1) sp->initialmass = fdummy;
+	else if (i == 2) sp->tform = fdummy;
+	else if (i == 3) sp->metallicitySNII = fdummy;
+	else if (i == 4) sp->metallicitySNIa = fdummy;
+
+	seekamount = (ad.Nstar-index)*sizeof(float);
+	assert(fseek(ad.StarPropertiesFile,seekamount,SEEK_CUR) == 0);
+	assert(fread(&trailer,sizeof(int),1,ad.StarPropertiesFile) == 1);
+	if (ad.doswap) reorder(&trailer,sizeof(int),1);
+	assert(header == trailer);
 	}
     }
 
@@ -1157,9 +1302,9 @@ void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, UNIT_SYSTEM us, 
 			hd[j].ps[l].Mtot += pdp[i].mass;
 			hd[j].ps[l].Mdark += pdp[i].mass;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].vtot[k] += vproj[k];
-			    hd[j].ps[l].vdark[k] += vproj[k];
-			    hd[j].ps[l].v2tot[k] += vproj[k]*vproj[k];
+			    hd[j].ps[l].vtot[k]   += vproj[k];
+			    hd[j].ps[l].vdark[k]  += vproj[k];
+			    hd[j].ps[l].v2tot[k]  += vproj[k]*vproj[k];
 			    hd[j].ps[l].v2dark[k] += vproj[k]*vproj[k];
 			    }
 			hd[j].ps[l].v2tot[3]  += vproj[0]*vproj[1];
@@ -1182,8 +1327,68 @@ void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, UNIT_SYSTEM us, 
 	}
     }
 
-void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *pdp, UNIT_SYSTEM us, GI gi) {
+void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, UNIT_SYSTEM us, GI gi) {
 
+    int i, j, k, l;
+    double r[3], v[3], vproj[3];
+    double erad[3], ephi[3], etheta[3];
+    double d;
+
+    for (i = 0; i < gi.Nparticleinblockstar; i++) {
+	for (j = 0; j < gi.Nhalo; j++) {
+	    for (k = 0; k < 3; k++) {
+		r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],us.LBox);
+		r[k] = r[k]-hd[j].rcentre[k];
+		}
+	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+	    if (d <= hd[j].ps[gi.Nbin].ro) {
+		for (k = 0; k < 3; k++) {
+		    v[k] = psp[i].v[k]-hd[j].vcentre[k];
+		    }
+		/*
+		** Go through bins from outside inwards => larger bin volume further out
+		*/
+		for (l = hd[j].Nbin; l >=0; l--) {
+		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+			if (gi.projectionvariant == 0) {
+			    vproj[0] = v[0];
+			    vproj[1] = v[1];
+			    vproj[2] = v[2];
+			    }
+			else if (gi.projectionvariant == 1) {
+			    calculate_unit_vectors(r,erad,ephi,etheta);
+			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+			    }
+			hd[j].ps[l].Ntot++;
+			hd[j].ps[l].Nstar++;
+			hd[j].ps[l].Mtot += psp[i].mass;
+			hd[j].ps[l].Mstar += psp[i].mass;
+			for (k = 0; k < 3; k++) {
+			    hd[j].ps[l].vtot[k]   += vproj[k];
+			    hd[j].ps[l].vstar[k]  += vproj[k];
+			    hd[j].ps[l].v2tot[k]  += vproj[k]*vproj[k];
+			    hd[j].ps[l].v2star[k] += vproj[k]*vproj[k];
+			    }
+			hd[j].ps[l].v2tot[3]  += vproj[0]*vproj[1];
+			hd[j].ps[l].v2tot[4]  += vproj[0]*vproj[2];
+			hd[j].ps[l].v2tot[5]  += vproj[1]*vproj[2];
+			hd[j].ps[l].v2star[3] += vproj[0]*vproj[1];
+			hd[j].ps[l].v2star[4] += vproj[0]*vproj[2];
+			hd[j].ps[l].v2star[5] += vproj[1]*vproj[2];
+			hd[j].ps[l].Ltot[0]  += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].Ltot[1]  += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].Ltot[2]  += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].Lstar[0] += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].Lstar[1] += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].Lstar[2] += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			break;
+			}
+		    }
+		}
+	    }
+	}
     }
 
 
