@@ -13,8 +13,10 @@
 #include <malloc.h>
 #include <assert.h>
 #include <iof.h>
+#include <sfc.h>
 
-#define ART_LEVEL_ARRAY_LENGTH 10
+#define ART_NUMBER_GAS_LEVELS 30
+#define ART_NUMBER_DARK_LEVELS 10
 #define ART_BANNER_LENGTH 45
 
 typedef struct profile_structure {
@@ -141,24 +143,45 @@ typedef struct unit_system {
 // => goes to iof
 typedef struct art_data {
 
+    /*
+    ** from general header
+    */
+    char Banner[ART_BANNER_LENGTH];
+    ART_HEADER ah;
+    /*
+    ** from star properties file
+    */
+    double totalstellarmass, totalstellarinitialmass;
+    /*
+    ** from gas file
+    */
+    float refinementvolumemin[3], refinementvolumemax[3];
+    float starformationvolumemin[3], starformationvolumemax[3];
+    SFC_INFO sfci;
+    /*
+    ** new and derived stuff to get data better organised
+    */
     int doswap;
     int massfromdata;
     int gascontained, darkcontained, starcontained;
+    int Ndim;
     int Lmaxdark;
+    int Lmingas, Lmaxgas, Nlevelgas;
     int Nparticleperrecord;
     int Nrecord;
     int Ngas, Ndark, Nstar;
-    int Ndarklevel[ART_LEVEL_ARRAY_LENGTH];
+    int Ndarklevel[ART_NUMBER_DARK_LEVELS];
     int Nstarproperties;
+    int Nhydroproperties, Notherproperties;
+    int Nrtchemspecies, Nchemspecies, Nrtdiskvars;
+    int GRAVITY, HYDRO, STARFORM, ADVECT_SPECIES, ENRICH, ENRICH_SNIa, RADIATIVE_TRANSFER, ELECTRON_ION_NONEQUILIBRIUM;
+    long Ncell[ART_NUMBER_GAS_LEVELS];
     double shift;
     double toplevelmassdark, toplevelsoftdark, refinementstepdark;
-    double massdark[ART_LEVEL_ARRAY_LENGTH];
-    double softdark[ART_LEVEL_ARRAY_LENGTH];
-    double totalstellarmass, totalstellarinitialmass;
-    char HeaderFileName[256], CoordinatesDataFileName[256], StarPropertiesFileName[256];
-    char Banner[ART_BANNER_LENGTH];
-    ART_HEADER ah;
-    FILE *HeaderFile, *CoordinatesDataFile, *StarPropertiesFile;
+    double massdark[ART_NUMBER_DARK_LEVELS];
+    double softdark[ART_NUMBER_DARK_LEVELS];
+    char HeaderFileName[256], CoordinatesDataFileName[256], StarPropertiesFileName[256], GasFileName[256];
+    FILE *HeaderFile, *CoordinatesDataFile, *StarPropertiesFile, *GasFile;
     } ART_DATA;
 
 typedef struct profile_dark_particle {
@@ -310,17 +333,19 @@ void read_art_header_star(ART_DATA *ad) {
 	ad->StarPropertiesFile = fopen(ad->StarPropertiesFileName,"r");
 	assert(ad->StarPropertiesFile != NULL);
 	}
-
+    /*
+    ** st, sa
+    */
     assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
     if (ad->doswap) reorder(&header,sizeof(int),1);
     assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
-    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
     assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
-    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
     assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
     if (ad->doswap) reorder(&trailer,sizeof(int),1);
     assert(header == trailer);
-
+    /*
+    ** Nstar
+    */
     assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
     if (ad->doswap) reorder(&header,sizeof(int),1);
     assert(fread(&idummy,sizeof(int),1,ad->StarPropertiesFile) == 1);
@@ -329,15 +354,15 @@ void read_art_header_star(ART_DATA *ad) {
     assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
     if (ad->doswap) reorder(&trailer,sizeof(int),1);
     assert(header == trailer);
-
+    /*
+    ** total stellar mass, total stellar initial mass
+    */
     assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
     if (ad->doswap) reorder(&header,sizeof(int),1);
-    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
-    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
-    ad->totalstellarmass = ddummy;
-    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
-    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
-    ad->totalstellarinitialmass = ddummy;
+    assert(fread(&ad->totalstellarmass,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ad->totalstellarmass,sizeof(double),1);
+    assert(fread(&ad->totalstellarinitialmass,sizeof(double),1,ad->StarPropertiesFile) == 1);
+    if (ad->doswap) reorder(&ad->totalstellarinitialmass,sizeof(double),1);
     assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
     if (ad->doswap) reorder(&trailer,sizeof(int),1);
     assert(header == trailer);
@@ -345,43 +370,193 @@ void read_art_header_star(ART_DATA *ad) {
 
 void read_art_header_gas(ART_DATA *ad) {
 
-    int header, trailer;
+    int header, trailer, i;
     int idummy;
+    float fdummy;
     double ddummy;
+    char cdummy[256];
 
-    if (ad->StarPropertiesFile == NULL) {
-	ad->StarPropertiesFile = fopen(ad->StarPropertiesFileName,"r");
-	assert(ad->StarPropertiesFile != NULL);
+    if (ad->GasFile == NULL) {
+	ad->GasFile = fopen(ad->GasFileName,"r");
+	assert(ad->GasFile != NULL);
 	}
-
-    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    /*
+    ** Jobname
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
     if (ad->doswap) reorder(&header,sizeof(int),1);
-    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
-    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
-    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
-    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
-    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    assert(fread(&cdummy,sizeof(char),256,ad->GasFile) == 256);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
     if (ad->doswap) reorder(&trailer,sizeof(int),1);
     assert(header == trailer);
-
-    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    /* 
+    ** istep, t, dt, adum, ainit 
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
     if (ad->doswap) reorder(&header,sizeof(int),1);
-    assert(fread(&idummy,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    assert(fread(&idummy,sizeof(int),1,ad->GasFile) == 1);
+    assert(fread(&ddummy,sizeof(double),1,ad->GasFile) == 1);
+    assert(fread(&ddummy,sizeof(double),1,ad->GasFile) == 1);
+    assert(fread(&fdummy,sizeof(float),1,ad->GasFile) == 1);
+    assert(fread(&fdummy,sizeof(float),1,ad->GasFile) == 1);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /* 
+    ** boxh, Om0, Oml0, Omb0, hubble
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&fdummy,sizeof(float),1,ad->GasFile) == 1);
+    assert(fread(&fdummy,sizeof(float),1,ad->GasFile) == 1);
+    assert(fread(&fdummy,sizeof(float),1,ad->GasFile) == 1);
+    assert(fread(&fdummy,sizeof(float),1,ad->GasFile) == 1);
+    assert(fread(&fdummy,sizeof(float),1,ad->GasFile) == 1);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /*
+    ** Nextra (some old crap - should be zero!)
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&idummy,sizeof(int),1,ad->GasFile) == 1);
     if (ad->doswap) reorder(&idummy,sizeof(int),1);
-    assert(idummy == ad->Nstar);
-    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    assert(idummy == 0);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
     if (ad->doswap) reorder(&trailer,sizeof(int),1);
     assert(header == trailer);
-
-    assert(fread(&header,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    /*
+    ** extra
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
     if (ad->doswap) reorder(&header,sizeof(int),1);
-    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
-    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
-    ad->totalstellarmass = ddummy;
-    assert(fread(&ddummy,sizeof(double),1,ad->StarPropertiesFile) == 1);
-    if (ad->doswap) reorder(&ddummy,sizeof(double),1);
-    ad->totalstellarinitialmass = ddummy;
-    assert(fread(&trailer,sizeof(int),1,ad->StarPropertiesFile) == 1);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /*
+    ** lextra
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /* 
+    ** Minlevel, Maxlevel
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&ad->Lmingas,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&ad->Lmingas,sizeof(int),1);
+    assert(fread(&ad->Lmaxgas,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&ad->Lmaxgas,sizeof(int),1);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    ad->Nlevelgas = ad->Lmaxgas-ad->Lmingas+1;
+    /*
+    ** tl
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    for (i = 0; i < ad->Nlevelgas; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad->GasFile) == 1);
+	}
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /* 
+    ** dtl
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    for (i = 0; i < ad->Nlevelgas; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad->GasFile) == 1);
+	}
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /*
+    ** tl_old
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    for (i = 0; i < ad->Nlevelgas; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad->GasFile) == 1);
+	}
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /* 
+    ** dtl_old
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    for (i = 0; i < ad->Nlevelgas; i++) {
+	assert(fread(&ddummy,sizeof(double),1,ad->GasFile) == 1);
+	}
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /* 
+    ** iSO (sweep direction for flux solver)
+    */
+    if (ad->HYDRO) {
+	assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+	if (ad->doswap) reorder(&header,sizeof(int),1);
+	for (i = 0; i < ad->Nlevelgas; i++) {
+	    assert(fread(&idummy,sizeof(int),1,ad->GasFile) == 1);
+	    }
+	assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+	if (ad->doswap) reorder(&trailer,sizeof(int),1);
+	assert(header == trailer);
+	}
+    /*
+    ** space filling curve (SFC) order
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&ad->sfci.sfc_order,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&ad->sfci.sfc_order,sizeof(int),1);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /* 
+    ** refinement volume 
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&ad->refinementvolumemin,sizeof(float),ad->Ndim,ad->GasFile) == ad->Ndim);
+    if (ad->doswap) reorder(&ad->refinementvolumemin,sizeof(float),ad->Ndim);
+    assert(fread(&ad->refinementvolumemax,sizeof(float),ad->Ndim,ad->GasFile) == ad->Ndim);
+    if (ad->doswap) reorder(&ad->refinementvolumemax,sizeof(float),ad->Ndim);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&trailer,sizeof(int),1);
+    assert(header == trailer);
+    /* 
+    ** star formation volume 
+    */
+    if (ad->STARFORM) {
+	assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+	if (ad->doswap) reorder(&header,sizeof(int),1);
+	assert(fread(&ad->starformationvolumemin,sizeof(float),ad->Ndim,ad->GasFile) == ad->Ndim);
+	if (ad->doswap) reorder(&ad->starformationvolumemin,sizeof(float),ad->Ndim);
+	assert(fread(&ad->starformationvolumemax,sizeof(float),ad->Ndim,ad->GasFile) == ad->Ndim);
+	if (ad->doswap) reorder(&ad->starformationvolumemax,sizeof(float),ad->Ndim);
+	assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
+	if (ad->doswap) reorder(&trailer,sizeof(int),1);
+	assert(header == trailer);
+	}
+    /*
+    ** Ncell[0]
+    */
+    assert(fread(&header,sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&header,sizeof(int),1);
+    assert(fread(&ad->Ncell[0],sizeof(int),1,ad->GasFile) == 1);
+    if (ad->doswap) reorder(&ad->Ncell[0],sizeof(int),1);
+    assert(ad->Ncell[0] == ad->ah.Ngrid*ad->ah.Ngrid*ad->ah.Ngrid);
+    assert(fread(&trailer,sizeof(int),1,ad->GasFile) == 1);
     if (ad->doswap) reorder(&trailer,sizeof(int),1);
     assert(header == trailer);
     }
@@ -458,6 +633,7 @@ int main(int argc, char **argv) {
     ad.gascontained = 0;
     ad.darkcontained = 0;
     ad.starcontained = 0;
+    ad.Ndim = 3;
     ad.Ngas = 0;
     ad.Ndark = 0;
     ad.Nstar = 0;
@@ -465,15 +641,26 @@ int main(int argc, char **argv) {
     ad.toplevelmassdark = -1;
     ad.toplevelsoftdark = 0;
     ad.shift = 0;
-    for (i = 0; i < ART_LEVEL_ARRAY_LENGTH; i++) {
+    for (i = 0; i < ART_NUMBER_DARK_LEVELS; i++) {
 	ad.Ndarklevel[i] = 0;
 	ad.massdark[i] = 0;
 	ad.softdark[i] = 0;
+	}
+    for (i = 0; i < ART_NUMBER_GAS_LEVELS; i++) {
+	ad.Ncell[i] = 0;
 	}
     ad.Nstarproperties = 5;
     ad.HeaderFile = NULL;
     ad.CoordinatesDataFile = NULL;
     ad.StarPropertiesFile = NULL;
+    ad.GRAVITY = 1;
+    ad.HYDRO = 1;
+    ad.STARFORM = 1;
+    ad.ADVECT_SPECIES = 1;
+    ad.ENRICH = 1;
+    ad.ENRICH_SNIa = 1;
+    ad.RADIATIVE_TRANSFER = 1;
+    ad.ELECTRON_ION_NONEQUILIBRIUM = 0;
 
     /*
     ** Read in arguments
@@ -640,22 +827,13 @@ int main(int argc, char **argv) {
             strcpy(ad.StarPropertiesFileName,argv[i]);
             i++;
             }
-
-
-/*
         else if (strcmp(argv[i],"-gasfile") == 0) {
+	    ad.gascontained = 1;
             i++;
             if (i >= argc) usage();
             strcpy(ad.GasFileName,argv[i]);
             i++;
             }
-        else if (strcmp(argv[i],"-darkfile") == 0) {
-            i++;
-            if (i >= argc) usage();
-            strcpy(ad.DarkFileName,argv[i]);
-            i++;
-            }
-*/
 	else if ((strcmp(argv[i],"-h") == 0) || (strcmp(argv[i],"-help") == 0)) {
 	    usage();
 	    }
@@ -790,6 +968,175 @@ int main(int argc, char **argv) {
 	}
     else if (gi.dataformat == 1) {
 	/*
+	** Gas
+	*/
+	ad.GasFile = fopen(ad.GasFileName,"r");
+	assert(ad.GasFile != NULL);
+	read_art_header_gas(&ad);
+
+	ad.Nhydroproperties = 0;
+	ad.Notherproperties = 0;
+	ad.Nrtchemspecies = 0;
+	ad.Nchemspecies = 0;
+	ad.Nrtdiskvars = 0;
+	if (ad.HYDRO) {
+	    if (ad.ADVECT_SPECIES) {
+		if (ad.RADIATIVE_TRANSFER) ad.Nrtchemspecies = 6;
+		else ad.Nrtchemspecies = 0;
+		if (ad.ENRICH) {
+		    if (ad.ENRICH_SNIa) ad.Nchemspecies = ad.Nrtchemspecies + 2;
+		    else ad.Nchemspecies = ad.Nrtchemspecies + 1;
+		    }
+		else ad.Nchemspecies = ad.Nrtchemspecies;
+		}
+	    else ad.Nchemspecies = 0;
+	    if (ad.ELECTRON_ION_NONEQUILIBRIUM) ad.Nhydroproperties = 6 + ad.Ndim + ad.Nchemspecies;
+	    else ad.Nhydroproperties = 5 + ad.Ndim + ad.Nchemspecies;
+	    }
+	if (ad.RADIATIVE_TRANSFER) ad.Nrtdiskvars = 6;
+	else ad.Nrtdiskvars = 0;
+	if (ad.GRAVITY) ad.Notherproperties++;
+	if (ad.HYDRO) ad.Notherproperties++;
+	if (ad.RADIATIVE_TRANSFER) ad.Notherproperties += ad.Nrtdiskvars;
+
+	fprintf(stderr,"B: Ndim %d Ngrid %d nBits %d nBitsPerDim %d\n",ad.Ndim,ad.ah.Ngrid,ad.sfci.nBits,ad.sfci.nBitsPerDim);
+
+	init_sfc(&ad.sfci,ad.Ndim,ad.ah.Ngrid);
+
+	fprintf(stderr,"A: Ndim %d Ngrid %d nBits %d nBitsPerDim %d\n",ad.Ndim,ad.ah.Ngrid,ad.sfci.nBits,ad.sfci.nBitsPerDim);
+
+	exit(1);
+
+	int header,trailer;
+	int *cellrefinedbuffer = NULL;
+	float cellhydroproperties[ad.Nhydroproperties];
+	float cellotherproperties[ad.Notherproperties];
+
+	fprintf(stderr,"Nhydroproperties %d Notherproperties %d sfc_order %d\n",
+		ad.Nhydroproperties,ad.Notherproperties,ad.sfci.sfc_order);
+
+	assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
+	if (ad.doswap) reorder(&header,sizeof(int),1);
+	if (ad.Lmingas == 0) assert(ad.Ncell[0] == header/sizeof(int));
+	ad.Ncell[ad.Lmingas] = header/(sizeof(int));
+	cellrefinedbuffer = realloc(cellrefinedbuffer,ad.Ncell[ad.Lmingas]*sizeof(int));
+	assert(fread(cellrefinedbuffer,sizeof(int),ad.Ncell[ad.Lmingas],ad.GasFile) == ad.Ncell[ad.Lmingas]);
+	if (ad.doswap) reorder(&cellrefinedbuffer,sizeof(int),ad.Ncell[ad.Lmingas]);
+	assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
+	if (ad.doswap) reorder(&trailer,sizeof(int),1);
+	assert(header == trailer);
+
+	fprintf(stderr,"Ncell[0] %lu =? %lu h %d t %d Lmingas %d Lgasmax %d\n",
+		ad.Ncell[0],header/sizeof(int),header,trailer,ad.Lmingas,ad.Lmaxgas);
+/*
+	for (i = 0; i < ad.Ncell[0]; i++) {
+	    if (cellrefinedbuffer[i] > 1) {
+		fprintf(stderr,"i %d crb %d\n",i,cellrefinedbuffer[i]);
+		}
+	    }
+*/
+
+
+	/*
+	** min level hydro properties
+	*/
+	fread(&header,sizeof(int),1,ad.GasFile);
+	if (ad.doswap) reorder(&header,sizeof(int),1);
+	assert(ad.Nhydroproperties == header/(sizeof(float)*ad.Ncell[ad.Lmingas]));
+	for (i = 0; i < ad.Ncell[ad.Lmingas]; i++) {
+	    assert(fread(cellhydroproperties,sizeof(float),ad.Nhydroproperties,ad.GasFile) == ad.Nhydroproperties);
+	    if (ad.doswap) reorder(cellhydroproperties,sizeof(float),ad.Nhydroproperties);
+	    }
+	assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
+	if (ad.doswap) reorder(&trailer,sizeof(int),1);
+	assert(header == trailer);
+//	fprintf(stderr,"h %d t %d\n",header,trailer);
+	/*
+	** min level other properties
+	*/
+	if (ad.GRAVITY || ad.RADIATIVE_TRANSFER) {
+	    assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
+	    if (ad.doswap) reorder(&header,sizeof(int),1);
+	    assert(ad.Notherproperties == header/(sizeof(float)*ad.Ncell[ad.Lmingas]));
+	    for (i = 0; i < ad.Ncell[ad.Lmingas]; i++) {
+		assert(fread(cellotherproperties,sizeof(float),ad.Notherproperties,ad.GasFile) == ad.Notherproperties);
+		if (ad.doswap) reorder(cellotherproperties,sizeof(float),ad.Notherproperties);
+		}
+	    assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
+	    if (ad.doswap) reorder(&trailer,sizeof(int),1);
+	    assert(header == trailer);
+//	    fprintf(stderr,"h %d t %d\n",header,trailer);
+	    }
+
+	for (i = ad.Lmingas+1; i <= ad.Lmaxgas; i++) {
+	    /*
+	    ** number of cells
+	    */
+	    assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
+	    if (ad.doswap) reorder(&header,sizeof(int),1);
+	    assert(fread(&ad.Ncell[i],sizeof(long),1,ad.GasFile) == 1);
+	    if (ad.doswap) reorder(&ad.Ncell[i],sizeof(long),1);
+	    assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
+	    if (ad.doswap) reorder(&trailer,sizeof(int),1);
+//	    fprintf(stderr,"h %d t %d\n",header,trailer);
+	    assert(header == trailer);
+	    /*
+	    ** cellrefinedbuffer
+	    */
+	    cellrefinedbuffer = realloc(cellrefinedbuffer,ad.Ncell[i]*sizeof(int));
+	    assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
+	    if (ad.doswap) reorder(&header,sizeof(int),1);
+	    assert(fread(cellrefinedbuffer,sizeof(int),ad.Ncell[i],ad.GasFile) == ad.Ncell[i]);
+	    if (ad.doswap) reorder(&cellrefinedbuffer,sizeof(int),ad.Ncell[i]);
+	    assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
+	    if (ad.doswap) reorder(&trailer,sizeof(int),1);
+//	    fprintf(stderr,"h %d t %d\n",header,trailer);
+	    assert(header == trailer);
+	    /*
+	    ** hydro properties
+	    */
+	    fread(&header,sizeof(int),1,ad.GasFile);
+	    if (ad.doswap) reorder(&header,sizeof(int),1);
+	    assert(ad.Nhydroproperties == header/(sizeof(float)*ad.Ncell[i]));
+	    for (j = 0; j < ad.Ncell[i]; j++) {
+		assert(fread(cellhydroproperties,sizeof(float),ad.Nhydroproperties,ad.GasFile) == ad.Nhydroproperties);
+		if (ad.doswap) reorder(cellhydroproperties,sizeof(float),ad.Nhydroproperties);
+		}
+	    assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
+	    if (ad.doswap) reorder(&trailer,sizeof(int),1);
+	    assert(header == trailer);
+//	    fprintf(stderr,"h %d t %d\n",header,trailer);
+	    /*
+	    ** other properties
+	    */
+	    if (ad.GRAVITY || ad.RADIATIVE_TRANSFER) {
+		assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
+		if (ad.doswap) reorder(&header,sizeof(int),1);
+		assert(ad.Notherproperties == header/(sizeof(float)*ad.Ncell[i]));
+		for (j = 0; j < ad.Ncell[i]; j++) {
+		    assert(fread(cellotherproperties,sizeof(float),ad.Notherproperties,ad.GasFile) == ad.Notherproperties);
+		    if (ad.doswap) reorder(cellotherproperties,sizeof(float),ad.Notherproperties);
+		    }
+		assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
+		if (ad.doswap) reorder(&trailer,sizeof(int),1);
+		assert(header == trailer);
+//		fprintf(stderr,"h %d t %d\n",header,trailer);
+		}
+	    }
+
+
+
+/*
+	for (i = 0; i < ad.Nhydroproperties; i++) {
+	    fprintf(stderr,"i %d %g\n",i,cellhydroproperties[i]);
+	    }
+*/
+
+	for (i = 0; i < ART_NUMBER_GAS_LEVELS; i++) {
+	    fprintf(stderr,"i %d N %lu\n",i,ad.Ncell[i]);
+	    }
+
+	/*
 	** Dark Matter and Stars
 	*/
 	ad.CoordinatesDataFile = fopen(ad.CoordinatesDataFileName,"r");
@@ -804,9 +1151,6 @@ int main(int argc, char **argv) {
 	Nrecordread = 0;
 	Icurrentblockdark = 0;
 	Icurrentblockstar = 0;
-	/*
-	** Read Stars Header
-	*/
 	read_art_header_star(&ad);
 	for (i = 0; i < ad.Nrecord; i++) {
 	    read_art_coordinates_record(ad,ac);
