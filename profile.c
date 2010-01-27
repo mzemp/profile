@@ -15,20 +15,20 @@
 #include <iof.h>
 #include <sfc.h>
 
-#define ART_NUMBER_GAS_LEVELS 30
-#define ART_NUMBER_DARK_LEVELS 10
+#define ART_MAX_NUMBER_GAS_LEVELS 30
+#define ART_MAX_NUMBER_DARK_LEVELS 10
 #define ART_BANNER_LENGTH 45
 
 typedef struct profile_structure {
 
-    int Ntot;
-    int Ngas;
-    int Ndark;
-    int Nstar;
-    int Nenctot;
-    int Nencgas;
-    int Nencdark;
-    int Nencstar;
+    long Ntot;
+    long Ngas;
+    long Ndark;
+    long Nstar;
+    long Nenctot;
+    long Nencgas;
+    long Nencdark;
+    long Nencstar;
     double ri;
     double rm;
     double ro;
@@ -81,6 +81,7 @@ typedef struct general_info {
     int verboselevel;
     int Nbin;
     int Nhalo;
+    int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
     int Nparticleread;
@@ -94,20 +95,20 @@ typedef struct general_info {
     char OutputName[256];
     } GI;
 
-typedef struct coordinates {
+typedef struct art_coordinates {
 
     double r[3];
     double v[3];
-    } COORDINATES;
+    } ART_COORDINATES;
 
-typedef struct star_properties {
+typedef struct art_star_properties {
 
     double mass;
     double initialmass;
     double tform;
     double metallicitySNII;
     double metallicitySNIa;
-    } STAR_PROPERTIES;
+    } ART_STAR_PROPERTIES;
 
 // => goes to iof
 typedef struct cosmological_parameters {
@@ -139,6 +140,10 @@ typedef struct unit_system {
     double LBox;
     } UNIT_SYSTEM;
 
+const double cell_delta[8][3] = {
+	{ -0.5, -0.5, -0.5 }, {  0.5, -0.5, -0.5 }, { -0.5,  0.5, -0.5 }, {  0.5,  0.5, -0.5 }, 
+	{ -0.5, -0.5,  0.5 }, {  0.5, -0.5,  0.5 }, { -0.5,  0.5,  0.5 }, {  0.5,  0.5,  0.5 }
+    };
 
 // => goes to iof
 typedef struct art_data {
@@ -169,20 +174,28 @@ typedef struct art_data {
     int Lmingas, Lmaxgas, Nlevelgas;
     int Nparticleperrecord;
     int Nrecord;
-    int Ngas, Ndark, Nstar;
-    int Ndarklevel[ART_NUMBER_DARK_LEVELS];
+    int Ndarklevel[ART_MAX_NUMBER_DARK_LEVELS];
     int Nstarproperties;
     int Nhydroproperties, Notherproperties;
     int Nrtchemspecies, Nchemspecies, Nrtdiskvars;
     int GRAVITY, HYDRO, STARFORM, ADVECT_SPECIES, ENRICH, ENRICH_SNIa, RADIATIVE_TRANSFER, ELECTRON_ION_NONEQUILIBRIUM;
-    long Ncell[ART_NUMBER_GAS_LEVELS];
+    long Ngas, Ndark, Nstar;
+    long Ncell[ART_MAX_NUMBER_GAS_LEVELS], Ncellrefined[ART_MAX_NUMBER_GAS_LEVELS];
     double shift;
+    double rootcelllength;
     double toplevelmassdark, toplevelsoftdark, refinementstepdark;
-    double massdark[ART_NUMBER_DARK_LEVELS];
-    double softdark[ART_NUMBER_DARK_LEVELS];
+    double massdark[ART_MAX_NUMBER_DARK_LEVELS];
+    double softdark[ART_MAX_NUMBER_DARK_LEVELS];
     char HeaderFileName[256], CoordinatesDataFileName[256], StarPropertiesFileName[256], GasFileName[256];
     FILE *HeaderFile, *CoordinatesDataFile, *StarPropertiesFile, *GasFile;
     } ART_DATA;
+
+typedef struct profile_gas_particle {
+
+    double r[3];
+    double v[3];
+    double mass;
+    } PROFILE_GAS_PARTICLE;
 
 typedef struct profile_dark_particle {
 
@@ -565,8 +578,9 @@ void usage(void);
 void read_halocatalogue_generic(GI (*), HALO_DATA (**));
 void read_halocatalogue_6DFOF(GI (*), HALO_DATA (**));
 void initialise_halo_profile (GI (*), HALO_DATA (*));
-void read_art_coordinates_record(ART_DATA, COORDINATES (*));
-void read_art_star_properties(ART_DATA, int, STAR_PROPERTIES (*));
+void read_art_coordinates_record(ART_DATA, ART_COORDINATES (*));
+void read_art_star_properties(ART_DATA, int, ART_STAR_PROPERTIES (*));
+void put_pgp_in_bins(HALO_DATA (*), PROFILE_GAS_PARTICLE (*), UNIT_SYSTEM, GI);
 void put_pdp_in_bins(HALO_DATA (*), PROFILE_DARK_PARTICLE (*), UNIT_SYSTEM, GI);
 void put_psp_in_bins(HALO_DATA (*), PROFILE_STAR_PARTICLE (*), UNIT_SYSTEM, GI);
 void calculate_halo_properties(HALO_DATA (*), COSMOLOGICAL_PARAMETERS, UNIT_SYSTEM, GI);
@@ -574,10 +588,20 @@ void write_output(HALO_DATA (*), GI);
 
 int main(int argc, char **argv) {
 
-    int i, j, k;
+    int index[3] = {-1,-1,-1};
     int L = -1;
-    int Nparticleread, Nrecordread;
-    int Icurrentblockdark, Icurrentblockstar;
+    int Icurrentblockgas, Icurrentblockdark, Icurrentblockstar;
+    long i, j, k, l;
+    long Nparticleread, Nrecordread, Ngasread;
+    double cellmass, celllength, cellvolume, celldensity, cellmomentum[3];
+    int header,trailer;
+    int *Ncelltotal = NULL;
+    int *cellrefined = NULL;
+    long *Icoordinates = NULL;
+    float *cellhydroproperties = NULL;
+    float *cellotherproperties = NULL;
+    double ***coordinates = NULL;
+    double r[3];
     GI gi;
     COSMOLOGICAL_PARAMETERS cp;
     UNIT_SYSTEM us;
@@ -589,9 +613,10 @@ int main(int argc, char **argv) {
     DARK_PARTICLE_DPP dpdpp;
     STAR_PARTICLE_DPP spdpp;
     ART_DATA ad;
-    STAR_PROPERTIES starprop;
-    COORDINATES *ac = NULL;
+    ART_STAR_PROPERTIES starprop;
+    ART_COORDINATES *ac = NULL;
     HALO_DATA *hd = NULL;
+    PROFILE_GAS_PARTICLE *pgp = NULL;
     PROFILE_DARK_PARTICLE *pdp = NULL;
     PROFILE_STAR_PARTICLE *psp = NULL;
     XDR xdrs;
@@ -621,6 +646,9 @@ int main(int argc, char **argv) {
     gi.gridtype = 1;
     gi.binfactor = 5;
     gi.Nhalo = 0;
+    gi.Nparticleperblockgas = 10000000;
+    gi.Nparticleinblockgas = 0;
+    gi.Nblockgas = 0;
     gi.Nparticleperblockdark = 10000000;
     gi.Nparticleinblockdark = 0;
     gi.Nblockdark = 0;
@@ -641,13 +669,15 @@ int main(int argc, char **argv) {
     ad.toplevelmassdark = -1;
     ad.toplevelsoftdark = 0;
     ad.shift = 0;
-    for (i = 0; i < ART_NUMBER_DARK_LEVELS; i++) {
+    ad.rootcelllength = 1;
+    for (i = 0; i < ART_MAX_NUMBER_DARK_LEVELS; i++) {
 	ad.Ndarklevel[i] = 0;
 	ad.massdark[i] = 0;
 	ad.softdark[i] = 0;
 	}
-    for (i = 0; i < ART_NUMBER_GAS_LEVELS; i++) {
+    for (i = 0; i < ART_MAX_NUMBER_GAS_LEVELS; i++) {
 	ad.Ncell[i] = 0;
+	ad.Ncellrefined[i] = 0;
 	}
     ad.Nstarproperties = 5;
     ad.HeaderFile = NULL;
@@ -661,6 +691,12 @@ int main(int argc, char **argv) {
     ad.ENRICH_SNIa = 1;
     ad.RADIATIVE_TRANSFER = 1;
     ad.ELECTRON_ION_NONEQUILIBRIUM = 0;
+    ad.sfci.nDim = 0;
+    ad.sfci.num_grid = 0;
+    ad.sfci.sfc_order = -1;
+    ad.sfci.nBitsPerDim = 0;
+    ad.sfci.nBits = 0;
+    ad.sfci.max_sfc_index = 0;
 
     /*
     ** Read in arguments
@@ -871,15 +907,44 @@ int main(int argc, char **argv) {
 	gi.bc[3] = us.LBox;
 	gi.bc[4] = us.LBox;
 	gi.bc[5] = us.LBox;
+	ad.sfci.nDim = ad.Ndim;
+	ad.sfci.num_grid = ad.ah.Ngrid;
+	/*
+	** Derive some parameters from flags
+	*/
+	ad.Nhydroproperties = 0;
+	ad.Notherproperties = 0;
+	ad.Nrtchemspecies = 0;
+	ad.Nchemspecies = 0;
+	ad.Nrtdiskvars = 0;
+	if (ad.HYDRO) {
+	    if (ad.ADVECT_SPECIES) {
+		if (ad.RADIATIVE_TRANSFER) ad.Nrtchemspecies = 6;
+		else ad.Nrtchemspecies = 0;
+		if (ad.ENRICH) {
+		    if (ad.ENRICH_SNIa) ad.Nchemspecies = ad.Nrtchemspecies + 2;
+		    else ad.Nchemspecies = ad.Nrtchemspecies + 1;
+		    }
+		else ad.Nchemspecies = ad.Nrtchemspecies;
+		}
+	    else ad.Nchemspecies = 0;
+	    if (ad.ELECTRON_ION_NONEQUILIBRIUM) ad.Nhydroproperties = 6 + ad.Ndim + ad.Nchemspecies;
+	    else ad.Nhydroproperties = 5 + ad.Ndim + ad.Nchemspecies;
+	    }
+	if (ad.RADIATIVE_TRANSFER) ad.Nrtdiskvars = 6;
+	else ad.Nrtdiskvars = 0;
+	if (ad.GRAVITY) ad.Notherproperties++;
+	if (ad.HYDRO) ad.Notherproperties++;
+	if (ad.RADIATIVE_TRANSFER) ad.Notherproperties += ad.Nrtdiskvars;
 	}
     else {
 	fprintf(stderr,"Not supported format!\n");
 	exit(1);
 	}
 
-    fprintf(stderr,"a = %g doswap %d Nparticleperrecord %d %d B %s Ndark %d Lmax %d\n",cp.ascale,ad.doswap,ad.Nparticleperrecord,ad.ah.Nrow,ad.Banner,ad.Ndark,ad.Lmaxdark);
+    fprintf(stderr,"a = %g doswap %d Nparticleperrecord %d %d B %s Ndark %ld Lmax %d\n",cp.ascale,ad.doswap,ad.Nparticleperrecord,ad.ah.Nrow,ad.Banner,ad.Ndark,ad.Lmaxdark);
     for (i = 0; i < 10; i++) {
-	fprintf(stderr,"i %d Ndarklvel %d massdark %g softdark %g num %d\n",i,ad.Ndarklevel[i],ad.massdark[i],ad.softdark[i],ad.ah.num[i]);
+	fprintf(stderr,"i %ld Ndarklvel %d massdark %g softdark %g num %d\n",i,ad.Ndarklevel[i],ad.massdark[i],ad.softdark[i],ad.ah.num[i]);
 	}
 
 //    exit(1);
@@ -927,25 +992,25 @@ int main(int argc, char **argv) {
 */
 	}
 
-    fprintf(stderr,"Ndark %d Nstar %d\n",ad.Ndark,ad.Nstar);
+    fprintf(stderr,"Ndark %ld Nstar %ld Ngas %ld\n",ad.Ndark,ad.Nstar,ad.Ngas);
 //    exit(1);
 
     /*
     ** Harvest data
     */
     if (gi.dataformat == 0) {
-	assert(ad.Ngas == 0);
-	assert(ad.Nstar == 0);
+	assert(th.ngas == 0);
+	assert(th.nstar == 0);
 	assert(gi.positionprecision == 0);
 	if (gi.positionprecision == 0) {
 	    /*
 	    ** Dark Matter
 	    */
-	    pdp = realloc(pdp,gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
+	    pdp = malloc(gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
 	    assert(pdp != NULL);
 	    Nparticleread = 0;
 	    Icurrentblockdark = 0;
-	    for (i = 0; i < ad.Ndark; i++) {
+	    for (i = 0; i < th.ndark; i++) {
 		read_tipsy_standard_dark(&xdrs,&dp);
 		for (k = 0; k < 3; k++) {
 		    pdp[Icurrentblockdark].r[k] = dp.pos[k];
@@ -972,71 +1037,55 @@ int main(int argc, char **argv) {
 	*/
 	ad.GasFile = fopen(ad.GasFileName,"r");
 	assert(ad.GasFile != NULL);
+	pgp = malloc(gi.Nparticleperblockgas*sizeof(PROFILE_GAS_PARTICLE));
+	assert(pgp != NULL);
+	cellhydroproperties = malloc(ad.Nhydroproperties*sizeof(float));
+	assert(cellhydroproperties != NULL);
+	cellotherproperties = malloc(ad.Notherproperties*sizeof(float));
+	assert(cellotherproperties != NULL);
+	Ngasread = 0;
+	Icurrentblockgas = 0;
+	/*
+	** initialise sfc stuff and read through gas header
+	*/
+	init_sfc(&ad.sfci);
 	read_art_header_gas(&ad);
-
-	ad.Nhydroproperties = 0;
-	ad.Notherproperties = 0;
-	ad.Nrtchemspecies = 0;
-	ad.Nchemspecies = 0;
-	ad.Nrtdiskvars = 0;
-	if (ad.HYDRO) {
-	    if (ad.ADVECT_SPECIES) {
-		if (ad.RADIATIVE_TRANSFER) ad.Nrtchemspecies = 6;
-		else ad.Nrtchemspecies = 0;
-		if (ad.ENRICH) {
-		    if (ad.ENRICH_SNIa) ad.Nchemspecies = ad.Nrtchemspecies + 2;
-		    else ad.Nchemspecies = ad.Nrtchemspecies + 1;
-		    }
-		else ad.Nchemspecies = ad.Nrtchemspecies;
-		}
-	    else ad.Nchemspecies = 0;
-	    if (ad.ELECTRON_ION_NONEQUILIBRIUM) ad.Nhydroproperties = 6 + ad.Ndim + ad.Nchemspecies;
-	    else ad.Nhydroproperties = 5 + ad.Ndim + ad.Nchemspecies;
-	    }
-	if (ad.RADIATIVE_TRANSFER) ad.Nrtdiskvars = 6;
-	else ad.Nrtdiskvars = 0;
-	if (ad.GRAVITY) ad.Notherproperties++;
-	if (ad.HYDRO) ad.Notherproperties++;
-	if (ad.RADIATIVE_TRANSFER) ad.Notherproperties += ad.Nrtdiskvars;
-
-	fprintf(stderr,"B: Ndim %d Ngrid %d nBits %d nBitsPerDim %d\n",ad.Ndim,ad.ah.Ngrid,ad.sfci.nBits,ad.sfci.nBitsPerDim);
-
-	init_sfc(&ad.sfci,ad.Ndim,ad.ah.Ngrid);
-
-	fprintf(stderr,"A: Ndim %d Ngrid %d nBits %d nBitsPerDim %d\n",ad.Ndim,ad.ah.Ngrid,ad.sfci.nBits,ad.sfci.nBitsPerDim);
-
-	exit(1);
-
-	int header,trailer;
-	int *cellrefinedbuffer = NULL;
-	float cellhydroproperties[ad.Nhydroproperties];
-	float cellotherproperties[ad.Notherproperties];
-
-	fprintf(stderr,"Nhydroproperties %d Notherproperties %d sfc_order %d\n",
-		ad.Nhydroproperties,ad.Notherproperties,ad.sfci.sfc_order);
-
+	celllength = ad.rootcelllength/pow(2,ad.Lmingas);
+	cellvolume = celllength*celllength*celllength;
+	/*
+	** read in total number of gas cells in each root cell
+	*/
 	assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
 	if (ad.doswap) reorder(&header,sizeof(int),1);
 	if (ad.Lmingas == 0) assert(ad.Ncell[0] == header/sizeof(int));
 	ad.Ncell[ad.Lmingas] = header/(sizeof(int));
-	cellrefinedbuffer = realloc(cellrefinedbuffer,ad.Ncell[ad.Lmingas]*sizeof(int));
-	assert(fread(cellrefinedbuffer,sizeof(int),ad.Ncell[ad.Lmingas],ad.GasFile) == ad.Ncell[ad.Lmingas]);
-	if (ad.doswap) reorder(&cellrefinedbuffer,sizeof(int),ad.Ncell[ad.Lmingas]);
+	Ncelltotal = malloc(ad.Ncell[ad.Lmingas]*sizeof(int));
+	assert(Ncelltotal != NULL);
+	assert(fread(Ncelltotal,sizeof(int),ad.Ncell[ad.Lmingas],ad.GasFile) == ad.Ncell[ad.Lmingas]);
+	if (ad.doswap) reorder(&Ncelltotal,sizeof(int),ad.Ncell[ad.Lmingas]);
 	assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
 	if (ad.doswap) reorder(&trailer,sizeof(int),1);
 	assert(header == trailer);
-
-	fprintf(stderr,"Ncell[0] %lu =? %lu h %d t %d Lmingas %d Lgasmax %d\n",
-		ad.Ncell[0],header/sizeof(int),header,trailer,ad.Lmingas,ad.Lmaxgas);
-/*
-	for (i = 0; i < ad.Ncell[0]; i++) {
-	    if (cellrefinedbuffer[i] > 1) {
-		fprintf(stderr,"i %d crb %d\n",i,cellrefinedbuffer[i]);
-		}
+	/*
+	** get coordinates array ready
+	*/
+	for (i = 0; i < ad.Ncell[ad.Lmingas]; i++) {
+	    ad.Ngas += Ncelltotal[i];
+	    if (Ncelltotal[i] > 1) ad.Ncellrefined[ad.Lmingas]++;
 	    }
-*/
-
-
+	coordinates = malloc((ad.Lmaxgas+1)*sizeof(double **));
+	assert(coordinates != NULL);
+	coordinates[ad.Lmingas] = malloc(ad.Ncellrefined[ad.Lmingas]*sizeof(double *));
+	assert(coordinates[ad.Lmingas] != NULL);
+	for (i = 0; i < ad.Ncellrefined[ad.Lmingas]; i++) {
+	    coordinates[ad.Lmingas][i] = malloc(3*sizeof(double));
+	    assert(coordinates[ad.Lmingas][i] != NULL);
+	    }
+	Icoordinates = malloc((ad.Lmaxgas+1)*sizeof(long));
+	assert(Icoordinates != NULL);
+	for (i = 0; i <= (ad.Lmaxgas+1); i++) {
+	    Icoordinates[i] = 0;
+	    }
 	/*
 	** min level hydro properties
 	*/
@@ -1046,13 +1095,46 @@ int main(int argc, char **argv) {
 	for (i = 0; i < ad.Ncell[ad.Lmingas]; i++) {
 	    assert(fread(cellhydroproperties,sizeof(float),ad.Nhydroproperties,ad.GasFile) == ad.Nhydroproperties);
 	    if (ad.doswap) reorder(cellhydroproperties,sizeof(float),ad.Nhydroproperties);
+	    Ngasread++;
+	    sfc_coords(ad.sfci,i,index);
+	    if (Ncelltotal[i] == 1) {
+		/*
+		** not refined => add it for analysis
+		*/
+		celldensity = cellhydroproperties[0];
+		cellmass = cellvolume*celldensity;
+		for (k = 0; k < 3; k++) {
+		    cellmomentum[k] = cellhydroproperties[2+k];
+		    pgp[Icurrentblockgas].r[k] = index[k] + 0.5;
+		    pgp[Icurrentblockgas].v[k] = cellmomentum[k]/cellmass;
+		    }
+		pgp[Icurrentblockgas].mass = cellmass;
+		Icurrentblockgas++;
+		if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Ngasread == ad.Ngas)) {
+		    /*
+		    ** Block is full or we reached end of gas particles
+		    */
+		    gi.Nparticleinblockgas = Icurrentblockgas;
+		    put_pgp_in_bins(hd,pgp,us,gi);
+		    Icurrentblockgas = 0;
+		    }
+		}
+	    else {
+		/*
+		** refined => add it to corresponding coordinates array
+		*/
+		for (k = 0; k < 3; k++) {
+		    coordinates[ad.Lmingas][Icoordinates[ad.Lmingas]][k] = r[k] + 0.5;
+		    }
+		Icoordinates[ad.Lmingas]++;
+		}
 	    }
 	assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
 	if (ad.doswap) reorder(&trailer,sizeof(int),1);
 	assert(header == trailer);
-//	fprintf(stderr,"h %d t %d\n",header,trailer);
+	assert(Icoordinates[ad.Lmingas] == ad.Ncellrefined[ad.Lmingas]);
 	/*
-	** min level other properties
+	** min level other properties (ignored so far)
 	*/
 	if (ad.GRAVITY || ad.RADIATIVE_TRANSFER) {
 	    assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
@@ -1060,15 +1142,17 @@ int main(int argc, char **argv) {
 	    assert(ad.Notherproperties == header/(sizeof(float)*ad.Ncell[ad.Lmingas]));
 	    for (i = 0; i < ad.Ncell[ad.Lmingas]; i++) {
 		assert(fread(cellotherproperties,sizeof(float),ad.Notherproperties,ad.GasFile) == ad.Notherproperties);
-		if (ad.doswap) reorder(cellotherproperties,sizeof(float),ad.Notherproperties);
 		}
 	    assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
 	    if (ad.doswap) reorder(&trailer,sizeof(int),1);
 	    assert(header == trailer);
-//	    fprintf(stderr,"h %d t %d\n",header,trailer);
 	    }
-
+	/*
+	** now go through all higher levels
+	*/
 	for (i = ad.Lmingas+1; i <= ad.Lmaxgas; i++) {
+	    celllength = ad.rootcelllength/pow(2,i);
+	    cellvolume = celllength*celllength*celllength;
 	    /*
 	    ** number of cells
 	    */
@@ -1078,36 +1162,90 @@ int main(int argc, char **argv) {
 	    if (ad.doswap) reorder(&ad.Ncell[i],sizeof(long),1);
 	    assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
 	    if (ad.doswap) reorder(&trailer,sizeof(int),1);
-//	    fprintf(stderr,"h %d t %d\n",header,trailer);
 	    assert(header == trailer);
+	    assert(ad.Ncell[i] == ad.Ncellrefined[i-1]*8);
 	    /*
-	    ** cellrefinedbuffer
+	    ** cellrefined
 	    */
-	    cellrefinedbuffer = realloc(cellrefinedbuffer,ad.Ncell[i]*sizeof(int));
+	    cellrefined = realloc(cellrefined,ad.Ncell[i]*sizeof(int));
+	    assert(cellrefined != NULL);
 	    assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
 	    if (ad.doswap) reorder(&header,sizeof(int),1);
-	    assert(fread(cellrefinedbuffer,sizeof(int),ad.Ncell[i],ad.GasFile) == ad.Ncell[i]);
-	    if (ad.doswap) reorder(&cellrefinedbuffer,sizeof(int),ad.Ncell[i]);
+	    assert(fread(cellrefined,sizeof(int),ad.Ncell[i],ad.GasFile) == ad.Ncell[i]);
+	    if (ad.doswap) reorder(cellrefined,sizeof(int),ad.Ncell[i]);
 	    assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
 	    if (ad.doswap) reorder(&trailer,sizeof(int),1);
-//	    fprintf(stderr,"h %d t %d\n",header,trailer);
 	    assert(header == trailer);
+	    /*
+	    ** get coordinates array ready
+	    */
+	    for (j = 0; j < ad.Ncell[i]; j++) {
+		if (cellrefined[j] == 1) ad.Ncellrefined[i]++;
+		}
+	    coordinates[i] = malloc(ad.Ncellrefined[i]*sizeof(double *));
+	    assert(coordinates[i] != NULL);
+	    for (j = 0; j < ad.Ncellrefined[i]; j++) {
+		coordinates[i][j] = malloc(3*sizeof(double));
+		assert(coordinates[i][j] != NULL);
+		}
 	    /*
 	    ** hydro properties
 	    */
 	    fread(&header,sizeof(int),1,ad.GasFile);
 	    if (ad.doswap) reorder(&header,sizeof(int),1);
 	    assert(ad.Nhydroproperties == header/(sizeof(float)*ad.Ncell[i]));
-	    for (j = 0; j < ad.Ncell[i]; j++) {
-		assert(fread(cellhydroproperties,sizeof(float),ad.Nhydroproperties,ad.GasFile) == ad.Nhydroproperties);
-		if (ad.doswap) reorder(cellhydroproperties,sizeof(float),ad.Nhydroproperties);
+	    for (j = 0; j < ad.Ncellrefined[i-1]; j++) {
+		for (k = 0; k < 8; k++) {
+		    assert(fread(cellhydroproperties,sizeof(float),ad.Nhydroproperties,ad.GasFile) == ad.Nhydroproperties);
+		    if (ad.doswap) reorder(cellhydroproperties,sizeof(float),ad.Nhydroproperties);
+		    Ngasread++;
+		    for (l = 0; l < 3; l++) {
+			r[l] = coordinates[i-1][j][l] + celllength*cell_delta[k][l]; // check
+			}
+
+		    if (i == 2 && j < 1) {
+			fprintf(stderr,"i %ld j %ld rx %g ry %g rz %g cl %g\n",i,j,r[0],r[1],r[2],celllength);
+			}
+
+		    if (cellrefined[j*8+k] == 0) {
+			/*
+			** not refined => add it for analysis
+			*/
+			celldensity = cellhydroproperties[0];
+			cellmass = cellvolume*celldensity;
+			for (l = 0; l < 3; l++) {
+			    cellmomentum[l] = cellhydroproperties[2+l];
+			    pgp[Icurrentblockgas].r[l] = r[l];
+			    pgp[Icurrentblockgas].v[l] = cellmomentum[l]/cellmass;
+			    }
+			pgp[Icurrentblockgas].mass = cellmass;
+			Icurrentblockgas++;
+			if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Ngasread == ad.Ngas)) {
+			    /*
+			    ** Block is full or we reached end of gas particles
+			    */
+			    gi.Nparticleinblockgas = Icurrentblockgas;
+			    put_pgp_in_bins(hd,pgp,us,gi);
+			    Icurrentblockgas = 0;
+			    }
+			}
+		    else {
+			/*
+			** refined => add it to corresponding coordinates array
+			*/
+			for (l = 0; l < 3; l++) {
+			    coordinates[i][Icoordinates[i]][l] = r[l];
+			    }
+			Icoordinates[i]++;
+			}
+		    }
 		}
 	    assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
 	    if (ad.doswap) reorder(&trailer,sizeof(int),1);
 	    assert(header == trailer);
-//	    fprintf(stderr,"h %d t %d\n",header,trailer);
+	    assert(Icoordinates[i] == ad.Ncellrefined[i]);
 	    /*
-	    ** other properties
+	    ** other properties (ignored so far)
 	    */
 	    if (ad.GRAVITY || ad.RADIATIVE_TRANSFER) {
 		assert(fread(&header,sizeof(int),1,ad.GasFile) == 1);
@@ -1120,32 +1258,41 @@ int main(int argc, char **argv) {
 		assert(fread(&trailer,sizeof(int),1,ad.GasFile) == 1);
 		if (ad.doswap) reorder(&trailer,sizeof(int),1);
 		assert(header == trailer);
-//		fprintf(stderr,"h %d t %d\n",header,trailer);
 		}
+	    /*
+	    ** free coordinates of level below
+	    */
+	    for (j = 0; j < ad.Ncellrefined[i-1]; j++) {
+		free(coordinates[i-1][j]);
+		}
+	    free(coordinates[i-1]);
 	    }
-
-
-
-/*
-	for (i = 0; i < ad.Nhydroproperties; i++) {
-	    fprintf(stderr,"i %d %g\n",i,cellhydroproperties[i]);
+	/*
+	** Some checks and free remaining arrays
+	*/
+	assert(ad.Ncellrefined[ad.Lmaxgas] == 0);
+	assert(ad.Ngas == Ngasread);
+	k = 0;
+	for (i = ad.Lmingas; i <= ad.Lmaxgas; i++) {
+	    k += ad.Ncell[i];
 	    }
-*/
-
-	for (i = 0; i < ART_NUMBER_GAS_LEVELS; i++) {
-	    fprintf(stderr,"i %d N %lu\n",i,ad.Ncell[i]);
-	    }
-
+	assert(ad.Ngas == k);
+	free(pgp);
+	free(cellhydroproperties);
+	free(cellotherproperties);
+	free(Icoordinates);
+	free(Ncelltotal);
+	free(cellrefined);
 	/*
 	** Dark Matter and Stars
 	*/
 	ad.CoordinatesDataFile = fopen(ad.CoordinatesDataFileName,"r");
 	assert(ad.CoordinatesDataFile != NULL);
-	ac = realloc(ac,ad.Nparticleperrecord*sizeof(COORDINATES));
+	ac = malloc(ad.Nparticleperrecord*sizeof(ART_COORDINATES));
 	assert(ac != NULL);
-	pdp = realloc(pdp,gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
+	pdp = malloc(gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
 	assert(pdp != NULL);
-	psp = realloc(psp,gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
+	psp = malloc(gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
 	assert(psp != NULL);
 	Nparticleread = 0;
 	Nrecordread = 0;
@@ -1154,7 +1301,7 @@ int main(int argc, char **argv) {
 	read_art_header_star(&ad);
 	for (i = 0; i < ad.Nrecord; i++) {
 	    read_art_coordinates_record(ad,ac);
-	    fprintf(stderr,"i %d Nrecord %d\n",i,ad.Nrecord);
+	    fprintf(stderr,"i %ld Nrecord %d\n",i,ad.Nrecord);
 	    for (j = 0; j < ad.Nparticleperrecord; j++) {
 		if (Nparticleread < ad.Ndark) {
 		    /*
@@ -1208,25 +1355,24 @@ int main(int argc, char **argv) {
 		    }
 		}
 	    }
+	/*
+	** free arrays
+	*/
+	free(ac);
+	free(pdp);
+	free(psp);
 	}
-
     /*
     ** Calculate halo properties
     */
- 
     calculate_halo_properties(hd,cp,us,gi); 
-
     /*
     ** Write output
     */
-
     write_output(hd,gi);
-
     /*
     ** Some more output if desired
     */
-
-
     if (gi.verboselevel >= 1) {
         fprintf(stderr,"Used values:\n");
         fprintf(stderr,"Delta_bg    : %.6e\n",gi.Deltabg);
@@ -1534,7 +1680,7 @@ void initialise_halo_profile (GI *gi, HALO_DATA *hd){
     }
 
 
-void read_art_coordinates_record(ART_DATA ad, COORDINATES *coordinates) {
+void read_art_coordinates_record(ART_DATA ad, ART_COORDINATES *coordinates) {
 
     int i;
     float fdummy;
@@ -1572,7 +1718,7 @@ void read_art_coordinates_record(ART_DATA ad, COORDINATES *coordinates) {
 	}
     }
 
-void read_art_star_properties(ART_DATA ad, int index, STAR_PROPERTIES *sp) {
+void read_art_star_properties(ART_DATA ad, int index, ART_STAR_PROPERTIES *sp) {
 
     int header, trailer;
     int i;
@@ -1604,6 +1750,70 @@ void read_art_star_properties(ART_DATA ad, int index, STAR_PROPERTIES *sp) {
 	assert(fread(&trailer,sizeof(int),1,ad.StarPropertiesFile) == 1);
 	if (ad.doswap) reorder(&trailer,sizeof(int),1);
 	assert(header == trailer);
+	}
+    }
+
+void put_pgp_in_bins(HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp, UNIT_SYSTEM us, GI gi) {
+
+    int i, j, k, l;
+    double r[3], v[3], vproj[3];
+    double erad[3], ephi[3], etheta[3];
+    double d;
+
+    for (i = 0; i < gi.Nparticleinblockgas; i++) {
+	for (j = 0; j < gi.Nhalo; j++) {
+	    for (k = 0; k < 3; k++) {
+		r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],us.LBox);
+		r[k] = r[k]-hd[j].rcentre[k];
+		}
+	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+	    if (d <= hd[j].ps[gi.Nbin].ro) {
+		for (k = 0; k < 3; k++) {
+		    v[k] = pgp[i].v[k]-hd[j].vcentre[k];
+		    }
+		/*
+		** Go through bins from outside inwards => larger bin volume further out
+		*/
+		for (l = hd[j].Nbin; l >=0; l--) {
+		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+			if (gi.projectionvariant == 0) {
+			    vproj[0] = v[0];
+			    vproj[1] = v[1];
+			    vproj[2] = v[2];
+			    }
+			else if (gi.projectionvariant == 1) {
+			    calculate_unit_vectors(r,erad,ephi,etheta);
+			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+			    }
+			hd[j].ps[l].Ntot++;
+			hd[j].ps[l].Ngas++;
+			hd[j].ps[l].Mtot += pgp[i].mass;
+			hd[j].ps[l].Mgas += pgp[i].mass;
+			for (k = 0; k < 3; k++) {
+			    hd[j].ps[l].vtot[k]   += vproj[k];
+			    hd[j].ps[l].vgas[k]  += vproj[k];
+			    hd[j].ps[l].v2tot[k]  += vproj[k]*vproj[k];
+			    hd[j].ps[l].v2gas[k] += vproj[k]*vproj[k];
+			    }
+			hd[j].ps[l].v2tot[3]  += vproj[0]*vproj[1];
+			hd[j].ps[l].v2tot[4]  += vproj[0]*vproj[2];
+			hd[j].ps[l].v2tot[5]  += vproj[1]*vproj[2];
+			hd[j].ps[l].v2gas[3] += vproj[0]*vproj[1];
+			hd[j].ps[l].v2gas[4] += vproj[0]*vproj[2];
+			hd[j].ps[l].v2gas[5] += vproj[1]*vproj[2];
+			hd[j].ps[l].Ltot[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].Ltot[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].Ltot[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].Lgas[0] += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].Lgas[1] += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].Lgas[2] += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			break;
+			}
+		    }
+		}
+	    }
 	}
     }
 
@@ -1932,8 +2142,8 @@ void write_output(HALO_DATA *hd, GI gi) {
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Mtot,hd[i].ps[j].Mgas,hd[i].ps[j].Mdark,hd[i].ps[j].Mstar);
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Menctot,hd[i].ps[j].Mencgas,hd[i].ps[j].Mencdark,hd[i].ps[j].Mencstar);
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Mtot/hd[i].ps[j].vol,hd[i].ps[j].Mgas/hd[i].ps[j].vol,hd[i].ps[j].Mdark/hd[i].ps[j].vol,hd[i].ps[j].Mstar/hd[i].ps[j].vol);
-	    fprintf(profilesfile,"%d %d %d %d ",hd[i].ps[j].Ntot,hd[i].ps[j].Ngas,hd[i].ps[j].Ndark,hd[i].ps[j].Nstar);
-	    fprintf(profilesfile,"%d %d %d %d ",hd[i].ps[j].Nenctot,hd[i].ps[j].Nencgas,hd[i].ps[j].Nencdark,hd[i].ps[j].Nencstar);
+	    fprintf(profilesfile,"%ld %ld %ld %ld ",hd[i].ps[j].Ntot,hd[i].ps[j].Ngas,hd[i].ps[j].Ndark,hd[i].ps[j].Nstar);
+	    fprintf(profilesfile,"%ld %ld %ld %ld ",hd[i].ps[j].Nenctot,hd[i].ps[j].Nencgas,hd[i].ps[j].Nencdark,hd[i].ps[j].Nencstar);
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Ntot/hd[i].ps[j].vol,hd[i].ps[j].Ngas/hd[i].ps[j].vol,hd[i].ps[j].Ndark/hd[i].ps[j].vol,hd[i].ps[j].Nstar/hd[i].ps[j].vol);
 	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vtot[k]);
 	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2tot[k]);
