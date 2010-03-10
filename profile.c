@@ -1,7 +1,7 @@
 /* 
 ** profile.c
 **
-** Program written in order to calculate profile
+** Program written in order to calculate profile and characteristic scales of haloes
 **
 ** written by Marcel Zemp
 */
@@ -16,7 +16,7 @@
 #include <iof.h>
 #include <art_sfc.h>
 
-#define HALO_DATA_SIZE 10000
+#define HALO_DATA_SIZE 1000
 
 typedef struct profile_structure {
 
@@ -60,7 +60,7 @@ typedef struct profile_structure {
 typedef struct halo_data {
 
     int ID;
-    int Nbin;
+    int NBin;
     int truncated;
     double rcentre[3];
     double vcentre[3];
@@ -103,150 +103,33 @@ typedef struct profile_star_particle {
 
 typedef struct general_info {
 
-    int positionprecision;
     int centretype;
-    int readhalocataloguefile;
     int rmaxfromhalocatalogue;
-    int dataformat;
-    int halocatalogueformat;
-    int verboselevel;
-    int Nbin;
-    int Nhalo;
+    int NBin;
+    int NHalo;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
-    int Nparticleread;
-    int Nrecordread;
     double rhoencbg, rhoenccrit;
     double Deltabg, Deltacrit;
     double ascale;
     double rmin, rmax;
     double bc[6];
     double binfactor;
-    double criticalslope;
     double fexcludermin, fincludermin, frhobg;
     double fcheckrvcmax, fcheckrstatic, fchecktruncated;
     double fextremerstatic, Nsigma, vraddispmin;
-    char HaloCatalogueFileName[256];
-    char OutputName[256];
     COSMOLOGICAL_PARAMETERS cp;
     UNIT_SYSTEM us, cosmous;
+    char HaloCatalogueFileName[256], OutputName[256];
     } GI;
 
-void set_default_values_general_info(GI *gi) {
-
-    gi->cp.OmegaM0 = 0.3;
-    gi->cp.OmegaDM0 = 0.26;
-    gi->cp.OmegaB0 = 0.04;
-    gi->cp.OmegaL0 = 0.7;
-    gi->cp.OmegaK0 = 0;
-    gi->cp.OmegaR0 = 0;
-
-    gi->us.LBox = 0;
-    gi->us.GNewton = 0;
-    gi->us.Hubble0 = 0;
-    gi->us.rhocrit0 = 0;
-
-    gi->cosmous.LBox = 0;
-    gi->cosmous.GNewton = 0;
-    gi->cosmous.Hubble0 = 0;
-    gi->cosmous.rhocrit0 = 0;
-
-    gi->positionprecision = 0;
-    gi->Deltabg = 200;
-    gi->Deltacrit = 0;
-    gi->rmin = 0;
-    gi->rmax = 1;
-    gi->Nbin = 0;
-    gi->binfactor = 5;
-    gi->Nhalo = 0;
-    gi->Nparticleperblockgas = 10000000;
-    gi->Nparticleinblockgas = 0;
-    gi->Nblockgas = 0;
-    gi->Nparticleperblockdark = 10000000;
-    gi->Nparticleinblockdark = 0;
-    gi->Nblockdark = 0;
-    gi->Nparticleperblockstar = 10000000;
-    gi->Nparticleinblockstar = 0;
-    gi->Nblockstar = 0;
-    gi->fexcludermin = 5;
-    gi->fincludermin = 100;
-    gi->frhobg = 1.2;
-    gi->fcheckrvcmax = 10;
-    gi->fcheckrstatic = 3;
-    gi->fchecktruncated = 0;
-    gi->fextremerstatic = 3;
-    gi->vraddispmin = 2;
-    gi->Nsigma = 1.5;
-}
-
-void calculate_unit_vectors(double pos[3], double erad[3], double ephi[3], double etheta[3]) {
-
-    double dist;
-    double cosphi, sinphi, costheta, sintheta;
-
-    /*
-    ** Calculate cosphi & sinphi
-    */
-    dist = sqrt(pos[0]*pos[0]+pos[1]*pos[1]);
-    cosphi = pos[0]/dist;
-    sinphi = pos[1]/dist;
-    if ((pos[0] == 0) && (pos[1] == 0)) {
-        cosphi = 1;
-        sinphi = 0;
-        }
-    /*
-    ** Calculate costheta & sintheta
-    */
-    dist = sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-    costheta = pos[2]/dist;
-    sintheta = sqrt(1-costheta*costheta);
-    /*
-    ** Calculate unit vectors
-    */
-    erad[0] = sintheta*cosphi;
-    erad[1] = sintheta*sinphi;
-    erad[2] = costheta;
-    ephi[0] = -sinphi;
-    ephi[1] = cosphi;
-    ephi[2] = 0;
-    etheta[0] = -costheta*cosphi;
-    etheta[1] = -costheta*sinphi;
-    etheta[2] = sintheta;
-    }
-
-double Ecosmo(double a, COSMOLOGICAL_PARAMETERS cp) {
-
-    return sqrt(cp.OmegaM0*pow(a,-3) + cp.OmegaL0 + cp.OmegaK0*pow(a,-2) + cp.OmegaR0*pow(a,-4));
-    }
-
-void calculate_densities(GI *gi) {
-    
-    double E, OmegaM, rhocrit;
-
-    assert((3*pow(gi->us.Hubble0,2)/(8*M_PI*gi->us.GNewton*gi->us.rhocrit0) - 1) < 1e-14);
-    
-    E = Ecosmo(gi->ascale,gi->cp);
-    OmegaM = gi->cp.OmegaM0/(pow(gi->ascale,3)*E*E);
-    rhocrit = gi->us.rhocrit0*E*E*pow(gi->ascale,3); /* comoving density*/
-    if (gi->Deltacrit == 0) {
-	if (gi->cp.OmegaK0 == 0) {
-	    gi->Deltacrit = 178*pow(OmegaM,0.45);
-	    }
-	else if (gi->cp.OmegaL0 == 0) {
-	    gi->Deltacrit = 178*pow(OmegaM,0.3);
-	    }
-	}
-    assert(gi->Deltabg > 0);
-    assert(gi->Deltacrit > 0);
-    gi->rhoencbg   = gi->Deltabg   * rhocrit*OmegaM; /* comoving density*/
-    gi->rhoenccrit = gi->Deltacrit * rhocrit; /* comoving density*/
-    }
-
 void usage(void);
+void set_default_values_general_info(GI *);
+void calculate_densities(GI *);
 void read_halocatalogue_ascii_generic(GI *, HALO_DATA **);
 void read_halocatalogue_ascii_6DFOF(GI *, HALO_DATA **);
-void initialise_halo_profile (GI *, HALO_DATA *);
+void initialise_halo_profile (HALO_DATA *);
 void put_pgp_in_bins(HALO_DATA *, PROFILE_GAS_PARTICLE *, GI);
 void put_pdp_in_bins(HALO_DATA *, PROFILE_DARK_PARTICLE *, GI);
 void put_psp_in_bins(HALO_DATA *, PROFILE_STAR_PARTICLE *, GI);
@@ -258,9 +141,12 @@ int main(int argc, char **argv) {
     int index[3] = {-1,-1,-1};
     int L = -1;
     int Icurrentblockgas, Icurrentblockdark, Icurrentblockstar;
+    int positionprecision, verboselevel;
+    int dataformat, halocatalogueformat;
+    int Lmaxgasanalysis;
     long int i, j, k;
     long int mothercellindex, childcellindex;
-    long int Nparticleread, Nrecordread, Ngasread, Ngasanalysis;
+    long int Nparticleread, Ngasread, Ngasanalysis;
     double celllength, cellvolume;
     double LBox;
     int *cellrefined = NULL;
@@ -269,12 +155,12 @@ int main(int argc, char **argv) {
     double r[3];
     GI gi;
     TIPSY_HEADER th;
-//    TIPSY_GAS_PARTICLE gp;
+    TIPSY_GAS_PARTICLE gp;
     TIPSY_DARK_PARTICLE dp;
-//    TIPSY_STAR_PARTICLE sp;
-//    TIPSY_GAS_PARTICLE_DPP gpdpp;
-//    TIPSY_DARK_PARTICLE_DPP dpdpp;
-//    TIPSY_STAR_PARTICLE_DPP spdpp;
+    TIPSY_STAR_PARTICLE sp;
+    TIPSY_GAS_PARTICLE_DPP gpdpp;
+    TIPSY_DARK_PARTICLE_DPP dpdpp;
+    TIPSY_STAR_PARTICLE_DPP spdpp;
     ART_DATA ad;
     ART_GAS_PROPERTIES agp;
     ART_STAR_PROPERTIES asp;
@@ -290,11 +176,15 @@ int main(int argc, char **argv) {
     ** Set some default values
     */
 
+    positionprecision = 0;
+    dataformat = 0;
+    halocatalogueformat = 0;
+    Nparticleread = 0;
+    Lmaxgasanalysis = -1;
+
     set_default_values_general_info(&gi);
     set_default_values_art_data(&ad);
     set_default_values_coordinate_transformation(&cosmo2internal_ct);
-
-    Nparticleread = 0;
 
     /*
     ** Read in arguments
@@ -303,23 +193,23 @@ int main(int argc, char **argv) {
     i = 1;
     while (i < argc) {
 	if (strcmp(argv[i],"-spp") == 0) {
-            gi.positionprecision = 0;
+            positionprecision = 0;
             i++;
             }
         else if (strcmp(argv[i],"-dpp") == 0) {
-            gi.positionprecision = 1;
+            positionprecision = 1;
             i++;
             }
         else if (strcmp(argv[i],"-dataformat") == 0) {
             i++;
             if (i >= argc) usage();
-	    gi.dataformat = atoi(argv[i]);
+	    dataformat = atoi(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-halocatalogueformat") == 0) {
             i++;
             if (i >= argc) usage();
-	    gi.halocatalogueformat = atoi(argv[i]);
+	    halocatalogueformat = atoi(argv[i]);
             i++;
             }
 	else if (strcmp(argv[i],"-rmin") == 0) {
@@ -332,6 +222,34 @@ int main(int argc, char **argv) {
 	    i++;
             if (i >= argc) usage();
 	    gi.rmax = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-NBin") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.NBin = atoi(argv[i]);
+	    i++;
+	    }
+        else if (strcmp(argv[i],"-com") == 0) {
+            gi.centretype = 0;
+            i++;
+            }
+        else if (strcmp(argv[i],"-potmin") == 0) {
+            gi.centretype = 1;
+            i++;
+            }
+        else if (strcmp(argv[i],"-denmax") == 0) {
+            gi.centretype = 2;
+            i++;
+            }
+        else if (strcmp(argv[i],"-rmaxfromhalocatalogue") == 0) {
+            gi.rmaxfromhalocatalogue = 1;
+            i++;
+            }
+	else if (strcmp(argv[i],"-binfactor") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.binfactor = atof(argv[i]);
 	    i++;
 	    }
         else if (strcmp(argv[i],"-Delta_bg") == 0) {
@@ -400,22 +318,28 @@ int main(int argc, char **argv) {
 	    gi.Nsigma = atof(argv[i]);
 	    i++;
 	    }
-	else if (strcmp(argv[i],"-binfactor") == 0) {
-	    i++;
-            if (i >= argc) usage();
-	    gi.binfactor = atof(argv[i]);
-	    i++;
-	    }
-	else if (strcmp(argv[i],"-Nbin") == 0) {
-	    i++;
-            if (i >= argc) usage();
-	    gi.Nbin = atof(argv[i]);
-	    i++;
-	    }
         else if (strcmp(argv[i],"-OmegaM0") == 0) {
             i++;
             if (i >= argc) usage();
             gi.cp.OmegaM0 = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-OmegaDM0") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.cp.OmegaDM0 = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-OmegaB0") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.cp.OmegaB0 = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-OmegaL0") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.cp.OmegaL0 = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-OmegaK0") == 0) {
@@ -424,10 +348,10 @@ int main(int argc, char **argv) {
             gi.cp.OmegaK0 = atof(argv[i]);
             i++;
             }
-        else if (strcmp(argv[i],"-OmegaL0") == 0) {
+        else if (strcmp(argv[i],"-OmegaR0") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.cp.OmegaL0 = atof(argv[i]);
+            gi.cp.OmegaR0 = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-h0_100") == 0) {
@@ -442,43 +366,12 @@ int main(int argc, char **argv) {
             LBox = atof(argv[i]);
             i++;
             }
-
-        else if (strcmp(argv[i],"-G") == 0) {
+        else if (strcmp(argv[i],"-Lmaxgasanalysis") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.us.GNewton = atof(argv[i]);
+            Lmaxgasanalysis = atoi(argv[i]);
             i++;
             }
-        else if (strcmp(argv[i],"-H0") == 0) {
-            i++;
-            if (i >= argc) usage();
-            gi.us.Hubble0 = atof(argv[i]);
-            i++;
-            }
-        else if (strcmp(argv[i],"-rhocrit0") == 0) {
-            i++;
-            if (i >= argc) usage();
-            gi.us.rhocrit0 = atof(argv[i]);
-            i++;
-            }
-        else if (strcmp(argv[i],"-com") == 0) {
-            gi.centretype = 0;
-            i++;
-            }
-        else if (strcmp(argv[i],"-potmin") == 0) {
-            gi.centretype = 1;
-            i++;
-            }
-        else if (strcmp(argv[i],"-denmax") == 0) {
-            gi.centretype = 2;
-            i++;
-            }
-        else if (strcmp(argv[i],"-rmaxfromhalocatalogue") == 0) {
-            gi.rmaxfromhalocatalogue = 0;
-            i++;
-            }
-
-
 	else if (strcmp(argv[i],"-GRAVITY") == 0) {
 	    i++;
             if (i >= argc) usage();
@@ -528,7 +421,6 @@ int main(int argc, char **argv) {
             i++;
             }
         else if (strcmp(argv[i],"-halocatalogue") == 0) {
-	    gi.readhalocataloguefile = 1;
             i++;
             if (i >= argc) usage();
             strcpy(gi.HaloCatalogueFileName,argv[i]);
@@ -568,7 +460,7 @@ int main(int argc, char **argv) {
             i++;
             }
         else if (strcmp(argv[i],"-v") == 0) {
-	    gi.verboselevel = 1;
+	    verboselevel = 1;
             i++;
             }
 	else if ((strcmp(argv[i],"-h") == 0) || (strcmp(argv[i],"-help") == 0)) {
@@ -583,7 +475,7 @@ int main(int argc, char **argv) {
     ** Read header files
     */
 
-    if (gi.dataformat == 0) {
+    if (dataformat == 0) {
 	xdrstdio_create(&xdrs,stdin,XDR_DECODE);
 	read_tipsy_xdr_header(&xdrs,&th);
 	gi.ascale = th.time;
@@ -598,7 +490,7 @@ int main(int argc, char **argv) {
 	gi.bc[4] = 0.5*gi.us.LBox;
 	gi.bc[5] = 0.5*gi.us.LBox;
 	}
-    else if (gi.dataformat == 1) {
+    else if (dataformat == 1) {
 	prepare_art_data(&ad);
 	gi.ascale = ad.ah.aunin;
 	gi.cp.OmegaM0 = ad.ah.OmM0;
@@ -618,11 +510,16 @@ int main(int argc, char **argv) {
 	gi.bc[4] = gi.us.LBox;
 	gi.bc[5] = gi.us.LBox;
 	for (i = ad.Lmindark; i <= ad.Lmaxdark; i++) ad.massdark[i] = ad.ah.mass[ad.Lmaxdark-i];
+	if (Lmaxgasanalysis == -1) Lmaxgasanalysis = ad.Lmaxgas;
+	assert(Lmaxgasanalysis >= 0);
 	}
     else {
 	fprintf(stderr,"Not supported format!\n");
 	exit(1);
 	}
+
+    gi.rmin /= gi.ascale;
+    gi.rmax /= gi.ascale;
 
     if(gi.cosmous.LBox == 0) gi.cosmous.LBox = LBox;
     if(gi.cosmous.GNewton == 0) gi.cosmous.GNewton = PhysicalConstants.GNewton_Cosmology;
@@ -630,8 +527,8 @@ int main(int argc, char **argv) {
     if(gi.cosmous.Hubble0 == 0) gi.cosmous.Hubble0 = 100*gi.cp.h0_100*ConversionFactors.km_per_s_2_kpc_per_Gyr/1e3;
 
     calculate_units_transformation(gi.cosmous,gi.us,&cosmo2internal_ct);
-    if (gi.dataformat == 0) cosmo2internal_ct.V_cssf = 1/gi.ascale;
-    else if (gi.dataformat == 1) cosmo2internal_ct.V_cssf = gi.ascale;
+    if (dataformat == 0) cosmo2internal_ct.V_cssf = 1/gi.ascale;
+    else if (dataformat == 1) cosmo2internal_ct.V_cssf = gi.ascale;
     gi.vraddispmin *= (cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr);
 
     /*
@@ -644,19 +541,53 @@ int main(int argc, char **argv) {
     ** Read halo catalogue
     */
 
-    if (gi.halocatalogueformat == 0) read_halocatalogue_ascii_generic(&gi,&hd);
-    else if (gi.halocatalogueformat == 1) read_halocatalogue_ascii_6DFOF(&gi,&hd);
+    if (halocatalogueformat == 0) read_halocatalogue_ascii_generic(&gi,&hd);
+    else if (halocatalogueformat == 1) read_halocatalogue_ascii_6DFOF(&gi,&hd);
 
     /*
     ** Harvest data
     */
-    if (gi.dataformat == 0) {
+    if (dataformat == 0) {
 	/*
 	** Tipsy data
+	**
+	** Gas
 	*/
-	assert(th.ngas == 0);
-	assert(th.nstar == 0);
-	assert(gi.positionprecision == 0);
+	fprintf(stderr,"Processing gas ... ");
+	pgp = malloc(gi.Nparticleperblockgas*sizeof(PROFILE_GAS_PARTICLE));
+	assert(pgp != NULL);
+	Nparticleread = 0;
+	Icurrentblockgas = 0;
+	for (i = 0; i < th.ngas; i++) {
+	    if (positionprecision == 0) {
+		read_tipsy_xdr_gas(&xdrs,&gp);
+		for (k = 0; k < 3; k++) {
+		    pgp[Icurrentblockgas].r[k] = gp.pos[k];
+		    pgp[Icurrentblockgas].v[k] = gp.vel[k];
+		    }
+		pgp[Icurrentblockgas].mass = gp.mass;
+		}
+	    else if (positionprecision == 1) {
+		read_tipsy_xdr_gas_dpp(&xdrs,&gpdpp);
+		for (k = 0; k < 3; k++) {
+		    pgp[Icurrentblockgas].r[k] = gpdpp.pos[k];
+		    pgp[Icurrentblockgas].v[k] = gpdpp.vel[k];
+		    }
+		pgp[Icurrentblockgas].mass = gpdpp.mass;
+		}
+	    Nparticleread++;
+	    Icurrentblockgas++;
+	    if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Nparticleread == ad.Ngas)) {
+		/*
+		** Block is full or we reached end of gas particles
+		*/
+		gi.Nparticleinblockgas = Icurrentblockgas;
+		put_pgp_in_bins(hd,pgp,gi);
+		Icurrentblockgas = 0;
+		}
+	    }
+	free(pgp);
+	fprintf(stderr,"Done. Processed in total %d gas particles.\n\n",th.ngas);
 	/*
 	** Dark Matter
 	*/
@@ -666,13 +597,21 @@ int main(int argc, char **argv) {
 	Nparticleread = 0;
 	Icurrentblockdark = 0;
 	for (i = 0; i < th.ndark; i++) {
-	    if (gi.positionprecision == 0) {
+	    if (positionprecision == 0) {
 		read_tipsy_xdr_dark(&xdrs,&dp);
 		for (k = 0; k < 3; k++) {
 		    pdp[Icurrentblockdark].r[k] = dp.pos[k];
 		    pdp[Icurrentblockdark].v[k] = dp.vel[k];
 		    }
 		pdp[Icurrentblockdark].mass = dp.mass;
+		}
+	    else if (positionprecision == 1) {
+		read_tipsy_xdr_dark_dpp(&xdrs,&dpdpp);
+		for (k = 0; k < 3; k++) {
+		    pdp[Icurrentblockdark].r[k] = dpdpp.pos[k];
+		    pdp[Icurrentblockdark].v[k] = dpdpp.vel[k];
+		    }
+		pdp[Icurrentblockdark].mass = dpdpp.mass;
 		}
 	    Nparticleread++;
 	    Icurrentblockdark++;
@@ -686,9 +625,47 @@ int main(int argc, char **argv) {
 		}
 	    }
 	free(pdp);
-	fprintf(stderr,"Done. Processed in total %d dark matter particles.\n",th.ndark);
+	fprintf(stderr,"Done. Processed in total %d dark matter particles.\n\n",th.ndark);
+	/*
+	** Stars
+	*/
+	fprintf(stderr,"Processing stars ... ");
+	psp = malloc(gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
+	assert(psp != NULL);
+	Nparticleread = 0;
+	Icurrentblockstar = 0;
+	for (i = 0; i < th.nstar; i++) {
+	    if (positionprecision == 0) {
+		read_tipsy_xdr_star(&xdrs,&sp);
+		for (k = 0; k < 3; k++) {
+		    psp[Icurrentblockstar].r[k] = sp.pos[k];
+		    psp[Icurrentblockstar].v[k] = sp.vel[k];
+		    }
+		psp[Icurrentblockstar].mass = sp.mass;
+		}
+	    else if (positionprecision == 1) {
+		read_tipsy_xdr_star_dpp(&xdrs,&spdpp);
+		for (k = 0; k < 3; k++) {
+		    psp[Icurrentblockstar].r[k] = spdpp.pos[k];
+		    psp[Icurrentblockstar].v[k] = spdpp.vel[k];
+		    }
+		psp[Icurrentblockstar].mass = spdpp.mass;
+		}
+	    Nparticleread++;
+	    Icurrentblockstar++;
+	    if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == ad.Nstar)) {
+		/*
+		** Block is full or we reached end of star matter particles
+		*/
+		gi.Nparticleinblockstar = Icurrentblockstar;
+		put_psp_in_bins(hd,psp,gi);
+		Icurrentblockstar = 0;
+		}
+	    }
+	free(psp);
+	fprintf(stderr,"Done. Processed in total %d star particles.\n\n",th.nstar);
 	}
-    else if (gi.dataformat == 1) {
+    else if (dataformat == 1) {
 	/*
 	** ART data
 	*/
@@ -713,7 +690,7 @@ int main(int argc, char **argv) {
 	    /*
 	    ** Go through all levels
 	    */
-	    for (i = ad.Lmingas; i <= ad.Lmaxgas; i++) {
+	    for (i = ad.Lmingas; i <= Lmaxgasanalysis; i++) {
 		/*
 		** Calculate level properties and read level header
 		*/
@@ -723,11 +700,13 @@ int main(int argc, char **argv) {
 		/*
 		** get coordinates array ready
 		*/
-		coordinates[i] = malloc(ad.Ncellrefined[i]*sizeof(double *));
-		assert(coordinates[i] != NULL);
-		for (j = 0; j < ad.Ncellrefined[i]; j++) {
-		    coordinates[i][j] = malloc(3*sizeof(double));
-		    assert(coordinates[i][j] != NULL);
+		if (i < Lmaxgasanalysis) {
+		    coordinates[i] = malloc(ad.Ncellrefined[i]*sizeof(double *));
+		    assert(coordinates[i] != NULL);
+		    for (j = 0; j < ad.Ncellrefined[i]; j++) {
+			coordinates[i][j] = malloc(3*sizeof(double));
+			assert(coordinates[i][j] != NULL);
+			}
 		    }
 		/*
 		** Move file positions
@@ -758,9 +737,9 @@ int main(int argc, char **argv) {
 		    /*
 		    ** Check if cell is refined
 		    */
-		    if (cellrefined[j] == 0) {
+		    if ((cellrefined[j] == 0) || (i == Lmaxgasanalysis)) {
 			/*
-			** not refined => add it for analysis
+			** not refined or maximum level reached => add it for analysis
 			*/
 			Ngasanalysis++;
 			for (k = 0; k < 3; k++) {
@@ -778,9 +757,9 @@ int main(int argc, char **argv) {
 			    Icurrentblockgas = 0;
 			    }
 			}
-		    else {
+		    else if (i < Lmaxgasanalysis) {
 			/*
-			** refined => add it to corresponding coordinates array
+			** refined and lower level than Lmaxgasanalysis => add it to corresponding coordinates array
 			*/
 			for (k = 0; k < 3; k++) {
 			    coordinates[i][Icoordinates[i]][k] = r[k];
@@ -795,7 +774,7 @@ int main(int argc, char **argv) {
 		/*
 		** Checks and free coordinates of level below
 		*/
-		assert(Icoordinates[i] == ad.Ncellrefined[i]);
+		if (i < Lmaxgasanalysis) assert(Icoordinates[i] == ad.Ncellrefined[i]);
 		if (i > ad.Lmingas) {
 		    for (j = 0; j < ad.Ncellrefined[i-1]; j++) {
 			free(coordinates[i-1][j]);
@@ -806,20 +785,22 @@ int main(int argc, char **argv) {
 	    /*
 	    ** Some checks and free remaining arrays
 	    */
-	    assert(ad.Ncellrefined[ad.Lmaxgas] == 0);
-	    assert(ad.Ngas == Ngasread);
-	    j = 0;
-	    k = 0;
-	    for (i = ad.Lmingas; i <= ad.Lmaxgas; i++) {
-		j += ad.Ncell[i];
-		k += ad.Ncellrefined[i];
+	    if (Lmaxgasanalysis == ad.Lmaxgas) {
+		assert(ad.Ncellrefined[ad.Lmaxgas] == 0);
+		assert(ad.Ngas == Ngasread);
+		j = 0;
+		k = 0;
+		for (i = ad.Lmingas; i <= ad.Lmaxgas; i++) {
+		    j += ad.Ncell[i];
+		    k += ad.Ncellrefined[i];
+		    }
+		assert(ad.Ngas == j);
+		assert(ad.Ngas == k + Ngasanalysis);
 		}
-	    assert(ad.Ngas == j);
-	    assert(ad.Ngas == k + Ngasanalysis);
 	    free(pgp);
 	    free(Icoordinates);
 	    free(cellrefined);
-	    fprintf(stderr,"Done. Processed in total %ld gas particles whereof %ld used for analysis.\n",ad.Ngas,Ngasanalysis);
+	    fprintf(stderr,"Done. Processed in total %ld gas particles whereof %ld used for analysis.\n\n",ad.Ngas,Ngasanalysis);
 	    }
 	if (ad.darkcontained || ad.starcontained) {
 	    /*
@@ -836,7 +817,6 @@ int main(int argc, char **argv) {
 		move_art_nb_star_filepositions_begin(ad);
 		}
 	    Nparticleread = 0;
-	    Nrecordread = 0;
 	    Icurrentblockdark = 0;
 	    Icurrentblockstar = 0;
 	    for (i = 0; i < ad.Nrecord; i++) {
@@ -901,7 +881,7 @@ int main(int argc, char **argv) {
 	    free(ac);
 	    free(pdp);
 	    free(psp);
-	    fprintf(stderr,"Done. Processed in total %ld dark matter and %ld star particles.\n",ad.Ndark,ad.Nstar);
+	    fprintf(stderr,"Done. Processed in total %ld dark matter and %ld star particles.\n\n",ad.Ndark,ad.Nstar);
 	    }
 	}
 
@@ -921,34 +901,98 @@ int main(int argc, char **argv) {
     ** Some more output if desired
     */
 
-    fprintf(stderr,"Ndark %ld Nstar %ld Ngas %ld\n",ad.Ndark,ad.Nstar,ad.Ngas);
-    if (gi.verboselevel >= 1) {
-        fprintf(stderr,"Used values:\n");
-        fprintf(stderr,"Delta_bg    : %.6e\n",gi.Deltabg);
-        fprintf(stderr,"Delta_crit  : %.6e\n",gi.Deltacrit);
-	fprintf(stderr,"rhoenc_bg   : %.6e MU LU^{-3} (comoving)\n",gi.rhoencbg);
-	fprintf(stderr,"rhoenc_crit : %.6e MU LU^{-3} (comoving)\n",gi.rhoenccrit);
-        fprintf(stderr,"OmegaM0     : %.6e\n",gi.cp.OmegaM0);
-        fprintf(stderr,"OmegaL0     : %.6e\n",gi.cp.OmegaL0);
-        fprintf(stderr,"OmegaK0     : %.6e\n",gi.cp.OmegaK0);
-        fprintf(stderr,"h0_100      : %.6e\n",gi.cp.h0_100);
-        fprintf(stderr,"G           : %.6e LU^3 MU^{-1} TU^{-2}\n",gi.us.GNewton);
-        fprintf(stderr,"H0          : %.6e TU^{-1}\n",gi.us.Hubble0);
-        fprintf(stderr,"rhocrit0    : %.6e MU LU^{-3}\n",gi.us.rhocrit0);
-	fprintf(stderr,"a           : %.6e\n",gi.ascale);
-        fprintf(stderr,"LBox        : %.6e kpc\n",LBox);
-	fprintf(stderr,"fexcludermin    : %.6e kpc\n",gi.fexcludermin);
-	fprintf(stderr,"fincludermin    : %.6e kpc\n",gi.fincludermin);
-	fprintf(stderr,"frhobg          : %.6e kpc\n",gi.frhobg);
-	fprintf(stderr,"fcheckrvcmax    : %.6e kpc\n",gi.fcheckrvcmax);
-	fprintf(stderr,"fcheckrstatic   : %.6e kpc\n",gi.fcheckrstatic);
-	fprintf(stderr,"fchecktruncated : %.6e kpc\n",gi.fchecktruncated);
-	fprintf(stderr,"fextremerstatic : %.6e kpc\n",gi.fextremerstatic);
-	fprintf(stderr,"vraddispmin     : %.6e VU = %.6e km/s (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
-        fprintf(stderr,"Nsigma          : %.6e\n",gi.Nsigma);
-        fprintf(stderr,"binfactor   : %.6e\n",gi.binfactor);
+    if (verboselevel >= 1) {
+	if (dataformat == 0) {
+	    fprintf(stderr,"Tipsy specific parameters:\n\n");
+	    fprintf(stderr,"binfactor             : %.6e\n",gi.binfactor);
+	    if (gi.centretype == 0) fprintf(stderr,"centretype            : com\n");
+	    else if (gi.centretype == 1) fprintf(stderr,"centretype            : potminm\n");
+	    else if (gi.centretype == 2) fprintf(stderr,"centretype            : denmax\n");
+	    fprintf(stderr,"rmaxfromhalocatalogue : %s\n",(gi.rmaxfromhalocatalogue == 0)?"no":"yes");
+	    fprintf(stderr,"\n");
+	    }
+	else if (dataformat == 1) {
+	    fprintf(stderr,"ART general header:\n\n");
+	    fprintf(stderr,"aunin    : %.6e\n",ad.ah.aunin);
+	    fprintf(stderr,"auni0    : %.6e\n",ad.ah.auni0);
+	    fprintf(stderr,"amplt    : %.6e\n",ad.ah.amplt);
+	    fprintf(stderr,"astep    : %.6e\n",ad.ah.astep);
+	    fprintf(stderr,"istep    : %d\n",ad.ah.istep);
+	    fprintf(stderr,"partw    : %.6e\n",ad.ah.partw);
+	    fprintf(stderr,"tintg    : %.6e\n",ad.ah.tintg);
+	    fprintf(stderr,"ekin     : %.6e\n",ad.ah.ekin);
+	    fprintf(stderr,"ekin1    : %.6e\n",ad.ah.ekin1);
+	    fprintf(stderr,"ekin2    : %.6e\n",ad.ah.ekin2);
+	    fprintf(stderr,"au0      : %.6e\n",ad.ah.au0);
+	    fprintf(stderr,"aeu0     : %.6e\n",ad.ah.aeu0);
+	    fprintf(stderr,"Nrow     : %d\n",ad.ah.Nrow);
+	    fprintf(stderr,"Ngrid    : %d\n",ad.ah.Ngrid);
+	    fprintf(stderr,"Nspecies : %d\n",ad.ah.Nspecies);
+	    fprintf(stderr,"Nseed    : %d\n",ad.ah.Nseed);
+	    fprintf(stderr,"OmM0     : %.6e\n",ad.ah.OmM0);
+	    fprintf(stderr,"OmL0     : %.6e\n",ad.ah.OmL0);
+	    fprintf(stderr,"h100     : %.6e\n",ad.ah.h100);
+	    fprintf(stderr,"Wp5      : %.6e\n",ad.ah.Wp5);
+	    fprintf(stderr,"OmK0     : %.6e\n",ad.ah.OmK0);
+	    fprintf(stderr,"OmB0     : %.6e\n",ad.ah.OmB0);
+	    fprintf(stderr,"Banner   : %s\n",ad.Banner);
+	    fprintf(stderr,"\n");
+	    fprintf(stderr,"ART data properties:\n\n");
+	    fprintf(stderr,"Nparticleperrecord : %d\n",ad.Nparticleperrecord);
+	    fprintf(stderr,"Nhydroproperties   : %d\n",ad.Nhydroproperties);
+	    fprintf(stderr,"Notherproperties   : %d\n",ad.Notherproperties);
+	    fprintf(stderr,"Nrtchemspecies     : %d\n",ad.Nrtchemspecies);
+	    fprintf(stderr,"Nchemspecies       : %d\n",ad.Nchemspecies);
+	    fprintf(stderr,"\n");
+	    fprintf(stderr,"ART preprocessor flags:\n\n");
+	    fprintf(stderr,"-GRAVITY                     : %s\n",(ad.GRAVITY == 0)?"not set":"set");
+	    fprintf(stderr,"-HYDRO                       : %s\n",(ad.HYDRO == 0)?"not set":"set");
+	    fprintf(stderr,"-ADVECT_SPECIES              : %s\n",(ad.ADVECT_SPECIES == 0)?"not set":"set");
+	    fprintf(stderr,"-STARFORM                    : %s\n",(ad.STARFORM == 0)?"not set":"set");
+	    fprintf(stderr,"-ENRICH                      : %s\n",(ad.ENRICH == 0)?"not set":"set");
+	    fprintf(stderr,"-ENRICH_SNIa                 : %s\n",(ad.ENRICH_SNIa == 0)?"not set":"set");
+	    fprintf(stderr,"-RADIATIVE_TRANSFER          : %s\n",(ad.RADIATIVE_TRANSFER == 0)?"not set":"set");
+	    fprintf(stderr,"-ELECTRON_ION_NONEQUILIBRIUM : %s\n",(ad.ELECTRON_ION_NONEQUILIBRIUM == 0)?"not set":"set");
+	    fprintf(stderr,"\n");
+	    fprintf(stderr,"ART specific parameters:\n\n");
+	    fprintf(stderr,"Lmaxgasanalysis : %d\n",Lmaxgasanalysis);
+	    fprintf(stderr,"\n");
+	    }
+        fprintf(stderr,"Cosmology:\n\n");
+        fprintf(stderr,"OmegaM0  : %.6e\n",gi.cp.OmegaM0);
+        fprintf(stderr,"OmegaDM0 : %.6e\n",gi.cp.OmegaDM0);
+        fprintf(stderr,"OmegaB0  : %.6e\n",gi.cp.OmegaB0);
+        fprintf(stderr,"OmegaL0  : %.6e\n",gi.cp.OmegaL0);
+        fprintf(stderr,"OmegaK0  : %.6e\n",gi.cp.OmegaK0);
+        fprintf(stderr,"OmegaR0  : %.6e\n",gi.cp.OmegaR0);
+        fprintf(stderr,"h0_100   : %.6e\n",gi.cp.h0_100);
+	fprintf(stderr,"\n");
+        fprintf(stderr,"Used values:\n\n");
+        fprintf(stderr,"Data format:         : %s\n",(dataformat == 0)?"Tipsy":"ART");
+        fprintf(stderr,"Halocatalogue format : %s\n",(halocatalogueformat == 0)?"generic":"6DFOF");
+        fprintf(stderr,"Delta_bg             : %.6e\n",gi.Deltabg);
+        fprintf(stderr,"Delta_crit           : %.6e\n",gi.Deltacrit);
+	fprintf(stderr,"rhoenc_bg            : %.6e MU LU^{-3} (comoving)\n",gi.rhoencbg);
+	fprintf(stderr,"rhoenc_crit          : %.6e MU LU^{-3} (comoving)\n",gi.rhoenccrit);
+	fprintf(stderr,"a                    : %.6e\n",gi.ascale);
+        fprintf(stderr,"LBox                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		cosmo2internal_ct.L_usf*LBox,LBox,gi.ascale*LBox);
+        fprintf(stderr,"rmin                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		gi.rmin,gi.rmin/cosmo2internal_ct.L_usf,gi.ascale*gi.rmin/cosmo2internal_ct.L_usf);
+	fprintf(stderr,"rmax                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		gi.rmax,gi.rmax/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax/cosmo2internal_ct.L_usf);
+        fprintf(stderr,"NBin                 : %d\n",gi.NBin);
+	fprintf(stderr,"fexcludermin         : %.6e\n",gi.fexcludermin);
+	fprintf(stderr,"fincludermin         : %.6e\n",gi.fincludermin);
+	fprintf(stderr,"frhobg               : %.6e\n",gi.frhobg);
+	fprintf(stderr,"fcheckrvcmax         : %.6e\n",gi.fcheckrvcmax);
+	fprintf(stderr,"fcheckrstatic        : %.6e\n",gi.fcheckrstatic);
+	fprintf(stderr,"fchecktruncated      : %.6e\n",gi.fchecktruncated);
+	fprintf(stderr,"fextremerstatic      : %.6e\n",gi.fextremerstatic);
+	fprintf(stderr,"vraddispmin          : %.6e VU = %.6e km/s (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
+        fprintf(stderr,"Nsigma               : %.6e\n",gi.Nsigma);
+	fprintf(stderr,"\n");
         }
-
     exit(0);
 
     }
@@ -956,68 +1000,144 @@ int main(int argc, char **argv) {
 void usage(void) {
 
     fprintf(stderr,"\n");
-    fprintf(stderr,"Program calculates the profile of the input file around r_cen.\n");
+    fprintf(stderr,"Program calculates the profiles and characteristics of haloes.\n");
     fprintf(stderr,"\n");
     fprintf(stderr,"You can specify the following arguments:\n");
     fprintf(stderr,"\n");
-    fprintf(stderr,"-spp                : set this flag if input and output files have single precision positions (default)\n");
-    fprintf(stderr,"-dpp                : set this flag if input and output files have double precision positions\n");
-    fprintf(stderr,"-rmin <value>       : minimum grid radius [LU] (default 0 LU)\n");
-    fprintf(stderr,"-rmax <value>       : maximum grid radius [LU] (default 1 LU)\n");
-    fprintf(stderr,"-Nbin <value>       : number of bins between rmin and rmax\n");
-    fprintf(stderr,"-N <value>          : number of haloes (default: 1)\n");
-    fprintf(stderr,"-rxcen <value>      : x-coordinate of centre [LU] (default: 0 LU)\n");
-    fprintf(stderr,"-rycen <value>      : y-coordinate of centre [LU] (default: 0 LU)\n");
-    fprintf(stderr,"-rzcen <value>      : z-coordinate of centre [LU] (default: 0 LU)\n");
-    fprintf(stderr,"-vxcen <value>      : x-velocity of centre [VU] (default: 0 VU)\n");
-    fprintf(stderr,"-vycen <value>      : y-velocity of centre [VU] (default: 0 VU)\n");
-    fprintf(stderr,"-vzcen <value>      : z-velocity of centre [VU] (default: 0 VU)\n");
-    fprintf(stderr,"-stats <name>       : name of stats file\n");
-    fprintf(stderr,"-com                : set this flag for centre-of-mass centres from stats file\n");
-    fprintf(stderr,"-potmin             : set this flag for potmin centres from stats file\n");
-    fprintf(stderr,"-denmax             : set this flag for denmax centres from stats file (default)\n");
-    fprintf(stderr,"-rmaxfromhalocatalogue      : set this flag for rmax determined from stats file\n");
-    fprintf(stderr,"-binfactor <value>  : extra factor for rmax determined form stats file (default: 5)\n");
-    fprintf(stderr,"-rhocrit0 <value>   : critical density of the universe [MU LU^{-3}] (default: 1 MU LU^{-3})\n");
-    fprintf(stderr,"-OmegaM0 <value>    : OmegaM0 value (default: 0.3)\n");
-    fprintf(stderr,"-OmegaL0 <value>    : OmegaL0 value (default: 0.7)\n");
-    fprintf(stderr,"-OmegaK0 <value>    : OmegaK0 value (default: 0.0)\n");
-    fprintf(stderr,"-Delta_bg <value>   : overdensity with respect to background density (default: 200)\n");
-    fprintf(stderr,"-Delta_crit <value> : overdensity with respect to critical density (default: 178*(OmegaM^0.45) [OmegaK0=0] / 178*(OmegaM^0.3) [OmegaL0=0])\n");
-    fprintf(stderr,"-G <value>          : gravitational constant [LU^3 MU^{-1} TU^{-1}] (default: 1 LU^3 MU^{-1} TU^{-1})\n");
-    fprintf(stderr,"-output <name>      : name of output files (endings .statistics and .profiles appended)\n");
-    fprintf(stderr,"-v                  : more informative output to screen\n");
-    fprintf(stderr,"< <name>            : name of input file in tipsy standard binary format\n");
+    fprintf(stderr,"-spp                                 : set this flag if input files have single precision positions (default)\n");
+    fprintf(stderr,"-dpp                                 : set this flag if input files have double precision positions\n");
+    fprintf(stderr,"-dataformat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
+    fprintf(stderr,"-halocatalogueformat <value>         : 0 = generic / 1 = 6DFOF (default: 0)\n");
+    fprintf(stderr,"-rmin <value>                        : minimum grid radius (physical) [LU] (default: not set)\n");
+    fprintf(stderr,"-rmax <value>                        : maximum grid radius (physical) [LU] (default: not set)\n");
+    fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax (default: not set)\n");
+    fprintf(stderr,"-com                                 : set this flag for centre-of-mass centres from 6DFOF file\n");
+    fprintf(stderr,"-potmin                              : set this flag for potmin centres from 6DFOF file\n");
+    fprintf(stderr,"-denmax                              : set this flag for denmax centres from 6DFOF file (default)\n");
+    fprintf(stderr,"-binfactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5)\n");
+    fprintf(stderr,"-rmaxfromhalocatalogue               : set this flag for rmax determined from 6DFOF file\n");
+    fprintf(stderr,"-OmegaM0 <value>                     : OmegaM0 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-OmegaDM0 <value>                    : OmegaDM0 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-OmegaB0 <value>                     : OmegaB0 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-OmegaL0 <value>                     : OmegaL0 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-OmegaK0 <value>                     : OmegaK0 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-OmegaR0 <value>                     : OmegaR0 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-h0_100 <value>                      : h0_100 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-Delta_bg <value>                    : overdensity with respect to background density (default: 200)\n");
+    fprintf(stderr,"-Delta_crit <value>                  : overdensity with respect to critical density (default: 178*(OmegaM^0.45) [OmegaK0=0] / 178*(OmegaM^0.3) [OmegaL0=0])\n");
+    fprintf(stderr,"-LBox <value>                        : box length (comoving) [kpc]\n");
+    fprintf(stderr,"-Lmaxgasanalysis <value>             : maximum level of gas analysed [counting from 0] (default: Lmaxgas in data)\n");
+    fprintf(stderr,"-GRAVITY <value>                     : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
+    fprintf(stderr,"-HYDRO <value>                       : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+    fprintf(stderr,"-ADVECT_SPECIES <value>              : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+    fprintf(stderr,"-STARFORM <value>                    : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+    fprintf(stderr,"-ENRICH <value>                      : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+    fprintf(stderr,"-ENRICH_SNIa <value>                 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+    fprintf(stderr,"-RADIATIVE_TRANSFER <value>          : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+    fprintf(stderr,"-ELECTRON_ION_NONEQUILIBRIUM <value> : 0 = flag not set / 1 = flag set (default: 0) [only necessary for ART format]\n");
+    fprintf(stderr,"< <name>                             : name of input file in Tipsy XDR format\n");
+    fprintf(stderr,"-headerfile <name>                   : header file in ART native binary format\n");
+    fprintf(stderr,"-coordinatesdatafile <name>          : coordinates data file in ART native binary format\n");
+    fprintf(stderr,"-starpropertiesfile <name>           : star properties file in ART native binary format\n");
+    fprintf(stderr,"-gasfile <name>                      : gas file in ART native binary format\n");
+    fprintf(stderr,"-output <name>                       : name of output files (endings .statistics and .profiles appended)\n");
+    fprintf(stderr,"-v                                   : more informative output to screen\n");
     fprintf(stderr,"\n");
     exit(1);
+    }
+
+void set_default_values_general_info(GI *gi) {
+
+    gi->cp.OmegaM0 = 0;
+    gi->cp.OmegaDM0 = 0;
+    gi->cp.OmegaB0 = 0;
+    gi->cp.OmegaL0 = 0;
+    gi->cp.OmegaK0 = 0;
+    gi->cp.OmegaR0 = 0;
+    gi->cp.h0_100 = 0;
+
+    gi->us.LBox = 0;
+    gi->us.GNewton = 0;
+    gi->us.Hubble0 = 0;
+    gi->us.rhocrit0 = 0;
+
+    gi->cosmous.LBox = 0;
+    gi->cosmous.GNewton = 0;
+    gi->cosmous.Hubble0 = 0;
+    gi->cosmous.rhocrit0 = 0;
+
+    gi->centretype = 0;
+    gi->rmaxfromhalocatalogue = 0;
+    gi->NBin = 0;
+    gi->NHalo = 0;
+
+    gi->Nparticleperblockgas = 10000000;
+    gi->Nparticleinblockgas = 0;
+    gi->Nblockgas = 0;
+    gi->Nparticleperblockdark = 10000000;
+    gi->Nparticleinblockdark = 0;
+    gi->Nblockdark = 0;
+    gi->Nparticleperblockstar = 10000000;
+    gi->Nparticleinblockstar = 0;
+    gi->Nblockstar = 0;
+
+    gi->Deltabg = 200;
+    gi->Deltacrit = 0;
+    gi->rmin = 0;
+    gi->rmax = 0;
+    gi->binfactor = 5;
+
+    gi->fexcludermin = 5;
+    gi->fincludermin = 100;
+    gi->frhobg = 1.2;
+    gi->fcheckrvcmax = 10;
+    gi->fcheckrstatic = 3;
+    gi->fchecktruncated = 0;
+    gi->fextremerstatic = 3;
+    gi->vraddispmin = 2;
+    gi->Nsigma = 1.5;
+    }
+
+void calculate_densities(GI *gi) {
+    
+    double E, OmegaM, rhocrit;
+
+    assert((3*pow(gi->us.Hubble0,2)/(8*M_PI*gi->us.GNewton*gi->us.rhocrit0) - 1) < 1e-14);
+    
+    E = Ecosmo(gi->ascale,gi->cp);
+    OmegaM = gi->cp.OmegaM0/(pow(gi->ascale,3)*E*E);
+    rhocrit = gi->us.rhocrit0*E*E*pow(gi->ascale,3); /* comoving density*/
+    if (gi->Deltacrit == 0) {
+	if (gi->cp.OmegaK0 == 0) {
+	    gi->Deltacrit = 178*pow(OmegaM,0.45);
+	    }
+	else if (gi->cp.OmegaL0 == 0) {
+	    gi->Deltacrit = 178*pow(OmegaM,0.3);
+	    }
+	}
+    assert(gi->Deltabg > 0);
+    assert(gi->Deltacrit > 0);
+    gi->rhoencbg   = gi->Deltabg   * rhocrit*OmegaM; /* comoving density*/
+    gi->rhoenccrit = gi->Deltacrit * rhocrit; /* comoving density*/
     }
 
 void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = HALO_DATA_SIZE;
-    int i, ID, idummy, NhaloRead;
+    int i, idummy, ID, NBin, NHaloRead;
     float fdummy;
     double rx, ry, rz, vx, vy, vz, rmin, rmax;
-    double dr;
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL;
 
     HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
     assert(HaloCatalogueFile != NULL);
+
     hd = *hdin;
-    assert(gi->Nbin > 0);
-    assert(gi->rmin >= 0);
-    assert(gi->rmax >= 0);
-    assert(gi->rmax > gi->rmin);
-    dr = 0;
-    NhaloRead = 0;
     hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
     assert(hd != NULL);
-    for (i = 0; i < SizeHaloData; i++) {
-	hd[i].Nbin = gi->Nbin;
-	hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
-	assert(hd[i].ps != NULL);
-	}
+
+    NHaloRead = 0;
     while (1) {
 	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
 	fscanf(HaloCatalogueFile,"%g",&fdummy); rx = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
@@ -1028,19 +1148,15 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	fscanf(HaloCatalogueFile,"%g",&fdummy); vz = fdummy;
 	fscanf(HaloCatalogueFile,"%g",&fdummy); rmin = fdummy;
 	fscanf(HaloCatalogueFile,"%g",&fdummy); rmax = fdummy;
+	fscanf(HaloCatalogueFile,"%i",&idummy); NBin = idummy;
 	if (feof(HaloCatalogueFile)) break;
-	NhaloRead++;
-	if (SizeHaloData < NhaloRead){
-	    SizeHaloData += HALO_DATA_SIZE; 
+	NHaloRead++;
+	if (SizeHaloData < NHaloRead){
+	    SizeHaloData += HALO_DATA_SIZE;
 	    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
 	    assert(hd != NULL);
-	    for (i = 0; i < SizeHaloData; i++) {
-		hd[i].Nbin = gi->Nbin;
-		hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
-		assert(hd[i].ps != NULL);
-		}
 	    }
-	i = NhaloRead-1;
+	i = NHaloRead-1;
 	hd[i].ID = ID;
 	hd[i].rcentre[0] = rx;
 	hd[i].rcentre[1] = ry;
@@ -1048,42 +1164,36 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	hd[i].vcentre[0] = vx;
 	hd[i].vcentre[1] = vy;
 	hd[i].vcentre[2] = vz;
-	hd[i].rmin = rmin;
-	hd[i].rmax = rmax;
-	initialise_halo_profile(gi,&hd[i]);
+	hd[i].rmin = (gi->rmin != 0)?gi->rmin:rmin;
+	hd[i].rmax = (gi->rmax != 0)?gi->rmax:rmax;
+	hd[i].NBin = (gi->NBin != 0)?gi->NBin:NBin;
+	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PS));
+	assert(hd[i].ps != NULL);
+	initialise_halo_profile(&hd[i]);
 	}
     fclose(HaloCatalogueFile);
     *hdin = hd;
-    gi->Nhalo = NhaloRead;
+    gi->NHalo = NHaloRead;
     }
 
 void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = HALO_DATA_SIZE;
-    int i, ID, N, idummy, NhaloRead;
+    int i, ID, N, idummy, NHaloRead;
     float fdummy;
     double DarkMass, radius1, radius2, vd1D;
     double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
-    double dr;
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL;
 
     HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
     assert(HaloCatalogueFile != NULL);
+
     hd = *hdin;
-    assert(gi->Nbin > 0);
-    assert(gi->rmin >= 0);
-    assert(gi->rmax >= 0);
-    assert(gi->rmax > gi->rmin);
-    dr = 0;
-    NhaloRead = 0;
     hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
     assert(hd != NULL);
-    for (i = 0; i < SizeHaloData; i++) {
-	hd[i].Nbin = gi->Nbin;
-	hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
-	assert(hd[i].ps != NULL);
-	}
+
+    NHaloRead = 0;
     while (1) {
 	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
 	fscanf(HaloCatalogueFile,"%i",&idummy); N = idummy;
@@ -1115,18 +1225,13 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	fscanf(HaloCatalogueFile,"%g",&fdummy);
 	fscanf(HaloCatalogueFile,"%g",&fdummy);
 	if (feof(HaloCatalogueFile)) break;
-	NhaloRead++;
-	if (SizeHaloData < NhaloRead){
+	NHaloRead++;
+	if (SizeHaloData < NHaloRead){
 	    SizeHaloData += HALO_DATA_SIZE; 
 	    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
 	    assert(hd != NULL);
-	    for (i = 0; i < SizeHaloData; i++) {
-		hd[i].Nbin = gi->Nbin;
-		hd[i].ps = realloc(hd[i].ps,(hd[i].Nbin+1)*sizeof(PS));
-		assert(hd[i].ps != NULL);
-		}
 	    }
-	i = NhaloRead-1;
+	i = NHaloRead-1;
 	hd[i].ID = ID;
 	if (gi->centretype == 0) {
 	    hd[i].rcentre[0] = rxcom;
@@ -1157,17 +1262,25 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	else {
 	    hd[i].rmax = gi->rmax;
 	    }
-	initialise_halo_profile(gi,&hd[i]);
+	hd[i].NBin = gi->NBin;
+	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PS));
+	assert(hd[i].ps != NULL);
+	initialise_halo_profile(&hd[i]);
 	}
     fclose(HaloCatalogueFile);
     *hdin = hd;
-    gi->Nhalo = NhaloRead;
+    gi->NHalo = NHaloRead;
     }
 
-void initialise_halo_profile (GI *gi, HALO_DATA *hd){
+void initialise_halo_profile (HALO_DATA *hd){
 
     int j, k;
     double dr = 0;
+
+    assert(hd->NBin > 0);
+    assert(hd->rmin > 0);
+    assert(hd->rmax > 0);
+    assert(hd->rmax > hd->rmin);
 
     hd->rstatic = 0;
     hd->Mrstatic = 0;
@@ -1190,14 +1303,15 @@ void initialise_halo_profile (GI *gi, HALO_DATA *hd){
     hd->vraddisp = 0;
     hd->truncated = 0;
 
-    dr = (log(hd->rmax)-log(hd->rmin))/hd->Nbin;
+    dr = (log(hd->rmax)-log(hd->rmin))/hd->NBin;
     hd->ps[0].ri = 0;
     hd->ps[0].ro = hd->rmin;
-    for (j = 1; j < (hd->Nbin+1); j++) {
+    for (j = 1; j < (hd->NBin+1); j++) {
 	hd->ps[j].ri = exp(log(hd->rmin) + (j-1)*dr);
 	hd->ps[j].ro = exp(log(hd->rmin) + j*dr);
 	}
-    for (j = 0; j < (hd->Nbin+1); j++) {
+
+    for (j = 0; j < (hd->NBin+1); j++) {
 	hd->ps[j].Ntot = 0;
 	hd->ps[j].Ngas = 0;
 	hd->ps[j].Ndark = 0;
@@ -1245,22 +1359,22 @@ void put_pgp_in_bins(HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp, GI gi) {
 
     for (i = 0; i < gi.Nparticleinblockgas; i++) {
 #pragma omp parallel for default(none) private(j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(i,hd,pgp,gi)
-	for (j = 0; j < gi.Nhalo; j++) {
+	for (j = 0; j < gi.NHalo; j++) {
 	    for (k = 0; k < 3; k++) {
 		r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
 		r[k] = r[k]-hd[j].rcentre[k];
 		}
 	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-	    if (d <= hd[j].ps[gi.Nbin].ro) {
+	    if (d <= hd[j].ps[hd[j].NBin].ro) {
 		for (k = 0; k < 3; k++) {
 		    v[k] = pgp[i].v[k]-hd[j].vcentre[k];
 		    }
 		/*
 		** Go through bins from outside inwards => larger bin volume further out
 		*/
-		for (l = hd[j].Nbin; l >=0; l--) {
+		for (l = hd[j].NBin; l >=0; l--) {
 		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-			calculate_unit_vectors(r,erad,ephi,etheta);
+			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
@@ -1303,22 +1417,22 @@ void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, GI gi) {
 
     for (i = 0; i < gi.Nparticleinblockdark; i++) {
 #pragma omp parallel for default(none) private(j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(i,hd,pdp,gi)
-	for (j = 0; j < gi.Nhalo; j++) {
+	for (j = 0; j < gi.NHalo; j++) {
 	    for (k = 0; k < 3; k++) {
 		r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
 		r[k] = r[k]-hd[j].rcentre[k];
 		}
 	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-	    if (d <= hd[j].ps[gi.Nbin].ro) {
+	    if (d <= hd[j].ps[hd[j].NBin].ro) {
 		for (k = 0; k < 3; k++) {
 		    v[k] = pdp[i].v[k]-hd[j].vcentre[k];
 		    }
 		/*
 		** Go through bins from outside inwards => larger bin volume further out
 		*/
-		for (l = hd[j].Nbin; l >=0; l--) {
+		for (l = hd[j].NBin; l >=0; l--) {
 		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-			calculate_unit_vectors(r,erad,ephi,etheta);
+			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
@@ -1361,22 +1475,22 @@ void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, GI gi) {
 
     for (i = 0; i < gi.Nparticleinblockstar; i++) {
 #pragma omp parallel for default(none) private(j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(i,hd,psp,gi)
-	for (j = 0; j < gi.Nhalo; j++) {
+	for (j = 0; j < gi.NHalo; j++) {
 	    for (k = 0; k < 3; k++) {
 		r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
 		r[k] = r[k]-hd[j].rcentre[k];
 		}
 	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-	    if (d <= hd[j].ps[gi.Nbin].ro) {
+	    if (d <= hd[j].ps[hd[j].NBin].ro) {
 		for (k = 0; k < 3; k++) {
 		    v[k] = psp[i].v[k]-hd[j].vcentre[k];
 		    }
 		/*
 		** Go through bins from outside inwards => larger bin volume further out
 		*/
-		for (l = hd[j].Nbin; l >=0; l--) {
+		for (l = hd[j].NBin; l >=0; l--) {
 		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-			calculate_unit_vectors(r,erad,ephi,etheta);
+			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
@@ -1413,19 +1527,19 @@ void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, GI gi) {
 void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 
     int i, j, k;
-    int Ncheck, Scheck, Nbin, Extreme;
+    int Ncheck, Scheck, NBin, Extreme;
     double radius[2], rhoenc[2], Menc[2], logslope[2], vsigma[2];
     double m, d, slope;
     double rcheck, Mrcheck, Qcheck, Qcomp;
     double rhotot, rhodark, rhototmin, rhodarkmin;
     double vradmean, vraddisp, barrier;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,Nbin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rhotot,rhodark,rhototmin,rhodarkmin,vradmean,vraddisp,barrier) shared(hd,gi)
-    for (i = 0; i < gi.Nhalo; i++) {
+#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rhotot,rhodark,rhototmin,rhodarkmin,vradmean,vraddisp,barrier) shared(hd,gi)
+    for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
 	*/
-	for (j = 0; j < (gi.Nbin+1); j++) {
+	for (j = 0; j < (hd[i].NBin+1); j++) {
 	    hd[i].ps[j].vol = 4*M_PI*(hd[i].ps[j].ro*hd[i].ps[j].ro*hd[i].ps[j].ro - hd[i].ps[j].ri*hd[i].ps[j].ri*hd[i].ps[j].ri)/3.0;
 	    if (j == 0) {
 		hd[i].ps[j].rm = exp((3*log(hd[i].ps[j+1].ri)-log(hd[i].ps[j+1].ro))/2.0);
@@ -1476,7 +1590,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	    hd[i].ps[j].v2star[4] -= hd[i].ps[j].vstar[0]*hd[i].ps[j].vstar[2];
 	    hd[i].ps[j].v2star[5] -= hd[i].ps[j].vstar[1]*hd[i].ps[j].vstar[2];
 	    }
-	for (j = 1; j < gi.Nbin; j++) {
+	for (j = 1; j < hd[i].NBin; j++) {
 	    for (k = 0; k < 3; k++) {
 		hd[i].ps[j].vtotsmooth[k] = (hd[i].ps[j-1].vtot[k]+hd[i].ps[j].vtot[k]+hd[i].ps[j+1].vtot[k])/3.0;
 		}
@@ -1484,7 +1598,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	/*
 	** Calculate rbg, Mrbg, rcrit & Mrcrit
 	*/
-	for (j = 1; j < (gi.Nbin+1); j++) {
+	for (j = 1; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].ro;
 	    radius[1] = hd[i].ps[j].ro;
 	    rhoenc[0] = 3*hd[i].ps[j-1].Menctot/(4*M_PI*hd[i].ps[j-1].ro*hd[i].ps[j-1].ro*hd[i].ps[j-1].ro);
@@ -1518,7 +1632,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	/*
 	** Calculate rstatic & Mrstatic
 	*/
-	Nbin = 0;
+	NBin = 0;
 	vradmean = 0;
 	vraddisp = 0;
 	barrier = 0;
@@ -1526,14 +1640,14 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	** Calculate vradmean & vraddisp
 	** Use only limited range 
 	*/
-	for (j = 2; j < (gi.Nbin+1); j++) {
+	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    if ((hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro) && (hd[i].ps[j].rm <= gi.fincludermin*hd[i].ps[0].ro) && (hd[i].rstatic == 0)) {
-		Nbin++;
+		NBin++;
 		vradmean += hd[i].ps[j].vtotsmooth[0];
 		vraddisp += pow(hd[i].ps[j].vtotsmooth[0],2);
-		hd[i].vradmean = vradmean/Nbin;
-		hd[i].vraddisp = sqrt(vraddisp/Nbin-pow(hd[i].vradmean,2));
-		barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp; // move down?
+		hd[i].vradmean = vradmean/NBin;
+		hd[i].vraddisp = sqrt(vraddisp/NBin-pow(hd[i].vradmean,2));
+		barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
 		}
 	    vsigma[0] = (hd[i].ps[j-1].vtotsmooth[0]-hd[i].vradmean)/barrier;
 	    vsigma[1] = (hd[i].ps[j].vtotsmooth[0]-hd[i].vradmean)/barrier;
@@ -1556,7 +1670,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		Qcheck = gi.Nsigma;
 		Ncheck = 0;
 		Scheck = 0;
-		for (k = j; (hd[i].ps[k].rm <= gi.fcheckrstatic*rcheck) && (k < gi.Nbin+1); k++) {
+		for (k = j; (hd[i].ps[k].rm <= gi.fcheckrstatic*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
 		    Qcomp = (hd[i].ps[k].vtotsmooth[0]-hd[i].vradmean)/barrier;
 		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
@@ -1573,7 +1687,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	hd[i].rstatic = 0;
 	Extreme = -1;
 	barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
-	for (j = gi.Nbin; j > 0; j--) {
+	for (j = hd[i].NBin; j > 0; j--) {
 	    Qcomp = (hd[i].ps[j].vtotsmooth[0]-hd[i].vradmean)/barrier;
 	    if ((fabs(Qcomp) > gi.fextremerstatic*gi.Nsigma) && (hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro)) Extreme = j;
 	    }
@@ -1618,7 +1732,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	** Indicator: minimum in enclosed density at scales larger than fexcludermin*rmin
 	** i.e. bump is significant enough to cause a minimum or saddle in enclosed density
 	*/
-	for (j = 2; j < (gi.Nbin+1); j++) {
+	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
 	    logslope[0] = (log(hd[i].ps[j-1].Menctot)-log(hd[i].ps[j-2].Menctot))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
@@ -1652,7 +1766,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		Qcheck = Mrcheck/pow(rcheck,3);
 		Ncheck = 0;
 		Scheck = 0;
-		for (k = j; (hd[i].ps[k].ro <= gi.fchecktruncated*rcheck) && (k < gi.Nbin+1); k++) {
+		for (k = j; (hd[i].ps[k].ro <= gi.fchecktruncated*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
 		    Qcomp = hd[i].ps[k].Menctot/pow(hd[i].ps[k].ro,3);
 		    if (Qcheck <= Qcomp) Scheck++;
@@ -1686,7 +1800,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		    hd[i].rhobggas  += hd[i].ps[j].Mgas/hd[i].ps[j].vol;
  		    hd[i].rhobgstar  = hd[i].ps[j-1].Mstar/hd[i].ps[j-1].vol;
 		    hd[i].rhobgstar += hd[i].ps[j].Mstar/hd[i].ps[j].vol;
-		    if (j < gi.Nbin) {
+		    if (j < hd[i].NBin) {
 			hd[i].rhobggas  += hd[i].ps[j+1].Mtot/hd[i].ps[j+1].vol;
 			hd[i].rhobggas  /= 3.0;
 			hd[i].rhobgstar += hd[i].ps[j+1].Mdark/hd[i].ps[j+1].vol;
@@ -1712,15 +1826,15 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	*/
 	if (hd[i].truncated == 1) {
 	    hd[i].Mrtrunc -= hd[i].rhobgtot*4*M_PI*pow(hd[i].rtrunc,3)/3.0;
-	    for (j = 0; j < (gi.Nbin+1); j++) {
+	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		hd[i].ps[j].Menctotremove  -= hd[i].rhobgtot*4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
 		hd[i].ps[j].Mencdarkremove -= hd[i].rhobgdark*4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
 		}
 	    }
 	/*
-	** Calcualte rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark by going from inside out
+	** Calculate rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark by going from inside out
 	*/
-	for (j = 2; j < (gi.Nbin+1); j++) {
+	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    /*
 	    ** Total mass
 	    */
@@ -1731,7 +1845,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	    slope = 1;
 	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxtot == 0)) {
 		/*
-		** Calculate rcheck, Mrcheck
+		** Calculate rcheck & Mrcheck
 		*/
 		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
 		d = slope-logslope[0];
@@ -1757,7 +1871,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		Qcheck = Mrcheck/rcheck;
 		Ncheck = 0;
 		Scheck = 0;
-		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < gi.Nbin+1); k++) {
+		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
 		    Qcomp = hd[i].ps[k].Menctotremove/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
@@ -1777,7 +1891,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	    slope = 1;
 	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxdark == 0)) {
 		/*
-		** Calculate rcheck, Mrcheck
+		** Calculate rcheck & Mrcheck
 		*/
 		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
 		d = slope-logslope[0];
@@ -1803,7 +1917,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		Qcheck = Mrcheck/rcheck;
 		Ncheck = 0;
 		Scheck = 0;
-		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < gi.Nbin+1); k++) {
+		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
 		    Qcomp = hd[i].ps[k].Mencdarkremove/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
@@ -1828,7 +1942,7 @@ void write_output(HALO_DATA *hd, GI gi) {
     statisticsfile = fopen(statisticsfilename,"w");
     assert(statisticsfile != NULL);
     fprintf(statisticsfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rstatic/8 Mrstatic/9 rvcmaxtot/10 Mrvcmaxtot/11 rvcmaxdark/12 Mrvcmaxdark/13 rtrunc/14 Mrtrunc/15 rbg/16 Mrbg/17 rcrit/18 Mrcrit/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 rminMenc/24 vradmean/25 vraddisp/26 truncated/27\n");
-    for (i = 0; i < gi.Nhalo; i++) {
+    for (i = 0; i < gi.NHalo; i++) {
 	fprintf(statisticsfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %d\n",
 		hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],
 		hd[i].rstatic,hd[i].Mrstatic,hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark,hd[i].rtrunc,hd[i].Mrtrunc,
@@ -1843,8 +1957,8 @@ void write_output(HALO_DATA *hd, GI gi) {
     assert(profilesfile != NULL);
     fprintf(profilesfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mtot/6 Mgas/7 Mdark/8 Mstar/9 Menctot/10 Mencgas/11 Mencdark/12 Mencstar/13 rhoMtot/14 rhoMgas/15 rhoMdark/16 rhoMstar/17 Ntot/18 Ngas/19 Ndark/20 Nstar/21 Nenctot/22 Nencgas/23 Nencdark/24 Nencstar/25 rhoNtot/26 rhoNgas/27 rhoNdark/28 rhoNstar/29 vtotrad/30 vtotphi/31 vtottheta/32 v2totradrad/33 v2totphiphi/34 v2totthetatheta/35 v2totradphi/36 v2totradtheta/37 v2totphitheta/38 vgasrad/39 vgasphi/40 vgastheta/41 v2gasradrad/42 v2gasphiphi/43 v2gasthetatheta/44 v2gasradphi/45 v2gasradtheta/46 v2gasphitheta/47 vdarkrad/48 vdarkphi/49 vdarktheta/50 v2darkradrad/51 v2darkphiphi/52 v2darkthetatheta/53 v2darkradphi/54 v2darkradtheta/55 v2darkphitheta/56 vstarrad/57 vstarphi/58 vstartheta/59 v2starradrad/60 v2starphiphi/61 v2starthetatheta/62 v2starradphi/63 v2starradtheta/64 v2starphitheta/65 vtotsmoothrad/66 vtotsmoothphi/67 vtotsmooththeta/68 Ltotx/69 Ltoty/70 Ltotz/71 Lgasx/72 Lgasy/73 Lgasz/74 Ldarkx/75 Ldarky/76 Ldarkz/77 Lstarx/78 Lstary/79 Lstarz/80\n");
     
-    for (i = 0; i < gi.Nhalo; i++) {
-	for (j = 0; j < (gi.Nbin+1); j++) {
+    for (i = 0; i < gi.NHalo; i++) {
+	for (j = 0; j < (hd[i].NBin+1); j++) {
 	    fprintf(profilesfile,"%d ",hd[i].ID);
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Mtot,hd[i].ps[j].Mgas,hd[i].ps[j].Mdark,hd[i].ps[j].Mstar);
