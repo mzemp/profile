@@ -110,6 +110,7 @@ typedef struct general_info {
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
+    double rhobg, rhocrit;
     double rhoencbg, rhoenccrit;
     double Deltabg, Deltacrit;
     double ascale;
@@ -324,18 +325,6 @@ int main(int argc, char **argv) {
             gi.cp.OmegaM0 = atof(argv[i]);
             i++;
             }
-        else if (strcmp(argv[i],"-OmegaDM0") == 0) {
-            i++;
-            if (i >= argc) usage();
-            gi.cp.OmegaDM0 = atof(argv[i]);
-            i++;
-            }
-        else if (strcmp(argv[i],"-OmegaB0") == 0) {
-            i++;
-            if (i >= argc) usage();
-            gi.cp.OmegaB0 = atof(argv[i]);
-            i++;
-            }
         else if (strcmp(argv[i],"-OmegaL0") == 0) {
             i++;
             if (i >= argc) usage();
@@ -364,6 +353,24 @@ int main(int argc, char **argv) {
             i++;
             if (i >= argc) usage();
             LBox = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-LBox_internal") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.us.LBox = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-rhocrit0_internal") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.us.rhocrit0 = atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-Hubble0_internal") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.us.Hubble0 = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-Lmaxgasanalysis") == 0) {
@@ -480,9 +487,8 @@ int main(int argc, char **argv) {
 	read_tipsy_xdr_header(&xdrs,&th);
 	gi.ascale = th.time;
 	if(gi.us.LBox == 0) gi.us.LBox = 1;
-	if(gi.us.GNewton == 0) gi.us.GNewton = 1;
-	if(gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1;
 	if(gi.us.Hubble0 == 0) gi.us.Hubble0 = sqrt(8.0*M_PI/3.0);
+	if(gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1;
 	gi.bc[0] = -0.5*gi.us.LBox;
 	gi.bc[1] = -0.5*gi.us.LBox;
 	gi.bc[2] = -0.5*gi.us.LBox;
@@ -500,9 +506,8 @@ int main(int argc, char **argv) {
 	gi.cp.OmegaK0 = ad.ah.OmK0;
 	gi.cp.h0_100 = ad.ah.h100;
 	if(gi.us.LBox == 0) gi.us.LBox = ad.ah.Ngrid;
-	if(gi.us.GNewton == 0) gi.us.GNewton = 3.0/(2*M_PI);
-	if(gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1/gi.cp.OmegaM0;
 	if(gi.us.Hubble0 == 0) gi.us.Hubble0 = 2.0/sqrt(gi.cp.OmegaM0);
+	if(gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1/gi.cp.OmegaM0;
 	gi.bc[0] = 0;
 	gi.bc[1] = 0;
 	gi.bc[2] = 0;
@@ -522,14 +527,15 @@ int main(int argc, char **argv) {
     gi.rmax /= gi.ascale;
 
     if(gi.cosmous.LBox == 0) gi.cosmous.LBox = LBox;
-    if(gi.cosmous.GNewton == 0) gi.cosmous.GNewton = PhysicalConstants.GNewton_Cosmology;
-    if(gi.cosmous.rhocrit0 == 0) gi.cosmous.rhocrit0 = PhysicalConstants.rho_crit_Cosmology*pow(gi.cp.h0_100,2);
     if(gi.cosmous.Hubble0 == 0) gi.cosmous.Hubble0 = 100*gi.cp.h0_100*ConversionFactors.km_per_s_2_kpc_per_Gyr/1e3;
+    if(gi.cosmous.rhocrit0 == 0) gi.cosmous.rhocrit0 = PhysicalConstants.rho_crit_Cosmology*pow(gi.cp.h0_100,2);
 
     calculate_units_transformation(gi.cosmous,gi.us,&cosmo2internal_ct);
     if (dataformat == 0) cosmo2internal_ct.V_cssf = 1/gi.ascale;
     else if (dataformat == 1) cosmo2internal_ct.V_cssf = gi.ascale;
-    gi.vraddispmin *= (cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr);
+    gi.vraddispmin *= ConversionFactors.km_per_s_2_kpc_per_Gyr;
+    gi.vraddispmin *= cosmo2internal_ct.V_usf;
+    gi.vraddispmin *= cosmo2internal_ct.V_cssf;
 
     /*
     ** Calculate densities in comoving coordinates 
@@ -547,7 +553,7 @@ int main(int argc, char **argv) {
     /*
     ** Harvest data
     */
-    if (dataformat == 0) {
+    if (dataformat == 2) {
 	/*
 	** Tipsy data
 	**
@@ -902,8 +908,8 @@ int main(int argc, char **argv) {
     */
 
     if (verboselevel >= 1) {
-	if (dataformat == 0) {
-	    fprintf(stderr,"Tipsy specific parameters:\n\n");
+	if (halocatalogueformat == 1) {
+	    fprintf(stderr,"6DFOF specific parameters:\n\n");
 	    fprintf(stderr,"binfactor             : %.6e\n",gi.binfactor);
 	    if (gi.centretype == 0) fprintf(stderr,"centretype            : com\n");
 	    else if (gi.centretype == 1) fprintf(stderr,"centretype            : potminm\n");
@@ -911,7 +917,7 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"rmaxfromhalocatalogue : %s\n",(gi.rmaxfromhalocatalogue == 0)?"no":"yes");
 	    fprintf(stderr,"\n");
 	    }
-	else if (dataformat == 1) {
+	if (dataformat == 1) {
 	    fprintf(stderr,"ART general header:\n\n");
 	    fprintf(stderr,"aunin    : %.6e\n",ad.ah.aunin);
 	    fprintf(stderr,"auni0    : %.6e\n",ad.ah.auni0);
@@ -960,20 +966,39 @@ int main(int argc, char **argv) {
 	    }
         fprintf(stderr,"Cosmology:\n\n");
         fprintf(stderr,"OmegaM0  : %.6e\n",gi.cp.OmegaM0);
-        fprintf(stderr,"OmegaDM0 : %.6e\n",gi.cp.OmegaDM0);
-        fprintf(stderr,"OmegaB0  : %.6e\n",gi.cp.OmegaB0);
         fprintf(stderr,"OmegaL0  : %.6e\n",gi.cp.OmegaL0);
         fprintf(stderr,"OmegaK0  : %.6e\n",gi.cp.OmegaK0);
         fprintf(stderr,"OmegaR0  : %.6e\n",gi.cp.OmegaR0);
         fprintf(stderr,"h0_100   : %.6e\n",gi.cp.h0_100);
+	fprintf(stderr,"\n");
+        fprintf(stderr,"Unit System:\n\n");
+        fprintf(stderr,"LBox     : %.6e LU\n",gi.us.LBox);
+        fprintf(stderr,"Hubble0  : %.6e TU^{-1}\n",gi.us.Hubble0);
+        fprintf(stderr,"rhocrit0 : %.6e MU LU^{-3}\n",gi.us.rhocrit0);
+	fprintf(stderr,"\n");
+	fprintf(stderr,"Internal units:\n\n");
+	fprintf(stderr,"LU : %.6e kpc\n",1.0/cosmo2internal_ct.L_usf);
+	fprintf(stderr,"TU : %.6e Gyr\n",1.0/cosmo2internal_ct.T_usf);
+	fprintf(stderr,"VU : %.6e kpc Gyr^{-1} = %.6e km s^{-1}\n",1.0/cosmo2internal_ct.V_usf,1.0/cosmo2internal_ct.V_usf*ConversionFactors.kpc_per_Gyr_2_km_per_s);
+	fprintf(stderr,"MU : %.6e Mo\n",1.0/cosmo2internal_ct.M_usf);
 	fprintf(stderr,"\n");
         fprintf(stderr,"Used values:\n\n");
         fprintf(stderr,"Data format:         : %s\n",(dataformat == 0)?"Tipsy":"ART");
         fprintf(stderr,"Halocatalogue format : %s\n",(halocatalogueformat == 0)?"generic":"6DFOF");
         fprintf(stderr,"Delta_bg             : %.6e\n",gi.Deltabg);
         fprintf(stderr,"Delta_crit           : %.6e\n",gi.Deltacrit);
-	fprintf(stderr,"rhoenc_bg            : %.6e MU LU^{-3} (comoving)\n",gi.rhoencbg);
-	fprintf(stderr,"rhoenc_crit          : %.6e MU LU^{-3} (comoving)\n",gi.rhoenccrit);
+	fprintf(stderr,"rhoenc_bg            : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		gi.rhoencbg,gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+	fprintf(stderr,"rhoenc_crit          : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		gi.rhoenccrit,gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+	fprintf(stderr,"rhobg                : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		gi.rhobg,gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+	fprintf(stderr,"rhocrit              : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		gi.rhocrit,gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
 	fprintf(stderr,"a                    : %.6e\n",gi.ascale);
         fprintf(stderr,"LBox                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		cosmo2internal_ct.L_usf*LBox,LBox,gi.ascale*LBox);
@@ -989,9 +1014,8 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fcheckrstatic        : %.6e\n",gi.fcheckrstatic);
 	fprintf(stderr,"fchecktruncated      : %.6e\n",gi.fchecktruncated);
 	fprintf(stderr,"fextremerstatic      : %.6e\n",gi.fextremerstatic);
-	fprintf(stderr,"vraddispmin          : %.6e VU = %.6e km/s (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
+	fprintf(stderr,"vraddispmin          : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
         fprintf(stderr,"Nsigma               : %.6e\n",gi.Nsigma);
-	fprintf(stderr,"\n");
         }
     exit(0);
 
@@ -1017,12 +1041,13 @@ void usage(void) {
     fprintf(stderr,"-binfactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5)\n");
     fprintf(stderr,"-rmaxfromhalocatalogue               : set this flag for rmax determined from 6DFOF file\n");
     fprintf(stderr,"-OmegaM0 <value>                     : OmegaM0 value (default: 0) [only necessary for Tipsy format]\n");
-    fprintf(stderr,"-OmegaDM0 <value>                    : OmegaDM0 value (default: 0) [only necessary for Tipsy format]\n");
-    fprintf(stderr,"-OmegaB0 <value>                     : OmegaB0 value (default: 0) [only necessary for Tipsy format]\n");
     fprintf(stderr,"-OmegaL0 <value>                     : OmegaL0 value (default: 0) [only necessary for Tipsy format]\n");
     fprintf(stderr,"-OmegaK0 <value>                     : OmegaK0 value (default: 0) [only necessary for Tipsy format]\n");
     fprintf(stderr,"-OmegaR0 <value>                     : OmegaR0 value (default: 0) [only necessary for Tipsy format]\n");
     fprintf(stderr,"-h0_100 <value>                      : h0_100 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-LBox_internal <value>               : box length (comoving) [LU] (default: standard value depending on file format)\n");
+    fprintf(stderr,"-Hubble0_internal <value>            : Hubble parameter today [TU^{-1}] (default: standard value depending on file format)\n");
+    fprintf(stderr,"-rhocrit0_internal <value>           : critical density today [MU LU^{-3}] (default: standard value depending on file format)\n");
     fprintf(stderr,"-Delta_bg <value>                    : overdensity with respect to background density (default: 200)\n");
     fprintf(stderr,"-Delta_crit <value>                  : overdensity with respect to critical density (default: 178*(OmegaM^0.45) [OmegaK0=0] / 178*(OmegaM^0.3) [OmegaL0=0])\n");
     fprintf(stderr,"-LBox <value>                        : box length (comoving) [kpc]\n");
@@ -1057,12 +1082,10 @@ void set_default_values_general_info(GI *gi) {
     gi->cp.h0_100 = 0;
 
     gi->us.LBox = 0;
-    gi->us.GNewton = 0;
     gi->us.Hubble0 = 0;
     gi->us.rhocrit0 = 0;
 
     gi->cosmous.LBox = 0;
-    gi->cosmous.GNewton = 0;
     gi->cosmous.Hubble0 = 0;
     gi->cosmous.rhocrit0 = 0;
 
@@ -1081,6 +1104,8 @@ void set_default_values_general_info(GI *gi) {
     gi->Nparticleinblockstar = 0;
     gi->Nblockstar = 0;
 
+    gi->rhobg = 0;
+    gi->rhocrit = 0;
     gi->Deltabg = 200;
     gi->Deltacrit = 0;
     gi->rmin = 0;
@@ -1100,13 +1125,11 @@ void set_default_values_general_info(GI *gi) {
 
 void calculate_densities(GI *gi) {
     
-    double E, OmegaM, rhocrit;
+    double E, OmegaM;
 
-    assert((3*pow(gi->us.Hubble0,2)/(8*M_PI*gi->us.GNewton*gi->us.rhocrit0) - 1) < 1e-14);
-    
     E = Ecosmo(gi->ascale,gi->cp);
     OmegaM = gi->cp.OmegaM0/(pow(gi->ascale,3)*E*E);
-    rhocrit = gi->us.rhocrit0*E*E*pow(gi->ascale,3); /* comoving density*/
+    gi->rhocrit = gi->us.rhocrit0*E*E*pow(gi->ascale,3); /* comoving density */
     if (gi->Deltacrit == 0) {
 	if (gi->cp.OmegaK0 == 0) {
 	    gi->Deltacrit = 178*pow(OmegaM,0.45);
@@ -1117,8 +1140,9 @@ void calculate_densities(GI *gi) {
 	}
     assert(gi->Deltabg > 0);
     assert(gi->Deltacrit > 0);
-    gi->rhoencbg   = gi->Deltabg   * rhocrit*OmegaM; /* comoving density*/
-    gi->rhoenccrit = gi->Deltacrit * rhocrit; /* comoving density*/
+    gi->rhobg = gi->rhocrit*OmegaM;               /* comoving density */
+    gi->rhoencbg   = gi->Deltabg   * gi->rhobg;   /* comoving density */
+    gi->rhoenccrit = gi->Deltacrit * gi->rhocrit; /* comoving density */
     }
 
 void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
