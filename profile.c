@@ -373,6 +373,24 @@ int main(int argc, char **argv) {
             gi.us.Hubble0 = atof(argv[i]);
             i++;
             }
+        else if (strcmp(argv[i],"-Nparticleperblockgas") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.Nparticleperblockgas = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-Nparticleperblockdark") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.Nparticleperblockdark = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-Nparticleperblockstar") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.Nparticleperblockstar = atoi(argv[i]);
+            i++;
+            }
         else if (strcmp(argv[i],"-Lmaxgasanalysis") == 0) {
             i++;
             if (i >= argc) usage();
@@ -983,39 +1001,42 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"MU : %.6e Mo\n",1.0/cosmo2internal_ct.M_usf);
 	fprintf(stderr,"\n");
         fprintf(stderr,"Used values:\n\n");
-        fprintf(stderr,"Data format:         : %s\n",(dataformat == 0)?"Tipsy":"ART");
-        fprintf(stderr,"Halocatalogue format : %s\n",(halocatalogueformat == 0)?"generic":"6DFOF");
-        fprintf(stderr,"Delta_bg             : %.6e\n",gi.Deltabg);
-        fprintf(stderr,"Delta_crit           : %.6e\n",gi.Deltacrit);
-	fprintf(stderr,"rhoenc_bg            : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+        fprintf(stderr,"Data format:          : %s\n",(dataformat == 0)?"Tipsy":"ART");
+        fprintf(stderr,"Halocatalogue format  : %s\n",(halocatalogueformat == 0)?"generic":"6DFOF");
+        fprintf(stderr,"Delta_bg              : %.6e\n",gi.Deltabg);
+        fprintf(stderr,"Delta_crit            : %.6e\n",gi.Deltacrit);
+	fprintf(stderr,"rhoenc_bg             : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 		gi.rhoencbg,gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 		gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-	fprintf(stderr,"rhoenc_crit          : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+	fprintf(stderr,"rhoenc_crit           : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 		gi.rhoenccrit,gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 		gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-	fprintf(stderr,"rhobg                : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+	fprintf(stderr,"rhobg                 : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 		gi.rhobg,gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 		gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-	fprintf(stderr,"rhocrit              : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+	fprintf(stderr,"rhocrit               : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 		gi.rhocrit,gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 		gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-	fprintf(stderr,"a                    : %.6e\n",gi.ascale);
-        fprintf(stderr,"LBox                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+	fprintf(stderr,"a                     : %.6e\n",gi.ascale);
+        fprintf(stderr,"LBox                  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		cosmo2internal_ct.L_usf*LBox,LBox,gi.ascale*LBox);
-        fprintf(stderr,"rmin                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+        fprintf(stderr,"rmin                  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		gi.rmin,gi.rmin/cosmo2internal_ct.L_usf,gi.ascale*gi.rmin/cosmo2internal_ct.L_usf);
-	fprintf(stderr,"rmax                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+	fprintf(stderr,"rmax                  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		gi.rmax,gi.rmax/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax/cosmo2internal_ct.L_usf);
-        fprintf(stderr,"NBin                 : %d\n",gi.NBin);
-	fprintf(stderr,"fexcludermin         : %.6e\n",gi.fexcludermin);
-	fprintf(stderr,"fincludermin         : %.6e\n",gi.fincludermin);
-	fprintf(stderr,"frhobg               : %.6e\n",gi.frhobg);
-	fprintf(stderr,"fcheckrvcmax         : %.6e\n",gi.fcheckrvcmax);
-	fprintf(stderr,"fcheckrstatic        : %.6e\n",gi.fcheckrstatic);
-	fprintf(stderr,"fchecktruncated      : %.6e\n",gi.fchecktruncated);
-	fprintf(stderr,"fextremerstatic      : %.6e\n",gi.fextremerstatic);
-	fprintf(stderr,"vraddispmin          : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
-        fprintf(stderr,"Nsigma               : %.6e\n",gi.Nsigma);
+        fprintf(stderr,"NBin                  : %d\n",gi.NBin);
+        fprintf(stderr,"Nparticleperblockgas  : %d\n",gi.Nparticleperblockgas);
+        fprintf(stderr,"Nparticleperblockdark : %d\n",gi.Nparticleperblockdark);
+        fprintf(stderr,"Nparticleperblockstar : %d\n",gi.Nparticleperblockstar);
+	fprintf(stderr,"fexcludermin          : %.6e\n",gi.fexcludermin);
+	fprintf(stderr,"fincludermin          : %.6e\n",gi.fincludermin);
+	fprintf(stderr,"frhobg                : %.6e\n",gi.frhobg);
+	fprintf(stderr,"fcheckrvcmax          : %.6e\n",gi.fcheckrvcmax);
+	fprintf(stderr,"fcheckrstatic         : %.6e\n",gi.fcheckrstatic);
+	fprintf(stderr,"fchecktruncated       : %.6e\n",gi.fchecktruncated);
+	fprintf(stderr,"fextremerstatic       : %.6e\n",gi.fextremerstatic);
+	fprintf(stderr,"vraddispmin           : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
+        fprintf(stderr,"Nsigma                : %.6e\n",gi.Nsigma);
         }
     exit(0);
 
@@ -1045,13 +1066,16 @@ void usage(void) {
     fprintf(stderr,"-OmegaK0 <value>                     : OmegaK0 value (default: 0) [only necessary for Tipsy format]\n");
     fprintf(stderr,"-OmegaR0 <value>                     : OmegaR0 value (default: 0) [only necessary for Tipsy format]\n");
     fprintf(stderr,"-h0_100 <value>                      : h0_100 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-LBox <value>                        : box length (comoving) [kpc]\n");
     fprintf(stderr,"-LBox_internal <value>               : box length (comoving) [LU] (default: standard value depending on file format)\n");
     fprintf(stderr,"-Hubble0_internal <value>            : Hubble parameter today [TU^{-1}] (default: standard value depending on file format)\n");
     fprintf(stderr,"-rhocrit0_internal <value>           : critical density today [MU LU^{-3}] (default: standard value depending on file format)\n");
     fprintf(stderr,"-Delta_bg <value>                    : overdensity with respect to background density (default: 200)\n");
     fprintf(stderr,"-Delta_crit <value>                  : overdensity with respect to critical density (default: 178*(OmegaM^0.45) [OmegaK0=0] / 178*(OmegaM^0.3) [OmegaL0=0])\n");
-    fprintf(stderr,"-LBox <value>                        : box length (comoving) [kpc]\n");
     fprintf(stderr,"-Lmaxgasanalysis <value>             : maximum level of gas analysed [counting from 0] (default: Lmaxgas in data)\n");
+    fprintf(stderr,"-Nparticleperblockgas <value>        : number of gas particles per block (default: 1e7)\n");
+    fprintf(stderr,"-Nparticleperblockdark <value>       : number of dark matter particles per block (default: 1e7)\n");
+    fprintf(stderr,"-Nparticleperblockstar <value>       : number of star particles per block (default: 1e7)\n");
     fprintf(stderr,"-GRAVITY <value>                     : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
     fprintf(stderr,"-HYDRO <value>                       : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
     fprintf(stderr,"-ADVECT_SPECIES <value>              : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
@@ -1115,7 +1139,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fexcludermin = 5;
     gi->fincludermin = 100;
     gi->frhobg = 1.2;
-    gi->fcheckrvcmax = 10;
+    gi->fcheckrvcmax = 5;
     gi->fcheckrstatic = 3;
     gi->fchecktruncated = 0;
     gi->fextremerstatic = 3;
@@ -1554,11 +1578,11 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
     int Ncheck, Scheck, NBin, Extreme;
     double radius[2], rhoenc[2], Menc[2], logslope[2], vsigma[2];
     double m, d, slope;
-    double rcheck, Mrcheck, Qcheck, Qcomp;
+    double rcheck, Mrcheck, Qcheck, Qcomp, rmax;
     double rhotot, rhodark, rhototmin, rhodarkmin;
     double vradmean, vraddisp, barrier;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rhotot,rhodark,rhototmin,rhodarkmin,vradmean,vraddisp,barrier) shared(hd,gi)
+#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhodark,rhototmin,rhodarkmin,vradmean,vraddisp,barrier) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
@@ -1840,7 +1864,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	/*
 	** Check if halo is truncated
 	** We only care about rstatic here, one can always find a rbg or rcrit:
-	** just choose outer bin large enough
+	** just choose outer bin radius large enough
 	*/
 	if ((hd[i].rtrunc > 0) && ((hd[i].rstatic > hd[i].rtrunc) || (hd[i].rstatic == 0))) hd[i].truncated = 1;
 	else hd[i].truncated = 0;
@@ -1858,7 +1882,12 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	/*
 	** Calculate rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark by going from inside out
 	*/
-	for (j = 2; j < (hd[i].NBin+1); j++) {
+	rmax = 0;
+	rmax = (hd[i].rstatic > rmax)?hd[i].rstatic:rmax;
+	rmax = (hd[i].rtrunc > rmax)?hd[i].rtrunc:rmax;
+	rmax = (hd[i].rbg > rmax)?hd[i].rbg:rmax;
+	rmax = (hd[i].rcrit > rmax)?hd[i].rcrit:rmax;
+	for (j = 2; (hd[i].ps[j].ro <= rmax) && (j < hd[i].NBin+1); j++) {
 	    /*
 	    ** Total mass
 	    */
@@ -1900,7 +1929,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		    Qcomp = hd[i].ps[k].Menctotremove/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
-		if (Scheck == Ncheck) {
+		if ((Scheck == Ncheck) && (rcheck <= rmax)) {
 		    hd[i].rvcmaxtot = rcheck;
 		    hd[i].Mrvcmaxtot = Mrcheck;
 		    }
@@ -1946,7 +1975,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		    Qcomp = hd[i].ps[k].Mencdarkremove/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
-		if (Scheck == Ncheck) {
+		if ((Scheck == Ncheck) && (rcheck <= rmax)) {
 		    hd[i].rvcmaxdark = rcheck;
 		    hd[i].Mrvcmaxdark = Mrcheck;
 		    }
