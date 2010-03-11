@@ -553,7 +553,7 @@ int main(int argc, char **argv) {
     /*
     ** Harvest data
     */
-    if (dataformat == 2) {
+    if (dataformat == 0) {
 	/*
 	** Tipsy data
 	**
