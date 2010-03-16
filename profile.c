@@ -535,6 +535,7 @@ int main(int argc, char **argv) {
 	for (i = ad.Lmindark; i <= ad.Lmaxdark; i++) ad.massdark[i] = ad.ah.mass[ad.Lmaxdark-i];
 	if (Lmaxgasanalysis == -1) Lmaxgasanalysis = ad.Lmaxgas;
 	assert(Lmaxgasanalysis >= 0);
+	assert(Lmaxgasanalysis <= ad.Lmaxgas);
 	}
     else {
 	fprintf(stderr,"Not supported format!\n");
@@ -1089,6 +1090,7 @@ void usage(void) {
     fprintf(stderr,"-coordinatesdatafile <name>          : coordinates data file in ART native binary format\n");
     fprintf(stderr,"-starpropertiesfile <name>           : star properties file in ART native binary format\n");
     fprintf(stderr,"-gasfile <name>                      : gas file in ART native binary format\n");
+    fprintf(stderr,"-halocatalogue <name>                : halo catalouge file\n");
     fprintf(stderr,"-output <name>                       : name of output files (endings .statistics and .profiles appended)\n");
     fprintf(stderr,"-v                                   : more informative output to screen\n");
     fprintf(stderr,"\n");
