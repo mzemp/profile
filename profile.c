@@ -572,7 +572,7 @@ int main(int argc, char **argv) {
     /*
     ** Harvest data
     */
-    if (dataformat == 0) {
+    if ((dataformat == 0) && (gi.NHalo > 0)) {
 	/*
 	** Tipsy data
 	**
@@ -690,7 +690,7 @@ int main(int argc, char **argv) {
 	free(psp);
 	fprintf(stderr,"Done. Processed in total %d star particles.\n\n",th.nstar);
 	}
-    else if (dataformat == 1) {
+    else if ((dataformat == 1) && (gi.NHalo > 0)) {
 	/*
 	** ART data
 	*/
@@ -964,10 +964,16 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"\n");
 	    fprintf(stderr,"ART data properties:\n\n");
 	    fprintf(stderr,"Nparticleperrecord : %d\n",ad.Nparticleperrecord);
+	    fprintf(stderr,"Nrecord            : %d\n",ad.Nrecord);
 	    fprintf(stderr,"Nhydroproperties   : %d\n",ad.Nhydroproperties);
 	    fprintf(stderr,"Notherproperties   : %d\n",ad.Notherproperties);
 	    fprintf(stderr,"Nrtchemspecies     : %d\n",ad.Nrtchemspecies);
 	    fprintf(stderr,"Nchemspecies       : %d\n",ad.Nchemspecies);
+	    fprintf(stderr,"Nstarproperties    : %d\n",ad.Nstarproperties);
+	    fprintf(stderr,"Lmingas            : %d\n",ad.Lmingas);
+	    fprintf(stderr,"Lmaxgas            : %d\n",ad.Lmaxgas);
+	    fprintf(stderr,"Lmindark           : %d\n",ad.Lmindark);
+	    fprintf(stderr,"Lmaxdark           : %d\n",ad.Lmaxdark);
 	    fprintf(stderr,"\n");
 	    fprintf(stderr,"ART preprocessor flags:\n\n");
 	    fprintf(stderr,"-GRAVITY                     : %s\n",(ad.GRAVITY == 0)?"not set":"set");
@@ -1026,6 +1032,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"rmax                  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		gi.rmax,gi.rmax/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax/cosmo2internal_ct.L_usf);
         fprintf(stderr,"NBin                  : %d\n",gi.NBin);
+        fprintf(stderr,"NHalo                 : %d\n",gi.NHalo);
         fprintf(stderr,"Nparticleperblockgas  : %d\n",gi.Nparticleperblockgas);
         fprintf(stderr,"Nparticleperblockdark : %d\n",gi.Nparticleperblockdark);
         fprintf(stderr,"Nparticleperblockstar : %d\n",gi.Nparticleperblockstar);
