@@ -18,43 +18,63 @@
 
 #define HALO_DATA_SIZE 1000
 
+typedef struct profile_tot_properties {
+
+    long int N;
+    long int Nenc;
+    double M;
+    double Menc;
+    double Mencremove;
+    double v[3];
+    double vsmooth[3];
+    double v2[6];
+    double L[3];
+    } PTP;
+
+typedef struct profile_gas_properties {
+
+    long int N;
+    long int Nenc;
+    double M;
+    double Menc;
+    double v[3];
+    double v2[6];
+    double L[3];
+    } PGP;
+
+typedef struct profile_dark_properties {
+
+    long int N;
+    long int Nenc;
+    double M;
+    double Menc;
+    double Mencremove;
+    double v[3];
+    double v2[6];
+    double L[3];
+    } PDP;
+
+typedef struct profile_star_properties {
+
+    long int N;
+    long int Nenc;
+    double M;
+    double Menc;
+    double v[3];
+    double v2[6];
+    double L[3];
+    } PSP;
+
 typedef struct profile_structure {
 
-    long int Ntot;
-    long int Ngas;
-    long int Ndark;
-    long int Nstar;
-    long int Nenctot;
-    long int Nencgas;
-    long int Nencdark;
-    long int Nencstar;
     double ri;
     double rm;
     double ro;
     double vol;
-    double Mtot;
-    double Mgas;
-    double Mdark;
-    double Mstar;
-    double Menctot;
-    double Mencgas;
-    double Mencdark;
-    double Mencstar;
-    double Menctotremove;
-    double Mencdarkremove;
-    double vtot[3];
-    double v2tot[6];
-    double vgas[3];
-    double v2gas[6];
-    double vdark[3];
-    double v2dark[6];
-    double vstar[3];
-    double v2star[6];
-    double vtotsmooth[3];
-    double Ltot[3];
-    double Lgas[3];
-    double Ldark[3];
-    double Lstar[3];
+    PTP *tot;
+    PGP *gas;
+    PDP *dark;
+    PSP *star;
     } PS;
 
 typedef struct halo_data {
@@ -105,6 +125,7 @@ typedef struct general_info {
 
     int centretype;
     int rmaxfromhalocatalogue;
+    int gascontained, darkcontained, starcontained;
     int NBin;
     int NHalo;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
@@ -513,6 +534,9 @@ int main(int argc, char **argv) {
 	gi.bc[3] = 0.5*gi.us.LBox;
 	gi.bc[4] = 0.5*gi.us.LBox;
 	gi.bc[5] = 0.5*gi.us.LBox;
+	gi.gascontained = (th.ngas > 0)?1:0;
+	gi.darkcontained = (th.ndark > 0)?1:0;
+	gi.starcontained = (th.nstar > 0)?1:0;
 	}
     else if (dataformat == 1) {
 	prepare_art_data(&ad);
@@ -532,6 +556,9 @@ int main(int argc, char **argv) {
 	gi.bc[3] = gi.us.LBox;
 	gi.bc[4] = gi.us.LBox;
 	gi.bc[5] = gi.us.LBox;
+	gi.gascontained = ad.gascontained;
+	gi.darkcontained = ad.darkcontained;
+	gi.starcontained = ad.starcontained;
 	for (i = ad.Lmindark; i <= ad.Lmaxdark; i++) ad.massdark[i] = ad.ah.mass[ad.Lmaxdark-i];
 	if (Lmaxgasanalysis == -1) Lmaxgasanalysis = ad.Lmaxgas;
 	assert(Lmaxgasanalysis >= 0);
@@ -1124,6 +1151,9 @@ void set_default_values_general_info(GI *gi) {
 
     gi->centretype = 0;
     gi->rmaxfromhalocatalogue = 0;
+    gi->gascontained = 0;
+    gi->darkcontained = 0;
+    gi->starcontained = 0;
     gi->NBin = 0;
     gi->NHalo = 0;
 
@@ -1181,7 +1211,7 @@ void calculate_densities(GI *gi) {
 void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = HALO_DATA_SIZE;
-    int i, idummy, ID, NBin, NHaloRead;
+    int i, j, idummy, ID, NBin, NHaloRead;
     float fdummy;
     double rx, ry, rz, vx, vy, vz, rmin, rmax;
     HALO_DATA *hd;
@@ -1226,6 +1256,31 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	hd[i].NBin = (gi->NBin != 0)?gi->NBin:NBin;
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PS));
 	assert(hd[i].ps != NULL);
+	for (j = 0; j < hd[i].NBin+1; j++) {
+	    hd[i].ps[j].tot = realloc(hd[i].ps[j].tot,sizeof(PTP));
+	    assert(hd[i].ps[j].tot != NULL);
+	    if (gi->gascontained) {
+		hd[i].ps[j].gas = realloc(hd[i].ps[j].gas,sizeof(PGP));
+		assert(hd[i].ps[j].gas != NULL);
+		}
+	    else {
+		hd[i].ps[j].gas = NULL;
+		}
+	    if (gi->darkcontained) {
+		hd[i].ps[j].dark = realloc(hd[i].ps[j].dark,sizeof(PDP));
+		assert(hd[i].ps[j].dark != NULL);
+		}
+	    else {
+		hd[i].ps[j].dark = NULL;
+		}
+	    if (gi->gascontained) {
+		hd[i].ps[j].star = realloc(hd[i].ps[j].star,sizeof(PSP));
+		assert(hd[i].ps[j].star != NULL);
+		}
+	    else {
+		hd[i].ps[j].star = NULL;
+		}
+	    }
 	initialise_halo_profile(&hd[i]);
 	}
     fclose(HaloCatalogueFile);
@@ -1236,7 +1291,7 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = HALO_DATA_SIZE;
-    int i, ID, N, idummy, NHaloRead;
+    int i, j, ID, N, idummy, NHaloRead;
     float fdummy;
     double DarkMass, radius1, radius2, vd1D;
     double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
@@ -1322,6 +1377,31 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	hd[i].NBin = gi->NBin;
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PS));
 	assert(hd[i].ps != NULL);
+	for (j = 0; j < hd[i].NBin+1; j++) {
+	    hd[i].ps[j].tot = realloc(hd[i].ps[j].tot,sizeof(PTP));
+	    assert(hd[i].ps[j].tot != NULL);
+	    if (gi->gascontained) {
+		hd[i].ps[j].gas = realloc(hd[i].ps[j].gas,sizeof(PGP));
+		assert(hd[i].ps[j].gas != NULL);
+		}
+	    else {
+		hd[i].ps[j].gas = NULL;
+		}
+	    if (gi->darkcontained) {
+		hd[i].ps[j].dark = realloc(hd[i].ps[j].dark,sizeof(PDP));
+		assert(hd[i].ps[j].dark != NULL);
+		}
+	    else {
+		hd[i].ps[j].dark = NULL;
+		}
+	    if (gi->gascontained) {
+		hd[i].ps[j].star = realloc(hd[i].ps[j].star,sizeof(PSP));
+		assert(hd[i].ps[j].star != NULL);
+		}
+	    else {
+		hd[i].ps[j].star = NULL;
+		}
+	    }
 	initialise_halo_profile(&hd[i]);
 	}
     fclose(HaloCatalogueFile);
@@ -1369,40 +1449,70 @@ void initialise_halo_profile (HALO_DATA *hd){
 	}
 
     for (j = 0; j < (hd->NBin+1); j++) {
-	hd->ps[j].Ntot = 0;
-	hd->ps[j].Ngas = 0;
-	hd->ps[j].Ndark = 0;
-	hd->ps[j].Nstar = 0;
-	hd->ps[j].Nenctot = 0;
-	hd->ps[j].Nencgas = 0;
-	hd->ps[j].Nencdark = 0;
-	hd->ps[j].Nencstar = 0;
-	hd->ps[j].Mtot = 0;
-	hd->ps[j].Mgas = 0;
-	hd->ps[j].Mdark = 0;
-	hd->ps[j].Mstar = 0;
-	hd->ps[j].Menctot = 0;
-	hd->ps[j].Mencgas = 0;
-	hd->ps[j].Mencdark = 0;
-	hd->ps[j].Mencstar = 0;
-	hd->ps[j].Menctotremove = 0;
-	hd->ps[j].Mencdarkremove = 0;
+	/*
+	** Total matter
+	*/
+	hd->ps[j].tot->N = 0;
+	hd->ps[j].tot->Nenc = 0;
+	hd->ps[j].tot->M = 0;
+	hd->ps[j].tot->Menc = 0;
+	hd->ps[j].tot->Mencremove = 0;
 	for (k = 0; k < 3; k++) {
-	    hd->ps[j].vtot[k] = 0;
-	    hd->ps[j].vgas[k] = 0;
-	    hd->ps[j].vdark[k] = 0;
-	    hd->ps[j].vstar[k] = 0;
-	    hd->ps[j].vtotsmooth[k] = 0;
-	    hd->ps[j].Ltot[k] = 0;
-	    hd->ps[j].Lgas[k] = 0;
-	    hd->ps[j].Ldark[k] = 0;
-	    hd->ps[j].Lstar[k] = 0;
+	    hd->ps[j].tot->v[k] = 0;
+	    hd->ps[j].tot->vsmooth[k] = 0;
+	    hd->ps[j].tot->L[k] = 0;
 	    }
 	for (k = 0; k < 6; k++) {
-	    hd->ps[j].v2tot[k] = 0;
-	    hd->ps[j].v2gas[k] = 0;
-	    hd->ps[j].v2dark[k] = 0;
-	    hd->ps[j].v2star[k] = 0;
+	    hd->ps[j].tot->v2[k] = 0;
+	    }
+	/*
+	** Gas
+	*/
+	if (hd->ps[j].gas != NULL) {
+	    hd->ps[j].gas->N = 0;
+	    hd->ps[j].gas->Nenc = 0;
+	    hd->ps[j].gas->M = 0;
+	    hd->ps[j].gas->Menc = 0;
+	    for (k = 0; k < 3; k++) {
+		hd->ps[j].gas->v[k] = 0;
+		hd->ps[j].gas->L[k] = 0;
+		}
+	    for (k = 0; k < 6; k++) {
+		hd->ps[j].gas->v2[k] = 0;
+		}
+	    }
+	/*
+	** Dark matter
+	*/
+	if (hd->ps[j].dark != NULL) {
+	    hd->ps[j].dark->N = 0;
+	    hd->ps[j].dark->Nenc = 0;
+	    hd->ps[j].dark->M = 0;
+	    hd->ps[j].dark->Menc = 0;
+	    hd->ps[j].dark->Mencremove = 0;
+	    for (k = 0; k < 3; k++) {
+		hd->ps[j].dark->v[k] = 0;
+		hd->ps[j].dark->L[k] = 0;
+		}
+	    for (k = 0; k < 6; k++) {
+		hd->ps[j].dark->v2[k] = 0;
+		}
+	    }
+	/*
+	** Stars
+	*/
+	if (hd->ps[j].star != NULL) {
+	    hd->ps[j].star->N = 0;
+	    hd->ps[j].star->Nenc = 0;
+	    hd->ps[j].star->M = 0;
+	    hd->ps[j].star->Menc = 0;
+	    for (k = 0; k < 3; k++) {
+		hd->ps[j].star->v[k] = 0;
+		hd->ps[j].star->L[k] = 0;
+		}
+	    for (k = 0; k < 6; k++) {
+		hd->ps[j].star->v2[k] = 0;
+		}
 	    }
 	}
     }
@@ -1435,28 +1545,28 @@ void put_pgp_in_bins(HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp, GI gi) {
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			hd[j].ps[l].Ntot++;
-			hd[j].ps[l].Ngas++;
-			hd[j].ps[l].Mtot += pgp[i].mass;
-			hd[j].ps[l].Mgas += pgp[i].mass;
+			hd[j].ps[l].tot->N++;
+			hd[j].ps[l].gas->N++;
+			hd[j].ps[l].tot->M += pgp[i].mass;
+			hd[j].ps[l].gas->M += pgp[i].mass;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].vtot[k]  += pgp[i].mass*vproj[k];
-			    hd[j].ps[l].vgas[k]  += pgp[i].mass*vproj[k];
-			    hd[j].ps[l].v2tot[k] += pgp[i].mass*vproj[k]*vproj[k];
-			    hd[j].ps[l].v2gas[k] += pgp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].tot->v[k]  += pgp[i].mass*vproj[k];
+			    hd[j].ps[l].gas->v[k]  += pgp[i].mass*vproj[k];
+			    hd[j].ps[l].tot->v2[k] += pgp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].gas->v2[k] += pgp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].v2tot[3] += pgp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].v2tot[4] += pgp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].v2tot[5] += pgp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].v2gas[3] += pgp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].v2gas[4] += pgp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].v2gas[5] += pgp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].Ltot[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].Ltot[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].Ltot[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
-			hd[j].ps[l].Lgas[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].Lgas[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].Lgas[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].tot->v2[3] += pgp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].tot->v2[4] += pgp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].tot->v2[5] += pgp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].gas->v2[3] += pgp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].gas->v2[4] += pgp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].gas->v2[5] += pgp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].tot->L[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].tot->L[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].tot->L[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].gas->L[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].gas->L[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].gas->L[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
 			break;
 			}
 		    }
@@ -1493,28 +1603,28 @@ void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, GI gi) {
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			hd[j].ps[l].Ntot++;
-			hd[j].ps[l].Ndark++;
-			hd[j].ps[l].Mtot += pdp[i].mass;
-			hd[j].ps[l].Mdark += pdp[i].mass;
+			hd[j].ps[l].tot->N++;
+			hd[j].ps[l].dark->N++;
+			hd[j].ps[l].tot->M += pdp[i].mass;
+			hd[j].ps[l].dark->M += pdp[i].mass;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].vtot[k]   += pdp[i].mass*vproj[k];
-			    hd[j].ps[l].vdark[k]  += pdp[i].mass*vproj[k];
-			    hd[j].ps[l].v2tot[k]  += pdp[i].mass*vproj[k]*vproj[k];
-			    hd[j].ps[l].v2dark[k] += pdp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].tot->v[k]   += pdp[i].mass*vproj[k];
+			    hd[j].ps[l].dark->v[k]  += pdp[i].mass*vproj[k];
+			    hd[j].ps[l].tot->v2[k]  += pdp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].dark->v2[k] += pdp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].v2tot[3]  += pdp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].v2tot[4]  += pdp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].v2tot[5]  += pdp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].v2dark[3] += pdp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].v2dark[4] += pdp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].v2dark[5] += pdp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].Ltot[0]   += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].Ltot[1]   += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].Ltot[2]   += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
-			hd[j].ps[l].Ldark[0]  += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].Ldark[1]  += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].Ldark[2]  += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].tot->v2[3]  += pdp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].tot->v2[4]  += pdp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].tot->v2[5]  += pdp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].dark->v2[3] += pdp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].dark->v2[4] += pdp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].dark->v2[5] += pdp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].tot->L[0]   += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].tot->L[1]   += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].tot->L[2]   += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].dark->L[0]  += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].dark->L[1]  += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].dark->L[2]  += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
 			break;
 			}
 		    }
@@ -1551,28 +1661,28 @@ void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, GI gi) {
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			hd[j].ps[l].Ntot++;
-			hd[j].ps[l].Nstar++;
-			hd[j].ps[l].Mtot += psp[i].mass;
-			hd[j].ps[l].Mstar += psp[i].mass;
+			hd[j].ps[l].tot->N++;
+			hd[j].ps[l].star->N++;
+			hd[j].ps[l].tot->M += psp[i].mass;
+			hd[j].ps[l].star->M += psp[i].mass;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].vtot[k]   += psp[i].mass*vproj[k];
-			    hd[j].ps[l].vstar[k]  += psp[i].mass*vproj[k];
-			    hd[j].ps[l].v2tot[k]  += psp[i].mass*vproj[k]*vproj[k];
-			    hd[j].ps[l].v2star[k] += psp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].tot->v[k]   += psp[i].mass*vproj[k];
+			    hd[j].ps[l].star->v[k]  += psp[i].mass*vproj[k];
+			    hd[j].ps[l].tot->v2[k]  += psp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].star->v2[k] += psp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].v2tot[3]  += psp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].v2tot[4]  += psp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].v2tot[5]  += psp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].v2star[3] += psp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].v2star[4] += psp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].v2star[5] += psp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].Ltot[0]   += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].Ltot[1]   += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].Ltot[2]   += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
-			hd[j].ps[l].Lstar[0]  += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].Lstar[1]  += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].Lstar[2]  += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].tot->v2[3]  += psp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].tot->v2[4]  += psp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].tot->v2[5]  += psp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].star->v2[3] += psp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].star->v2[4] += psp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].star->v2[5] += psp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].tot->L[0]   += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].tot->L[1]   += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].tot->L[2]   += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].star->L[0]  += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].star->L[1]  += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].star->L[2]  += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
 			break;
 			}
 		    }
@@ -1588,10 +1698,10 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
     double radius[2], rhoenc[2], Menc[2], logslope[2], vsigma[2];
     double m, d, slope;
     double rcheck, Mrcheck, Qcheck, Qcomp, rmax;
-    double rhotot, rhodark, rhototmin, rhodarkmin;
+    double rhotot, rhogas, rhodark, rhostar, rhototmin, rhogasmin, rhodarkmin, rhostarmin;
     double vradmean, vraddisp, barrier;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhodark,rhototmin,rhodarkmin,vradmean,vraddisp,barrier) shared(hd,gi)
+#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
@@ -1605,51 +1715,63 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		hd[i].ps[j].rm = exp((log(hd[i].ps[j].ri)+log(hd[i].ps[j].ro))/2.0);
 		}
 	    for (k = 0; k <= j; k++) {
-		hd[i].ps[j].Nenctot  += hd[i].ps[k].Ntot;
-		hd[i].ps[j].Nencgas  += hd[i].ps[k].Ngas;
-		hd[i].ps[j].Nencdark += hd[i].ps[k].Ndark;
-		hd[i].ps[j].Nencstar += hd[i].ps[k].Nstar;
-		hd[i].ps[j].Menctot  += hd[i].ps[k].Mtot;
-		hd[i].ps[j].Mencgas  += hd[i].ps[k].Mgas;
-		hd[i].ps[j].Mencdark += hd[i].ps[k].Mdark;
-		hd[i].ps[j].Mencstar += hd[i].ps[k].Mstar;
+		hd[i].ps[j].tot->Nenc  += hd[i].ps[k].tot->N;
+		hd[i].ps[j].tot->Menc  += hd[i].ps[k].tot->M;
+		if (gi.gascontained) {
+		    hd[i].ps[j].gas->Nenc  += hd[i].ps[k].gas->N;
+		    hd[i].ps[j].gas->Menc  += hd[i].ps[k].gas->M;
+		    }
+		if (gi.darkcontained) {
+		    hd[i].ps[j].dark->Nenc  += hd[i].ps[k].dark->N;
+		    hd[i].ps[j].dark->Menc  += hd[i].ps[k].dark->M;
+		    }
+		if (gi.starcontained) {
+		    hd[i].ps[j].star->Nenc  += hd[i].ps[k].star->N;
+		    hd[i].ps[j].star->Menc  += hd[i].ps[k].star->M;
+		    }
 		}
-	    hd[i].ps[j].Menctotremove = hd[i].ps[j].Menctot;
-	    hd[i].ps[j].Mencdarkremove = hd[i].ps[j].Mencdark;
+	    hd[i].ps[j].tot->Mencremove = hd[i].ps[j].tot->Menc;
+	    if (gi.darkcontained) hd[i].ps[j].dark->Mencremove = hd[i].ps[j].dark->Menc;
 	    for (k = 0; k < 3; k++) {
-		if (hd[i].ps[j].Mtot != 0)  hd[i].ps[j].vtot[k]  /= hd[i].ps[j].Mtot;
-		if (hd[i].ps[j].Mgas != 0)  hd[i].ps[j].vgas[k]  /= hd[i].ps[j].Mgas;
-		if (hd[i].ps[j].Mdark != 0) hd[i].ps[j].vdark[k] /= hd[i].ps[j].Mdark;
-		if (hd[i].ps[j].Mstar != 0) hd[i].ps[j].vstar[k] /= hd[i].ps[j].Mstar;
+		if (hd[i].ps[j].tot->M != 0)  hd[i].ps[j].tot->v[k]  /= hd[i].ps[j].tot->M;
+		if (gi.gascontained && hd[i].ps[j].gas->M != 0)  hd[i].ps[j].gas->v[k]  /= hd[i].ps[j].gas->M;
+		if (gi.darkcontained && hd[i].ps[j].dark->M != 0) hd[i].ps[j].dark->v[k] /= hd[i].ps[j].dark->M;
+		if (gi.starcontained && hd[i].ps[j].star->M != 0) hd[i].ps[j].star->v[k] /= hd[i].ps[j].star->M;
 		}
 	    for (k = 0; k < 6; k++) {
-		if (hd[i].ps[j].Mtot != 0)  hd[i].ps[j].v2tot[k]  /= hd[i].ps[j].Mtot;
-		if (hd[i].ps[j].Mgas != 0)  hd[i].ps[j].v2gas[k]  /= hd[i].ps[j].Mgas;
-		if (hd[i].ps[j].Mdark != 0) hd[i].ps[j].v2dark[k] /= hd[i].ps[j].Mdark;
-		if (hd[i].ps[j].Mstar != 0) hd[i].ps[j].v2star[k] /= hd[i].ps[j].Mstar;
+		if (hd[i].ps[j].tot->M != 0)  hd[i].ps[j].tot->v2[k]  /= hd[i].ps[j].tot->M;
+		if (gi.gascontained && hd[i].ps[j].gas->M != 0)  hd[i].ps[j].gas->v2[k]  /= hd[i].ps[j].gas->M;
+		if (gi.darkcontained && hd[i].ps[j].dark->M != 0) hd[i].ps[j].dark->v2[k] /= hd[i].ps[j].dark->M;
+		if (gi.starcontained && hd[i].ps[j].star->M != 0) hd[i].ps[j].star->v2[k] /= hd[i].ps[j].star->M;
 		}
 	    for (k = 0; k < 3; k++) {
-		hd[i].ps[j].v2tot[k]  -= hd[i].ps[j].vtot[k]*hd[i].ps[j].vtot[k];
-		hd[i].ps[j].v2gas[k]  -= hd[i].ps[j].vgas[k]*hd[i].ps[j].vgas[k];
-		hd[i].ps[j].v2dark[k] -= hd[i].ps[j].vdark[k]*hd[i].ps[j].vdark[k];
-		hd[i].ps[j].v2star[k] -= hd[i].ps[j].vstar[k]*hd[i].ps[j].vstar[k];
+		hd[i].ps[j].tot->v2[k]  -= hd[i].ps[j].tot->v[k]*hd[i].ps[j].tot->v[k];
+		if (gi.gascontained) hd[i].ps[j].gas->v2[k]  -= hd[i].ps[j].gas->v[k]*hd[i].ps[j].gas->v[k];
+		if (gi.darkcontained) hd[i].ps[j].dark->v2[k] -= hd[i].ps[j].dark->v[k]*hd[i].ps[j].dark->v[k];
+		if (gi.starcontained) hd[i].ps[j].star->v2[k] -= hd[i].ps[j].star->v[k]*hd[i].ps[j].star->v[k];
 		}
-	    hd[i].ps[j].v2tot[3]  -= hd[i].ps[j].vtot[0]*hd[i].ps[j].vtot[1];
-	    hd[i].ps[j].v2tot[4]  -= hd[i].ps[j].vtot[0]*hd[i].ps[j].vtot[2];
-	    hd[i].ps[j].v2tot[5]  -= hd[i].ps[j].vtot[1]*hd[i].ps[j].vtot[2];
-	    hd[i].ps[j].v2gas[3]  -= hd[i].ps[j].vgas[0]*hd[i].ps[j].vgas[1];
-	    hd[i].ps[j].v2gas[4]  -= hd[i].ps[j].vgas[0]*hd[i].ps[j].vgas[2];
-	    hd[i].ps[j].v2gas[5]  -= hd[i].ps[j].vgas[1]*hd[i].ps[j].vgas[2];
-	    hd[i].ps[j].v2dark[3] -= hd[i].ps[j].vdark[0]*hd[i].ps[j].vdark[1];
-	    hd[i].ps[j].v2dark[4] -= hd[i].ps[j].vdark[0]*hd[i].ps[j].vdark[2];
-	    hd[i].ps[j].v2dark[5] -= hd[i].ps[j].vdark[1]*hd[i].ps[j].vdark[2];
-	    hd[i].ps[j].v2star[3] -= hd[i].ps[j].vstar[0]*hd[i].ps[j].vstar[1];
-	    hd[i].ps[j].v2star[4] -= hd[i].ps[j].vstar[0]*hd[i].ps[j].vstar[2];
-	    hd[i].ps[j].v2star[5] -= hd[i].ps[j].vstar[1]*hd[i].ps[j].vstar[2];
+	    hd[i].ps[j].tot->v2[3]  -= hd[i].ps[j].tot->v[0]*hd[i].ps[j].tot->v[1];
+	    hd[i].ps[j].tot->v2[4]  -= hd[i].ps[j].tot->v[0]*hd[i].ps[j].tot->v[2];
+	    hd[i].ps[j].tot->v2[5]  -= hd[i].ps[j].tot->v[1]*hd[i].ps[j].tot->v[2];
+	    if (gi.gascontained) {
+		hd[i].ps[j].gas->v2[3]  -= hd[i].ps[j].gas->v[0]*hd[i].ps[j].gas->v[1];
+		hd[i].ps[j].gas->v2[4]  -= hd[i].ps[j].gas->v[0]*hd[i].ps[j].gas->v[2];
+		hd[i].ps[j].gas->v2[5]  -= hd[i].ps[j].gas->v[1]*hd[i].ps[j].gas->v[2];
+		}
+	    if (gi.darkcontained) {
+		hd[i].ps[j].dark->v2[3] -= hd[i].ps[j].dark->v[0]*hd[i].ps[j].dark->v[1];
+		hd[i].ps[j].dark->v2[4] -= hd[i].ps[j].dark->v[0]*hd[i].ps[j].dark->v[2];
+		hd[i].ps[j].dark->v2[5] -= hd[i].ps[j].dark->v[1]*hd[i].ps[j].dark->v[2];
+		}
+	    if (gi.starcontained) {
+		hd[i].ps[j].star->v2[3] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[1];
+		hd[i].ps[j].star->v2[4] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[2];
+		hd[i].ps[j].star->v2[5] -= hd[i].ps[j].star->v[1]*hd[i].ps[j].star->v[2];
+		}
 	    }
 	for (j = 1; j < hd[i].NBin; j++) {
 	    for (k = 0; k < 3; k++) {
-		hd[i].ps[j].vtotsmooth[k] = (hd[i].ps[j-1].vtot[k]+hd[i].ps[j].vtot[k]+hd[i].ps[j+1].vtot[k])/3.0;
+		hd[i].ps[j].tot->vsmooth[k] = (hd[i].ps[j-1].tot->v[k]+hd[i].ps[j].tot->v[k]+hd[i].ps[j+1].tot->v[k])/3.0;
 		}
 	    }
 	/*
@@ -1658,10 +1780,10 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	for (j = 1; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].ro;
 	    radius[1] = hd[i].ps[j].ro;
-	    rhoenc[0] = 3*hd[i].ps[j-1].Menctot/(4*M_PI*hd[i].ps[j-1].ro*hd[i].ps[j-1].ro*hd[i].ps[j-1].ro);
-	    rhoenc[1] = 3*hd[i].ps[j].Menctot/(4*M_PI*hd[i].ps[j].ro*hd[i].ps[j].ro*hd[i].ps[j].ro);
-	    Menc[0] = hd[i].ps[j-1].Menctot;
-	    Menc[1] = hd[i].ps[j].Menctot;
+	    rhoenc[0] = 3*hd[i].ps[j-1].tot->Menc/(4*M_PI*hd[i].ps[j-1].ro*hd[i].ps[j-1].ro*hd[i].ps[j-1].ro);
+	    rhoenc[1] = 3*hd[i].ps[j].tot->Menc/(4*M_PI*hd[i].ps[j].ro*hd[i].ps[j].ro*hd[i].ps[j].ro);
+	    Menc[0] = hd[i].ps[j-1].tot->Menc;
+	    Menc[1] = hd[i].ps[j].tot->Menc;
 	    /*
 	    ** rbg & Mrbg
 	    */
@@ -1700,14 +1822,14 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    if ((hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro) && (hd[i].ps[j].rm <= gi.fincludermin*hd[i].ps[0].ro) && (hd[i].rstatic == 0)) {
 		NBin++;
-		vradmean += hd[i].ps[j].vtotsmooth[0];
-		vraddisp += pow(hd[i].ps[j].vtotsmooth[0],2);
+		vradmean += hd[i].ps[j].tot->vsmooth[0];
+		vraddisp += pow(hd[i].ps[j].tot->vsmooth[0],2);
 		hd[i].vradmean = vradmean/NBin;
 		hd[i].vraddisp = sqrt(vraddisp/NBin-pow(hd[i].vradmean,2));
 		barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
 		}
-	    vsigma[0] = (hd[i].ps[j-1].vtotsmooth[0]-hd[i].vradmean)/barrier;
-	    vsigma[1] = (hd[i].ps[j].vtotsmooth[0]-hd[i].vradmean)/barrier;
+	    vsigma[0] = (hd[i].ps[j-1].tot->vsmooth[0]-hd[i].vradmean)/barrier;
+	    vsigma[1] = (hd[i].ps[j].tot->vsmooth[0]-hd[i].vradmean)/barrier;
 	    /*
 	    ** Make sure vsigma[0] is on the other side of the barrier
 	    */
@@ -1729,7 +1851,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		Scheck = 0;
 		for (k = j; (hd[i].ps[k].rm <= gi.fcheckrstatic*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
-		    Qcomp = (hd[i].ps[k].vtotsmooth[0]-hd[i].vradmean)/barrier;
+		    Qcomp = (hd[i].ps[k].tot->vsmooth[0]-hd[i].vradmean)/barrier;
 		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
 		    }
 		if ((Scheck == Ncheck) && (rcheck > gi.fexcludermin*hd[i].ps[0].ro)) {
@@ -1745,15 +1867,15 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	Extreme = -1;
 	barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
 	for (j = hd[i].NBin; j > 0; j--) {
-	    Qcomp = (hd[i].ps[j].vtotsmooth[0]-hd[i].vradmean)/barrier;
+	    Qcomp = (hd[i].ps[j].tot->vsmooth[0]-hd[i].vradmean)/barrier;
 	    if ((fabs(Qcomp) > gi.fextremerstatic*gi.Nsigma) && (hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro)) Extreme = j;
 	    }
 	/*
 	** Get location where barrier is pierced
 	*/
 	for (j = Extreme; j > 0; j--) {
-	    vsigma[0] = (hd[i].ps[j-1].vtotsmooth[0]-hd[i].vradmean)/barrier;
-	    vsigma[1] = (hd[i].ps[j].vtotsmooth[0]-hd[i].vradmean)/barrier;
+	    vsigma[0] = (hd[i].ps[j-1].tot->vsmooth[0]-hd[i].vradmean)/barrier;
+	    vsigma[1] = (hd[i].ps[j].tot->vsmooth[0]-hd[i].vradmean)/barrier;
 	    /*
 	    ** Make sure vsigma[0] is on the other side of the barrier
 	    */
@@ -1770,14 +1892,14 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		if (hd[i].rstatic <= hd[i].ps[j-1].ro) {
 		    radius[0] = hd[i].ps[j-2].ro;
 		    radius[1] = hd[i].ps[j-1].ro;
-		    Menc[0] = hd[i].ps[j-2].Menctot;
-		    Menc[1] = hd[i].ps[j-1].Menctot;
+		    Menc[0] = hd[i].ps[j-2].tot->Menc;
+		    Menc[1] = hd[i].ps[j-1].tot->Menc;
 		    }
 		else {
 		    radius[0] = hd[i].ps[j-1].ro;
 		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].Menctot;
-		    Menc[1] = hd[i].ps[j].Menctot;
+		    Menc[0] = hd[i].ps[j-1].tot->Menc;
+		    Menc[1] = hd[i].ps[j].tot->Menc;
 		    }
 		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		d = log(hd[i].rstatic)-log(radius[0]);
@@ -1792,8 +1914,8 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
-	    logslope[0] = (log(hd[i].ps[j-1].Menctot)-log(hd[i].ps[j-2].Menctot))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
-	    logslope[1] = (log(hd[i].ps[j].Menctot)-log(hd[i].ps[j-1].Menctot))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
+	    logslope[0] = (log(hd[i].ps[j-1].tot->Menc)-log(hd[i].ps[j-2].tot->Menc))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
+	    logslope[1] = (log(hd[i].ps[j].tot->Menc)-log(hd[i].ps[j-1].tot->Menc))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
 	    slope = 3;
 	    if ((logslope[0] <= slope) && (logslope[1] > slope) && (hd[i].rminMenc == 0)) {
 		/*
@@ -1805,14 +1927,14 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		if (rcheck <= hd[i].ps[j-1].ro) {
 		    radius[0] = hd[i].ps[j-2].ro;
 		    radius[1] = hd[i].ps[j-1].ro;
-		    Menc[0] = hd[i].ps[j-2].Menctot;
-		    Menc[1] = hd[i].ps[j-1].Menctot;
+		    Menc[0] = hd[i].ps[j-2].tot->Menc;
+		    Menc[1] = hd[i].ps[j-1].tot->Menc;
 		    }
 		else {
 		    radius[0] = hd[i].ps[j-1].ro;
 		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].Menctot;
-		    Menc[1] = hd[i].ps[j].Menctot;
+		    Menc[0] = hd[i].ps[j-1].tot->Menc;
+		    Menc[1] = hd[i].ps[j].tot->Menc;
 		    }
 		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		d = log(rcheck)-log(radius[0]);
@@ -1825,7 +1947,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		Scheck = 0;
 		for (k = j; (hd[i].ps[k].ro <= gi.fchecktruncated*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
-		    Qcomp = hd[i].ps[k].Menctot/pow(hd[i].ps[k].ro,3);
+		    Qcomp = hd[i].ps[k].tot->Menc/pow(hd[i].ps[k].ro,3);
 		    if (Qcheck <= Qcomp) Scheck++;
 		    }
 		if ((Scheck == Ncheck) && (rcheck > gi.fexcludermin*hd[i].ps[0].ro)) {
@@ -1841,32 +1963,30 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	** of the density within rminMenc as rtrunc
 	*/
 	if (hd[i].truncated > 0) {
+	    rhotot = 0;
+	    rhogas = 0;
+	    rhodark = 0;
+	    rhostar = 0;
 	    rhototmin = 1e100;
+	    rhogasmin = 1e100;
 	    rhodarkmin = 1e100;
+	    rhostarmin = 1e100;
 	    for (j = hd[i].truncated; j > 0; j--) {
-		rhotot = hd[i].ps[j].Mtot/hd[i].ps[j].vol;
-		rhodark = hd[i].ps[j].Mdark/hd[i].ps[j].vol;
+		rhotot = hd[i].ps[j].tot->M/hd[i].ps[j].vol;
+		if (gi.gascontained) rhogas = hd[i].ps[j].gas->M/hd[i].ps[j].vol;
+		if (gi.darkcontained) rhodark = hd[i].ps[j].dark->M/hd[i].ps[j].vol;
+		if (gi.starcontained) rhostar = hd[i].ps[j].star->M/hd[i].ps[j].vol;
 		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j].ro > gi.fexcludermin*hd[i].ps[0].ro)) {
-		    if(rhotot < rhototmin) rhototmin = rhotot;
-		    if(rhodark < rhodarkmin) rhodarkmin = rhodark;
+		    if (rhotot < rhototmin) rhototmin = rhotot;
+		    if (gi.gascontained && rhogas < rhogasmin) rhogasmin = rhogas;
+		    if (gi.darkcontained && rhodark < rhodarkmin) rhodarkmin = rhodark;
+		    if (gi.starcontained && rhostar < rhostarmin) rhostarmin = rhostar;
 		    hd[i].rtrunc = hd[i].ps[j].ro;
-		    hd[i].Mrtrunc = hd[i].ps[j].Menctot;
+		    hd[i].Mrtrunc = hd[i].ps[j].tot->Menc;
 		    hd[i].rhobgtot = 0.5*(rhotot+rhototmin);
-		    hd[i].rhobgdark = 0.5*(rhodark+rhodarkmin);
- 		    hd[i].rhobggas   = hd[i].ps[j-1].Mgas/hd[i].ps[j-1].vol;
-		    hd[i].rhobggas  += hd[i].ps[j].Mgas/hd[i].ps[j].vol;
- 		    hd[i].rhobgstar  = hd[i].ps[j-1].Mstar/hd[i].ps[j-1].vol;
-		    hd[i].rhobgstar += hd[i].ps[j].Mstar/hd[i].ps[j].vol;
-		    if (j < hd[i].NBin) {
-			hd[i].rhobggas  += hd[i].ps[j+1].Mtot/hd[i].ps[j+1].vol;
-			hd[i].rhobggas  /= 3.0;
-			hd[i].rhobgstar += hd[i].ps[j+1].Mdark/hd[i].ps[j+1].vol;
-			hd[i].rhobgstar /= 3.0;
-			}
-		    else {
-			hd[i].rhobggas  /= 2.0;
-			hd[i].rhobgstar /= 2.0;
-			}
+		    if (gi.gascontained) hd[i].rhobggas = 0.5*(rhogas+rhogasmin);
+		    if (gi.darkcontained) hd[i].rhobgdark = 0.5*(rhodark+rhodarkmin);
+		    if (gi.starcontained) hd[i].rhobgstar = 0.5*(rhostar+rhostarmin);
 		    }
 		}
 	    }
@@ -1884,8 +2004,8 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	if (hd[i].truncated == 1) {
 	    hd[i].Mrtrunc -= hd[i].rhobgtot*4*M_PI*pow(hd[i].rtrunc,3)/3.0;
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
-		hd[i].ps[j].Menctotremove  -= hd[i].rhobgtot*4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
-		hd[i].ps[j].Mencdarkremove -= hd[i].rhobgdark*4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
+		hd[i].ps[j].tot->Mencremove  -= hd[i].rhobgtot*4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
+		hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
 		}
 	    }
 	/*
@@ -1902,8 +2022,8 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	    */
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
-	    logslope[0] = (log(hd[i].ps[j-1].Menctotremove)-log(hd[i].ps[j-2].Menctotremove))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
-	    logslope[1] = (log(hd[i].ps[j].Menctotremove)-log(hd[i].ps[j-1].Menctotremove))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
+	    logslope[0] = (log(hd[i].ps[j-1].tot->Mencremove)-log(hd[i].ps[j-2].tot->Mencremove))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
+	    logslope[1] = (log(hd[i].ps[j].tot->Mencremove)-log(hd[i].ps[j-1].tot->Mencremove))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
 	    slope = 1;
 	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxtot == 0)) {
 		/*
@@ -1915,14 +2035,14 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		if (rcheck <= hd[i].ps[j-1].ro) {
 		    radius[0] = hd[i].ps[j-2].ro;
 		    radius[1] = hd[i].ps[j-1].ro;
-		    Menc[0] = hd[i].ps[j-2].Menctotremove;
-		    Menc[1] = hd[i].ps[j-1].Menctotremove;
+		    Menc[0] = hd[i].ps[j-2].tot->Mencremove;
+		    Menc[1] = hd[i].ps[j-1].tot->Mencremove;
 		    }
 		else {
 		    radius[0] = hd[i].ps[j-1].ro;
 		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].Menctotremove;
-		    Menc[1] = hd[i].ps[j].Menctotremove;
+		    Menc[0] = hd[i].ps[j-1].tot->Mencremove;
+		    Menc[1] = hd[i].ps[j].tot->Mencremove;
 		    }
 		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		d = log(rcheck)-log(radius[0]);
@@ -1935,7 +2055,7 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 		Scheck = 0;
 		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
-		    Qcomp = hd[i].ps[k].Menctotremove/hd[i].ps[k].ro;
+		    Qcomp = hd[i].ps[k].tot->Mencremove/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
 		if ((Scheck == Ncheck) && (rcheck <= rmax)) {
@@ -1946,50 +2066,52 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	    /*
 	    ** Dark matter only
 	    */
-	    radius[0] = hd[i].ps[j-1].rm;
-	    radius[1] = hd[i].ps[j].rm;
-	    logslope[0] = (log(hd[i].ps[j-1].Mencdarkremove)-log(hd[i].ps[j-2].Mencdarkremove))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
-	    logslope[1] = (log(hd[i].ps[j].Mencdarkremove)-log(hd[i].ps[j-1].Mencdarkremove))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
-	    slope = 1;
-	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxdark == 0)) {
-		/*
-		** Calculate rcheck & Mrcheck
-		*/
-		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
-		d = slope-logslope[0];
-		rcheck = exp(log(radius[0])+m*d);
-		if (rcheck <= hd[i].ps[j-1].ro) {
-		    radius[0] = hd[i].ps[j-2].ro;
-		    radius[1] = hd[i].ps[j-1].ro;
-		    Menc[0] = hd[i].ps[j-2].Mencdarkremove;
-		    Menc[1] = hd[i].ps[j-1].Mencdarkremove;
+	    if (gi.darkcontained) {
+		radius[0] = hd[i].ps[j-1].rm;
+		radius[1] = hd[i].ps[j].rm;
+		logslope[0] = (log(hd[i].ps[j-1].dark->Mencremove)-log(hd[i].ps[j-2].dark->Mencremove))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
+		logslope[1] = (log(hd[i].ps[j].dark->Mencremove)-log(hd[i].ps[j-1].dark->Mencremove))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
+		slope = 1;
+		if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxdark == 0)) {
+		    /*
+		    ** Calculate rcheck & Mrcheck
+		    */
+		    m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
+		    d = slope-logslope[0];
+		    rcheck = exp(log(radius[0])+m*d);
+		    if (rcheck <= hd[i].ps[j-1].ro) {
+			radius[0] = hd[i].ps[j-2].ro;
+			radius[1] = hd[i].ps[j-1].ro;
+			Menc[0] = hd[i].ps[j-2].dark->Mencremove;
+			Menc[1] = hd[i].ps[j-1].dark->Mencremove;
+			}
+		    else {
+			radius[0] = hd[i].ps[j-1].ro;
+			radius[1] = hd[i].ps[j].ro;
+			Menc[0] = hd[i].ps[j-1].dark->Mencremove;
+			Menc[1] = hd[i].ps[j].dark->Mencremove;
+			}
+		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		    d = log(rcheck)-log(radius[0]);
+		    Mrcheck = exp(log(Menc[0])+m*d);
+		    /*
+		    ** Check criteria
+		    */
+		    Qcheck = Mrcheck/rcheck;
+		    Ncheck = 0;
+		    Scheck = 0;
+		    for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
+			Ncheck++;
+			Qcomp = hd[i].ps[k].dark->Mencremove/hd[i].ps[k].ro;
+			if (Qcheck >= Qcomp) Scheck++;
+			}
+		    if ((Scheck == Ncheck) && (rcheck <= rmax)) {
+			hd[i].rvcmaxdark = rcheck;
+			hd[i].Mrvcmaxdark = Mrcheck;
+			}
 		    }
-		else {
-		    radius[0] = hd[i].ps[j-1].ro;
-		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].Mencdarkremove;
-		    Menc[1] = hd[i].ps[j].Mencdarkremove;
-		    }
-		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		d = log(rcheck)-log(radius[0]);
-		Mrcheck = exp(log(Menc[0])+m*d);
-		/*
-		** Check criteria
-		*/
-		Qcheck = Mrcheck/rcheck;
-		Ncheck = 0;
-		Scheck = 0;
-		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
-		    Ncheck++;
-		    Qcomp = hd[i].ps[k].Mencdarkremove/hd[i].ps[k].ro;
-		    if (Qcheck >= Qcomp) Scheck++;
-		    }
-		if ((Scheck == Ncheck) && (rcheck <= rmax)) {
-		    hd[i].rvcmaxdark = rcheck;
-		    hd[i].Mrvcmaxdark = Mrcheck;
-		    }
+		if ((hd[i].rvcmaxtot != 0) && (hd[i].rvcmaxdark != 0)) break;
 		}
-	    if ((hd[i].rvcmaxtot != 0) && (hd[i].rvcmaxdark != 0)) break;
 	    }
 	}
     }
@@ -2023,25 +2145,25 @@ void write_output(HALO_DATA *hd, GI gi) {
 	for (j = 0; j < (hd[i].NBin+1); j++) {
 	    fprintf(profilesfile,"%d ",hd[i].ID);
 	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Mtot,hd[i].ps[j].Mgas,hd[i].ps[j].Mdark,hd[i].ps[j].Mstar);
-	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Menctot,hd[i].ps[j].Mencgas,hd[i].ps[j].Mencdark,hd[i].ps[j].Mencstar);
-	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Mtot/hd[i].ps[j].vol,hd[i].ps[j].Mgas/hd[i].ps[j].vol,hd[i].ps[j].Mdark/hd[i].ps[j].vol,hd[i].ps[j].Mstar/hd[i].ps[j].vol);
-	    fprintf(profilesfile,"%ld %ld %ld %ld ",hd[i].ps[j].Ntot,hd[i].ps[j].Ngas,hd[i].ps[j].Ndark,hd[i].ps[j].Nstar);
-	    fprintf(profilesfile,"%ld %ld %ld %ld ",hd[i].ps[j].Nenctot,hd[i].ps[j].Nencgas,hd[i].ps[j].Nencdark,hd[i].ps[j].Nencstar);
-	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].Ntot/hd[i].ps[j].vol,hd[i].ps[j].Ngas/hd[i].ps[j].vol,hd[i].ps[j].Ndark/hd[i].ps[j].vol,hd[i].ps[j].Nstar/hd[i].ps[j].vol);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vtot[k]);
-	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2tot[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vgas[k]);
-	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2gas[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vdark[k]);
-	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2dark[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vstar[k]);
-	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].v2star[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].vtotsmooth[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].Ltot[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].Lgas[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].Ldark[k]);
-	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].Lstar[k]);
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].tot->M,hd[i].ps[j].gas->M,hd[i].ps[j].dark->M,hd[i].ps[j].star->M);
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].tot->Menc,hd[i].ps[j].gas->Menc,hd[i].ps[j].dark->Menc,hd[i].ps[j].star->Menc);
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].tot->M/hd[i].ps[j].vol,hd[i].ps[j].gas->M/hd[i].ps[j].vol,hd[i].ps[j].dark->M/hd[i].ps[j].vol,hd[i].ps[j].star->M/hd[i].ps[j].vol);
+	    fprintf(profilesfile,"%ld %ld %ld %ld ",hd[i].ps[j].tot->N,hd[i].ps[j].gas->N,hd[i].ps[j].dark->N,hd[i].ps[j].star->N);
+	    fprintf(profilesfile,"%ld %ld %ld %ld ",hd[i].ps[j].tot->Nenc,hd[i].ps[j].gas->Nenc,hd[i].ps[j].dark->Nenc,hd[i].ps[j].star->Nenc);
+	    fprintf(profilesfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].tot->N/hd[i].ps[j].vol,hd[i].ps[j].gas->N/hd[i].ps[j].vol,hd[i].ps[j].dark->N/hd[i].ps[j].vol,hd[i].ps[j].star->N/hd[i].ps[j].vol);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].tot->v[k]);
+	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].tot->v2[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].gas->v[k]);
+	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].gas->v2[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].dark->v[k]);
+	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].dark->v2[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].star->v[k]);
+	    for (k = 0; k < 6; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].star->v2[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].tot->vsmooth[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].tot->L[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].gas->L[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].dark->L[k]);
+	    for (k = 0; k < 3; k++) fprintf(profilesfile,"%.6e ",hd[i].ps[j].star->L[k]);
 	    fprintf(profilesfile,"\n");
 	    }
 	}
