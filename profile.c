@@ -2147,14 +2147,14 @@ void write_output(HALO_DATA *hd, GI gi) {
     fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mtot/6 Menctot/7 rhoMtot/8 Ntot/9 Nenctot/10 rhoNtot/11 vtotrad/12 vtotphi/13 vtottheta/14 v2totradrad/15 v2totphiphi/16 v2totthetatheta/17 v2totradphi/18 v2totradtheta/19 v2totphitheta/20 Ltotx/21 Ltoty/22 Ltotz/23 vtotsmoothrad/24 vtotsmoothphi/25 vtotsmooththeta/26\n");
     for (i = 0; i < gi.NHalo; i++) {
 	for (j = 0; j < (hd[i].NBin+1); j++) {
-	    fprintf(outputfile,"%d ",hd[i].ID);
-	    fprintf(outputfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-	    fprintf(outputfile,"%.6e %.6e %.6e ",hd[i].ps[j].tot->M,hd[i].ps[j].tot->Menc,hd[i].ps[j].tot->M/hd[i].ps[j].vol);
-	    fprintf(outputfile,"%ld %ld %.6e ",hd[i].ps[j].tot->N,hd[i].ps[j].tot->Nenc,hd[i].ps[j].tot->N/hd[i].ps[j].vol);
-	    for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].tot->v[k]);
-	    for (k = 0; k < 6; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].tot->v2[k]);
-	    for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].tot->L[k]);
-	    for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].tot->vsmooth[k]);
+	    fprintf(outputfile,"%d",hd[i].ID);
+	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
+	    fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].tot->M,hd[i].ps[j].tot->Menc,hd[i].ps[j].tot->M/hd[i].ps[j].vol);
+	    fprintf(outputfile," %ld %ld %.6e",hd[i].ps[j].tot->N,hd[i].ps[j].tot->Nenc,hd[i].ps[j].tot->N/hd[i].ps[j].vol);
+	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->v[k]);
+	    for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->v2[k]);
+	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->L[k]);
+	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->vsmooth[k]);
 	    fprintf(outputfile,"\n");
 	    }
 	}
@@ -2169,13 +2169,13 @@ void write_output(HALO_DATA *hd, GI gi) {
 	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mgas/6 Mencgas/7 rhoMgas/8 Ngas/9 Nencgas/10 rhoNgas/11 vgasrad/12 vgasphi/13 vgastheta/14 v2gasradrad/15 v2gasphiphi/16 v2gasthetatheta/17 v2gasradphi/18 v2gasradtheta/19 v2gasphitheta/20 Lgasx/21 Lgasy/22 Lgasz/23\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
-		fprintf(outputfile,"%d ",hd[i].ID);
-		fprintf(outputfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-		fprintf(outputfile,"%.6e %.6e %.6e ",hd[i].ps[j].gas->M,hd[i].ps[j].gas->Menc,hd[i].ps[j].gas->M/hd[i].ps[j].vol);
-		fprintf(outputfile,"%ld %ld %.6e ",hd[i].ps[j].gas->N,hd[i].ps[j].gas->Nenc,hd[i].ps[j].gas->N/hd[i].ps[j].vol);
-		for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].gas->v[k]);
-		for (k = 0; k < 6; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].gas->v2[k]);
-		for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].gas->L[k]);
+		fprintf(outputfile,"%d",hd[i].ID);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->M,hd[i].ps[j].gas->Menc,hd[i].ps[j].gas->M/hd[i].ps[j].vol);
+		fprintf(outputfile," %ld %ld %.6e",hd[i].ps[j].gas->N,hd[i].ps[j].gas->Nenc,hd[i].ps[j].gas->N/hd[i].ps[j].vol);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->v[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->v2[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->L[k]);
 		fprintf(outputfile,"\n");
 		}
 	    }
@@ -2191,13 +2191,13 @@ void write_output(HALO_DATA *hd, GI gi) {
 	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mdark/6 Mencdark/7 rhoMdark/8 Ndark/9 Nencdark/10 rhoNdark/11 vdarkrad/12 vdarkphi/13 vdarktheta/14 v2darkradrad/15 v2darkphiphi/16 v2darkthetatheta/17 v2darkradphi/18 v2darkradtheta/19 v2darkphitheta/20 Ldarkx/21 Ldarky/22 Ldarkz/23\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
-		fprintf(outputfile,"%d ",hd[i].ID);
-		fprintf(outputfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-		fprintf(outputfile,"%.6e %.6e %.6e ",hd[i].ps[j].dark->M,hd[i].ps[j].dark->Menc,hd[i].ps[j].dark->M/hd[i].ps[j].vol);
-		fprintf(outputfile,"%ld %ld %.6e ",hd[i].ps[j].dark->N,hd[i].ps[j].dark->Nenc,hd[i].ps[j].dark->N/hd[i].ps[j].vol);
-		for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].dark->v[k]);
-		for (k = 0; k < 6; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].dark->v2[k]);
-		for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].dark->L[k]);
+		fprintf(outputfile,"%d",hd[i].ID);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].dark->M,hd[i].ps[j].dark->Menc,hd[i].ps[j].dark->M/hd[i].ps[j].vol);
+		fprintf(outputfile," %ld %ld %.6e",hd[i].ps[j].dark->N,hd[i].ps[j].dark->Nenc,hd[i].ps[j].dark->N/hd[i].ps[j].vol);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->v[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->v2[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->L[k]);
 		fprintf(outputfile,"\n");
 		}
 	    }
@@ -2213,13 +2213,13 @@ void write_output(HALO_DATA *hd, GI gi) {
 	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mstar/6 Mencstar/7 rhoMstar/8 Nstar/9 Nencstar/10 rhoNstar/11 vstarrad/12 vstarphi/13 vstartheta/14 v2starradrad/15 v2starphiphi/16 v2starthetatheta/17 v2starradphi/18 v2starradtheta/19 v2starphitheta/20 Lstarx/21 Lstary/22 Lstarz/23\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
-		fprintf(outputfile,"%d ",hd[i].ID);
-		fprintf(outputfile,"%.6e %.6e %.6e %.6e ",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-		fprintf(outputfile,"%.6e %.6e %.6e ",hd[i].ps[j].star->M,hd[i].ps[j].star->Menc,hd[i].ps[j].star->M/hd[i].ps[j].vol);
-		fprintf(outputfile,"%ld %ld %.6e ",hd[i].ps[j].star->N,hd[i].ps[j].star->Nenc,hd[i].ps[j].star->N/hd[i].ps[j].vol);
-		for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].star->v[k]);
-		for (k = 0; k < 6; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].star->v2[k]);
-		for (k = 0; k < 3; k++) fprintf(outputfile,"%.6e ",hd[i].ps[j].star->L[k]);
+		fprintf(outputfile,"%d",hd[i].ID);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].star->M,hd[i].ps[j].star->Menc,hd[i].ps[j].star->M/hd[i].ps[j].vol);
+		fprintf(outputfile," %ld %ld %.6e",hd[i].ps[j].star->N,hd[i].ps[j].star->Nenc,hd[i].ps[j].star->N/hd[i].ps[j].vol);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->v[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->v2[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->L[k]);
 		fprintf(outputfile,"\n");
 		}
 	    }
