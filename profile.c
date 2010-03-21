@@ -24,11 +24,11 @@ typedef struct profile_tot_properties {
     long int Nenc;
     double M;
     double Menc;
-    double Mencremove;
     double v[3];
-    double vsmooth[3];
     double v2[6];
     double L[3];
+    double Mencremove;
+    double vsmooth[3];
     } PTP;
 
 typedef struct profile_gas_properties {
@@ -48,10 +48,10 @@ typedef struct profile_dark_properties {
     long int Nenc;
     double M;
     double Menc;
-    double Mencremove;
     double v[3];
     double v2[6];
     double L[3];
+    double Mencremove;
     } PDP;
 
 typedef struct profile_star_properties {
@@ -152,11 +152,12 @@ void calculate_densities(GI *);
 void read_halocatalogue_ascii_generic(GI *, HALO_DATA **);
 void read_halocatalogue_ascii_6DFOF(GI *, HALO_DATA **);
 void initialise_halo_profile (HALO_DATA *);
-void put_pgp_in_bins(HALO_DATA *, PROFILE_GAS_PARTICLE *, GI);
-void put_pdp_in_bins(HALO_DATA *, PROFILE_DARK_PARTICLE *, GI);
-void put_psp_in_bins(HALO_DATA *, PROFILE_STAR_PARTICLE *, GI);
-void calculate_halo_properties(HALO_DATA *, GI);
-void write_output(HALO_DATA *, GI);
+void put_pgp_in_bins(GI, HALO_DATA *, PROFILE_GAS_PARTICLE *);
+void put_pdp_in_bins(GI, HALO_DATA *, PROFILE_DARK_PARTICLE *);
+void put_psp_in_bins(GI, HALO_DATA *, PROFILE_STAR_PARTICLE *);
+void calculate_total_matter_distribution(GI, HALO_DATA *);
+void calculate_halo_properties(GI, HALO_DATA *);
+void write_output(GI, HALO_DATA *);
 
 int main(int argc, char **argv) {
 
@@ -634,7 +635,7 @@ int main(int argc, char **argv) {
 		** Block is full or we reached end of gas particles
 		*/
 		gi.Nparticleinblockgas = Icurrentblockgas;
-		put_pgp_in_bins(hd,pgp,gi);
+		put_pgp_in_bins(gi,hd,pgp);
 		Icurrentblockgas = 0;
 		}
 	    }
@@ -672,7 +673,7 @@ int main(int argc, char **argv) {
 		** Block is full or we reached end of dark matter particles
 		*/
 		gi.Nparticleinblockdark = Icurrentblockdark;
-		put_pdp_in_bins(hd,pdp,gi);
+		put_pdp_in_bins(gi,hd,pdp);
 		Icurrentblockdark = 0;
 		}
 	    }
@@ -710,7 +711,7 @@ int main(int argc, char **argv) {
 		** Block is full or we reached end of star matter particles
 		*/
 		gi.Nparticleinblockstar = Icurrentblockstar;
-		put_psp_in_bins(hd,psp,gi);
+		put_psp_in_bins(gi,hd,psp);
 		Icurrentblockstar = 0;
 		}
 	    }
@@ -805,7 +806,7 @@ int main(int argc, char **argv) {
 			    ** Block is full or we reached end of gas particles
 			    */
 			    gi.Nparticleinblockgas = Icurrentblockgas;
-			    put_pgp_in_bins(hd,pgp,gi);
+			    put_pgp_in_bins(gi,hd,pgp);
 			    Icurrentblockgas = 0;
 			    }
 			}
@@ -893,7 +894,7 @@ int main(int argc, char **argv) {
 			    ** Block is full or we reached end of dark matter particles
 			    */
 			    gi.Nparticleinblockdark = Icurrentblockdark;
-			    put_pdp_in_bins(hd,pdp,gi);
+			    put_pdp_in_bins(gi,hd,pdp);
 			    Icurrentblockdark = 0;
 			    }
 			}
@@ -920,7 +921,7 @@ int main(int argc, char **argv) {
 			    ** Block is full or we reached end of star particles
 			    */
 			    gi.Nparticleinblockstar = Icurrentblockstar;
-			    put_psp_in_bins(hd,psp,gi);
+			    put_psp_in_bins(gi,hd,psp);
 			    Icurrentblockstar = 0;
 			    }
 			}
@@ -938,16 +939,22 @@ int main(int argc, char **argv) {
 	}
 
     /*
+    ** Calculate total matter distribution
+    */
+
+    calculate_total_matter_distribution(gi,hd);
+
+    /*
     ** Calculate halo properties
     */
 
-    calculate_halo_properties(hd,gi); 
+    calculate_halo_properties(gi,hd); 
 
     /*
     ** Write output
     */
 
-    write_output(hd,gi);
+    write_output(gi,hd);
 
     /*
     ** Some more output if desired
@@ -1125,7 +1132,7 @@ void usage(void) {
     fprintf(stderr,"-starpropertiesfile <name>           : star properties file in ART native binary format\n");
     fprintf(stderr,"-gasfile <name>                      : gas file in ART native binary format\n");
     fprintf(stderr,"-halocatalogue <name>                : halo catalouge file\n");
-    fprintf(stderr,"-output <name>                       : name of output files (endings .statistics and .profiles appended)\n");
+    fprintf(stderr,"-output <name>                       : name of output files (endings .characteristics and .profiles.type appended)\n");
     fprintf(stderr,"-v                                   : more informative output to screen\n");
     fprintf(stderr,"\n");
     exit(1);
@@ -1517,7 +1524,7 @@ void initialise_halo_profile (HALO_DATA *hd){
 	}
     }
 
-void put_pgp_in_bins(HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp, GI gi) {
+void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 
     int i, j, k, l;
     double r[3], v[3], vproj[3];
@@ -1545,25 +1552,15 @@ void put_pgp_in_bins(HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp, GI gi) {
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			hd[j].ps[l].tot->N++;
 			hd[j].ps[l].gas->N++;
-			hd[j].ps[l].tot->M += pgp[i].mass;
 			hd[j].ps[l].gas->M += pgp[i].mass;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].tot->v[k]  += pgp[i].mass*vproj[k];
 			    hd[j].ps[l].gas->v[k]  += pgp[i].mass*vproj[k];
-			    hd[j].ps[l].tot->v2[k] += pgp[i].mass*vproj[k]*vproj[k];
 			    hd[j].ps[l].gas->v2[k] += pgp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].tot->v2[3] += pgp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].tot->v2[4] += pgp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].tot->v2[5] += pgp[i].mass*vproj[1]*vproj[2];
 			hd[j].ps[l].gas->v2[3] += pgp[i].mass*vproj[0]*vproj[1];
 			hd[j].ps[l].gas->v2[4] += pgp[i].mass*vproj[0]*vproj[2];
 			hd[j].ps[l].gas->v2[5] += pgp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].tot->L[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].tot->L[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].tot->L[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
 			hd[j].ps[l].gas->L[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
 			hd[j].ps[l].gas->L[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
 			hd[j].ps[l].gas->L[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
@@ -1575,7 +1572,7 @@ void put_pgp_in_bins(HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp, GI gi) {
 	}
     }
 
-void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, GI gi) {
+void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 
     int i, j, k, l;
     double r[3], v[3], vproj[3];
@@ -1603,25 +1600,15 @@ void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, GI gi) {
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			hd[j].ps[l].tot->N++;
 			hd[j].ps[l].dark->N++;
-			hd[j].ps[l].tot->M += pdp[i].mass;
 			hd[j].ps[l].dark->M += pdp[i].mass;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].tot->v[k]   += pdp[i].mass*vproj[k];
 			    hd[j].ps[l].dark->v[k]  += pdp[i].mass*vproj[k];
-			    hd[j].ps[l].tot->v2[k]  += pdp[i].mass*vproj[k]*vproj[k];
 			    hd[j].ps[l].dark->v2[k] += pdp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].tot->v2[3]  += pdp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].tot->v2[4]  += pdp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].tot->v2[5]  += pdp[i].mass*vproj[1]*vproj[2];
 			hd[j].ps[l].dark->v2[3] += pdp[i].mass*vproj[0]*vproj[1];
 			hd[j].ps[l].dark->v2[4] += pdp[i].mass*vproj[0]*vproj[2];
 			hd[j].ps[l].dark->v2[5] += pdp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].tot->L[0]   += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].tot->L[1]   += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].tot->L[2]   += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
 			hd[j].ps[l].dark->L[0]  += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
 			hd[j].ps[l].dark->L[1]  += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
 			hd[j].ps[l].dark->L[2]  += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
@@ -1633,7 +1620,7 @@ void put_pdp_in_bins(HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, GI gi) {
 	}
     }
 
-void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, GI gi) {
+void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 
     int i, j, k, l;
     double r[3], v[3], vproj[3];
@@ -1661,25 +1648,15 @@ void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, GI gi) {
 			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			hd[j].ps[l].tot->N++;
 			hd[j].ps[l].star->N++;
-			hd[j].ps[l].tot->M += psp[i].mass;
 			hd[j].ps[l].star->M += psp[i].mass;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].tot->v[k]   += psp[i].mass*vproj[k];
 			    hd[j].ps[l].star->v[k]  += psp[i].mass*vproj[k];
-			    hd[j].ps[l].tot->v2[k]  += psp[i].mass*vproj[k]*vproj[k];
 			    hd[j].ps[l].star->v2[k] += psp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].tot->v2[3]  += psp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].tot->v2[4]  += psp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].tot->v2[5]  += psp[i].mass*vproj[1]*vproj[2];
 			hd[j].ps[l].star->v2[3] += psp[i].mass*vproj[0]*vproj[1];
 			hd[j].ps[l].star->v2[4] += psp[i].mass*vproj[0]*vproj[2];
 			hd[j].ps[l].star->v2[5] += psp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].tot->L[0]   += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].tot->L[1]   += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].tot->L[2]   += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
 			hd[j].ps[l].star->L[0]  += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
 			hd[j].ps[l].star->L[1]  += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
 			hd[j].ps[l].star->L[2]  += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
@@ -1691,7 +1668,50 @@ void put_psp_in_bins(HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, GI gi) {
 	}
     }
 
-void calculate_halo_properties(HALO_DATA *hd, GI gi) {
+void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
+
+    int i, j, k;
+
+    for (i = 0; i < gi.NHalo; i++) {
+	for (j = 0; j < hd[i].NBin+1; j++) {
+	    if (gi.gascontained) {
+		hd[i].ps[j].tot->N += hd[i].ps[j].gas->N;
+		hd[i].ps[j].tot->M += hd[i].ps[j].gas->M;
+		for (k = 0; k < 3; k++) {
+		    hd[i].ps[j].tot->v[k] += hd[i].ps[j].gas->v[k];
+		    hd[i].ps[j].tot->L[k] += hd[i].ps[j].gas->L[k];
+		    }
+		for (k = 0; k < 6; k++) {
+		    hd[i].ps[j].tot->v2[k] += hd[i].ps[j].gas->v2[k];
+		    }
+		}
+	    if (gi.darkcontained) {
+		hd[i].ps[j].tot->N += hd[i].ps[j].dark->N;
+		hd[i].ps[j].tot->M += hd[i].ps[j].dark->M;
+		for (k = 0; k < 3; k++) {
+		    hd[i].ps[j].tot->v[k] += hd[i].ps[j].dark->v[k];
+		    hd[i].ps[j].tot->L[k] += hd[i].ps[j].dark->L[k];
+		    }
+		for (k = 0; k < 6; k++) {
+		    hd[i].ps[j].tot->v2[k] += hd[i].ps[j].dark->v2[k];
+		    }
+		}
+	    if (gi.starcontained) {
+		hd[i].ps[j].tot->N += hd[i].ps[j].star->N;
+		hd[i].ps[j].tot->M += hd[i].ps[j].star->M;
+		for (k = 0; k < 3; k++) {
+		    hd[i].ps[j].tot->v[k] += hd[i].ps[j].star->v[k];
+		    hd[i].ps[j].tot->L[k] += hd[i].ps[j].star->L[k];
+		    }
+		for (k = 0; k < 6; k++) {
+		    hd[i].ps[j].tot->v2[k] += hd[i].ps[j].star->v2[k];
+		    }
+		}
+	    }
+	}
+    }
+
+void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 
     int i, j, k;
     int Ncheck, Scheck, NBin, Extreme;
@@ -2116,16 +2136,16 @@ void calculate_halo_properties(HALO_DATA *hd, GI gi) {
 	}
     }
 
-void write_output(HALO_DATA *hd, GI gi) {
+void write_output(GI gi, HALO_DATA *hd) {
 
     int i, j, k;
     char outputfilename[256];
     FILE *outputfile;
 
     /*
-    ** Statistics
+    ** Characteristics
     */
-    sprintf(outputfilename,"%s.statistics",gi.OutputName);
+    sprintf(outputfilename,"%s.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
     fprintf(outputfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rstatic/8 Mrstatic/9 rvcmaxtot/10 Mrvcmaxtot/11 rvcmaxdark/12 Mrvcmaxdark/13 rtrunc/14 Mrtrunc/15 rbg/16 Mrbg/17 rcrit/18 Mrcrit/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 rminMenc/24 vradmean/25 vraddisp/26 truncated/27\n");
