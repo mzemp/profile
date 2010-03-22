@@ -25,10 +25,10 @@ typedef struct profile_tot_properties {
     double M;
     double Menc;
     double v[3];
-    double v2[6];
+    double vdt[6];
     double L[3];
     double Mencremove;
-    double vsmooth[3];
+    double vradsmooth;
     } PTP;
 
 typedef struct profile_gas_properties {
@@ -38,7 +38,7 @@ typedef struct profile_gas_properties {
     double M;
     double Menc;
     double v[3];
-    double v2[6];
+    double vdt[6];
     double L[3];
     } PGP;
 
@@ -49,7 +49,7 @@ typedef struct profile_dark_properties {
     double M;
     double Menc;
     double v[3];
-    double v2[6];
+    double vdt[6];
     double L[3];
     double Mencremove;
     } PDP;
@@ -61,7 +61,7 @@ typedef struct profile_star_properties {
     double M;
     double Menc;
     double v[3];
-    double v2[6];
+    double vdt[6];
     double L[3];
     } PSP;
 
@@ -70,7 +70,8 @@ typedef struct profile_structure {
     double ri;
     double rm;
     double ro;
-    double vol;
+    double V;
+    double Venc;
     PTP *tot;
     PGP *gas;
     PDP *dark;
@@ -124,6 +125,7 @@ typedef struct profile_star_particle {
 typedef struct general_info {
 
     int centretype;
+    int velocityprojection;
     int rmaxfromhalocatalogue;
     int gascontained, darkcontained, starcontained;
     int NBin;
@@ -253,16 +255,24 @@ int main(int argc, char **argv) {
 	    gi.NBin = atoi(argv[i]);
 	    i++;
 	    }
-        else if (strcmp(argv[i],"-com") == 0) {
+        else if (strcmp(argv[i],"-ctcom") == 0) {
             gi.centretype = 0;
             i++;
             }
-        else if (strcmp(argv[i],"-potmin") == 0) {
+        else if (strcmp(argv[i],"-ctpotmin") == 0) {
             gi.centretype = 1;
             i++;
             }
-        else if (strcmp(argv[i],"-denmax") == 0) {
+        else if (strcmp(argv[i],"-ctdenmax") == 0) {
             gi.centretype = 2;
+            i++;
+            }
+        else if (strcmp(argv[i],"-vpaxes") == 0) {
+            gi.velocityprojection = 0;
+            i++;
+            }
+        else if (strcmp(argv[i],"-vpspherical") == 0) {
+            gi.velocityprojection = 1;
             i++;
             }
         else if (strcmp(argv[i],"-rmaxfromhalocatalogue") == 0) {
@@ -1044,6 +1054,7 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Used values:\n\n");
         fprintf(stderr,"Data format:          : %s\n",(dataformat == 0)?"Tipsy":"ART");
         fprintf(stderr,"Halocatalogue format  : %s\n",(halocatalogueformat == 0)?"generic":"6DFOF");
+        fprintf(stderr,"Velocity projection   : %s\n",(gi.velocityprojection == 0)?"coordinate axes":"spherical");
         fprintf(stderr,"Delta_bg              : %.6e\n",gi.Deltabg);
         fprintf(stderr,"Delta_crit            : %.6e\n",gi.Deltacrit);
 	fprintf(stderr,"rhoenc_bg             : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
@@ -1098,9 +1109,11 @@ void usage(void) {
     fprintf(stderr,"-rmin <value>                        : minimum grid radius (physical) [LU] (default: not set)\n");
     fprintf(stderr,"-rmax <value>                        : maximum grid radius (physical) [LU] (default: not set)\n");
     fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax (default: not set)\n");
-    fprintf(stderr,"-com                                 : set this flag for centre-of-mass centres from 6DFOF file\n");
-    fprintf(stderr,"-potmin                              : set this flag for potmin centres from 6DFOF file\n");
-    fprintf(stderr,"-denmax                              : set this flag for denmax centres from 6DFOF file (default)\n");
+    fprintf(stderr,"-ctcom                               : set this flag for centre-of-mass centres from 6DFOF file\n");
+    fprintf(stderr,"-ctpotmin                            : set this flag for potmin centres from 6DFOF file\n");
+    fprintf(stderr,"-ctdenmax                            : set this flag for denmax centres from 6DFOF file (default)\n");
+    fprintf(stderr,"-vpaxes                              : set this flag for velocity projection along coordinate axes (default)\n");
+    fprintf(stderr,"-vpspherical                         : set this flag for velocity projection in spherical coordinates\n");
     fprintf(stderr,"-binfactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5)\n");
     fprintf(stderr,"-rmaxfromhalocatalogue               : set this flag for rmax determined from 6DFOF file\n");
     fprintf(stderr,"-OmegaM0 <value>                     : OmegaM0 value (default: 0) [only necessary for Tipsy format]\n");
@@ -1157,6 +1170,7 @@ void set_default_values_general_info(GI *gi) {
     gi->cosmous.rhocrit0 = 0;
 
     gi->centretype = 0;
+    gi->velocityprojection = 0;
     gi->rmaxfromhalocatalogue = 0;
     gi->gascontained = 0;
     gi->darkcontained = 0;
@@ -1464,13 +1478,13 @@ void initialise_halo_profile (HALO_DATA *hd){
 	hd->ps[j].tot->M = 0;
 	hd->ps[j].tot->Menc = 0;
 	hd->ps[j].tot->Mencremove = 0;
+	hd->ps[j].tot->vradsmooth = 0;
 	for (k = 0; k < 3; k++) {
 	    hd->ps[j].tot->v[k] = 0;
-	    hd->ps[j].tot->vsmooth[k] = 0;
 	    hd->ps[j].tot->L[k] = 0;
 	    }
 	for (k = 0; k < 6; k++) {
-	    hd->ps[j].tot->v2[k] = 0;
+	    hd->ps[j].tot->vdt[k] = 0;
 	    }
 	/*
 	** Gas
@@ -1485,7 +1499,7 @@ void initialise_halo_profile (HALO_DATA *hd){
 		hd->ps[j].gas->L[k] = 0;
 		}
 	    for (k = 0; k < 6; k++) {
-		hd->ps[j].gas->v2[k] = 0;
+		hd->ps[j].gas->vdt[k] = 0;
 		}
 	    }
 	/*
@@ -1502,7 +1516,7 @@ void initialise_halo_profile (HALO_DATA *hd){
 		hd->ps[j].dark->L[k] = 0;
 		}
 	    for (k = 0; k < 6; k++) {
-		hd->ps[j].dark->v2[k] = 0;
+		hd->ps[j].dark->vdt[k] = 0;
 		}
 	    }
 	/*
@@ -1518,7 +1532,7 @@ void initialise_halo_profile (HALO_DATA *hd){
 		hd->ps[j].star->L[k] = 0;
 		}
 	    for (k = 0; k < 6; k++) {
-		hd->ps[j].star->v2[k] = 0;
+		hd->ps[j].star->vdt[k] = 0;
 		}
 	    }
 	}
@@ -1549,18 +1563,26 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 		for (l = hd[j].NBin; l >=0; l--) {
 		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
 			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+			if (gi.velocityprojection == 0) {
+			    vproj[0] = v[0];
+			    vproj[1] = v[1];
+			    vproj[2] = v[2];
+			    }
+			else if (gi.velocityprojection == 1) {
+			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+			    }
+			hd[j].ps[l].tot->vradsmooth += pgp[i].mass*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
 			hd[j].ps[l].gas->N++;
 			hd[j].ps[l].gas->M += pgp[i].mass;
 			for (k = 0; k < 3; k++) {
 			    hd[j].ps[l].gas->v[k]  += pgp[i].mass*vproj[k];
-			    hd[j].ps[l].gas->v2[k] += pgp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].gas->vdt[k] += pgp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].gas->v2[3] += pgp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].gas->v2[4] += pgp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].gas->v2[5] += pgp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].gas->vdt[3] += pgp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].gas->vdt[4] += pgp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].gas->vdt[5] += pgp[i].mass*vproj[1]*vproj[2];
 			hd[j].ps[l].gas->L[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
 			hd[j].ps[l].gas->L[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
 			hd[j].ps[l].gas->L[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
@@ -1597,18 +1619,26 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 		for (l = hd[j].NBin; l >=0; l--) {
 		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
 			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+			if (gi.velocityprojection == 0) {
+			    vproj[0] = v[0];
+			    vproj[1] = v[1];
+			    vproj[2] = v[2];
+			    }
+			else if (gi.velocityprojection == 1) {
+			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+			    }
+			hd[j].ps[l].tot->vradsmooth += pdp[i].mass*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
 			hd[j].ps[l].dark->N++;
 			hd[j].ps[l].dark->M += pdp[i].mass;
 			for (k = 0; k < 3; k++) {
 			    hd[j].ps[l].dark->v[k]  += pdp[i].mass*vproj[k];
-			    hd[j].ps[l].dark->v2[k] += pdp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].dark->vdt[k] += pdp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].dark->v2[3] += pdp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].dark->v2[4] += pdp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].dark->v2[5] += pdp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].dark->vdt[3] += pdp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].dark->vdt[4] += pdp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].dark->vdt[5] += pdp[i].mass*vproj[1]*vproj[2];
 			hd[j].ps[l].dark->L[0]  += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
 			hd[j].ps[l].dark->L[1]  += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
 			hd[j].ps[l].dark->L[2]  += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
@@ -1645,18 +1675,26 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 		for (l = hd[j].NBin; l >=0; l--) {
 		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
 			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-			vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-			vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-			vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+			if (gi.velocityprojection == 0) {
+			    vproj[0] = v[0];
+			    vproj[1] = v[1];
+			    vproj[2] = v[2];
+			    }
+			else if (gi.velocityprojection == 1) {
+			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+			    }
+			hd[j].ps[l].tot->vradsmooth += psp[i].mass*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
 			hd[j].ps[l].star->N++;
 			hd[j].ps[l].star->M += psp[i].mass;
 			for (k = 0; k < 3; k++) {
 			    hd[j].ps[l].star->v[k]  += psp[i].mass*vproj[k];
-			    hd[j].ps[l].star->v2[k] += psp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].star->vdt[k] += psp[i].mass*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].star->v2[3] += psp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].star->v2[4] += psp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].star->v2[5] += psp[i].mass*vproj[1]*vproj[2];
+			hd[j].ps[l].star->vdt[3] += psp[i].mass*vproj[0]*vproj[1];
+			hd[j].ps[l].star->vdt[4] += psp[i].mass*vproj[0]*vproj[2];
+			hd[j].ps[l].star->vdt[5] += psp[i].mass*vproj[1]*vproj[2];
 			hd[j].ps[l].star->L[0]  += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
 			hd[j].ps[l].star->L[1]  += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
 			hd[j].ps[l].star->L[2]  += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
@@ -1682,7 +1720,7 @@ void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
 		    hd[i].ps[j].tot->L[k] += hd[i].ps[j].gas->L[k];
 		    }
 		for (k = 0; k < 6; k++) {
-		    hd[i].ps[j].tot->v2[k] += hd[i].ps[j].gas->v2[k];
+		    hd[i].ps[j].tot->vdt[k] += hd[i].ps[j].gas->vdt[k];
 		    }
 		}
 	    if (gi.darkcontained) {
@@ -1693,7 +1731,7 @@ void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
 		    hd[i].ps[j].tot->L[k] += hd[i].ps[j].dark->L[k];
 		    }
 		for (k = 0; k < 6; k++) {
-		    hd[i].ps[j].tot->v2[k] += hd[i].ps[j].dark->v2[k];
+		    hd[i].ps[j].tot->vdt[k] += hd[i].ps[j].dark->vdt[k];
 		    }
 		}
 	    if (gi.starcontained) {
@@ -1704,7 +1742,7 @@ void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
 		    hd[i].ps[j].tot->L[k] += hd[i].ps[j].star->L[k];
 		    }
 		for (k = 0; k < 6; k++) {
-		    hd[i].ps[j].tot->v2[k] += hd[i].ps[j].star->v2[k];
+		    hd[i].ps[j].tot->vdt[k] += hd[i].ps[j].star->vdt[k];
 		    }
 		}
 	    }
@@ -1720,14 +1758,19 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
     double rcheck, Mrcheck, Qcheck, Qcomp, rmax;
     double rhotot, rhogas, rhodark, rhostar, rhototmin, rhogasmin, rhodarkmin, rhostarmin;
     double vradmean, vraddisp, barrier;
+    double *vradsmooth = NULL;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier) shared(hd,gi)
+#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,vradsmooth) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
 	*/
+	vradsmooth = malloc((hd[i].NBin+1)*sizeof(double));
+	assert(vradsmooth != NULL);
 	for (j = 0; j < (hd[i].NBin+1); j++) {
-	    hd[i].ps[j].vol = 4*M_PI*(hd[i].ps[j].ro*hd[i].ps[j].ro*hd[i].ps[j].ro - hd[i].ps[j].ri*hd[i].ps[j].ri*hd[i].ps[j].ri)/3.0;
+//	    vradsmooth[j] = 0;
+	    hd[i].ps[j].V = 4*M_PI*(pow(hd[i].ps[j].ro,3) - pow(hd[i].ps[j].ri,3))/3.0;
+	    hd[i].ps[j].Venc = 4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
 	    if (j == 0) {
 		hd[i].ps[j].rm = exp((3*log(hd[i].ps[j+1].ri)-log(hd[i].ps[j+1].ro))/2.0);
 		}
@@ -1759,49 +1802,53 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		if (gi.starcontained && hd[i].ps[j].star->M != 0) hd[i].ps[j].star->v[k] /= hd[i].ps[j].star->M;
 		}
 	    for (k = 0; k < 6; k++) {
-		if (hd[i].ps[j].tot->M != 0)  hd[i].ps[j].tot->v2[k]  /= hd[i].ps[j].tot->M;
-		if (gi.gascontained && hd[i].ps[j].gas->M != 0)  hd[i].ps[j].gas->v2[k]  /= hd[i].ps[j].gas->M;
-		if (gi.darkcontained && hd[i].ps[j].dark->M != 0) hd[i].ps[j].dark->v2[k] /= hd[i].ps[j].dark->M;
-		if (gi.starcontained && hd[i].ps[j].star->M != 0) hd[i].ps[j].star->v2[k] /= hd[i].ps[j].star->M;
+		if (hd[i].ps[j].tot->M != 0)  hd[i].ps[j].tot->vdt[k]  /= hd[i].ps[j].tot->M;
+		if (gi.gascontained && hd[i].ps[j].gas->M != 0)  hd[i].ps[j].gas->vdt[k]  /= hd[i].ps[j].gas->M;
+		if (gi.darkcontained && hd[i].ps[j].dark->M != 0) hd[i].ps[j].dark->vdt[k] /= hd[i].ps[j].dark->M;
+		if (gi.starcontained && hd[i].ps[j].star->M != 0) hd[i].ps[j].star->vdt[k] /= hd[i].ps[j].star->M;
 		}
 	    for (k = 0; k < 3; k++) {
-		hd[i].ps[j].tot->v2[k]  -= hd[i].ps[j].tot->v[k]*hd[i].ps[j].tot->v[k];
-		if (gi.gascontained) hd[i].ps[j].gas->v2[k]  -= hd[i].ps[j].gas->v[k]*hd[i].ps[j].gas->v[k];
-		if (gi.darkcontained) hd[i].ps[j].dark->v2[k] -= hd[i].ps[j].dark->v[k]*hd[i].ps[j].dark->v[k];
-		if (gi.starcontained) hd[i].ps[j].star->v2[k] -= hd[i].ps[j].star->v[k]*hd[i].ps[j].star->v[k];
+		hd[i].ps[j].tot->vdt[k]  -= hd[i].ps[j].tot->v[k]*hd[i].ps[j].tot->v[k];
+		if (gi.gascontained) hd[i].ps[j].gas->vdt[k]  -= hd[i].ps[j].gas->v[k]*hd[i].ps[j].gas->v[k];
+		if (gi.darkcontained) hd[i].ps[j].dark->vdt[k] -= hd[i].ps[j].dark->v[k]*hd[i].ps[j].dark->v[k];
+		if (gi.starcontained) hd[i].ps[j].star->vdt[k] -= hd[i].ps[j].star->v[k]*hd[i].ps[j].star->v[k];
 		}
-	    hd[i].ps[j].tot->v2[3]  -= hd[i].ps[j].tot->v[0]*hd[i].ps[j].tot->v[1];
-	    hd[i].ps[j].tot->v2[4]  -= hd[i].ps[j].tot->v[0]*hd[i].ps[j].tot->v[2];
-	    hd[i].ps[j].tot->v2[5]  -= hd[i].ps[j].tot->v[1]*hd[i].ps[j].tot->v[2];
+	    hd[i].ps[j].tot->vdt[3]  -= hd[i].ps[j].tot->v[0]*hd[i].ps[j].tot->v[1];
+	    hd[i].ps[j].tot->vdt[4]  -= hd[i].ps[j].tot->v[0]*hd[i].ps[j].tot->v[2];
+	    hd[i].ps[j].tot->vdt[5]  -= hd[i].ps[j].tot->v[1]*hd[i].ps[j].tot->v[2];
 	    if (gi.gascontained) {
-		hd[i].ps[j].gas->v2[3]  -= hd[i].ps[j].gas->v[0]*hd[i].ps[j].gas->v[1];
-		hd[i].ps[j].gas->v2[4]  -= hd[i].ps[j].gas->v[0]*hd[i].ps[j].gas->v[2];
-		hd[i].ps[j].gas->v2[5]  -= hd[i].ps[j].gas->v[1]*hd[i].ps[j].gas->v[2];
+		hd[i].ps[j].gas->vdt[3]  -= hd[i].ps[j].gas->v[0]*hd[i].ps[j].gas->v[1];
+		hd[i].ps[j].gas->vdt[4]  -= hd[i].ps[j].gas->v[0]*hd[i].ps[j].gas->v[2];
+		hd[i].ps[j].gas->vdt[5]  -= hd[i].ps[j].gas->v[1]*hd[i].ps[j].gas->v[2];
 		}
 	    if (gi.darkcontained) {
-		hd[i].ps[j].dark->v2[3] -= hd[i].ps[j].dark->v[0]*hd[i].ps[j].dark->v[1];
-		hd[i].ps[j].dark->v2[4] -= hd[i].ps[j].dark->v[0]*hd[i].ps[j].dark->v[2];
-		hd[i].ps[j].dark->v2[5] -= hd[i].ps[j].dark->v[1]*hd[i].ps[j].dark->v[2];
+		hd[i].ps[j].dark->vdt[3] -= hd[i].ps[j].dark->v[0]*hd[i].ps[j].dark->v[1];
+		hd[i].ps[j].dark->vdt[4] -= hd[i].ps[j].dark->v[0]*hd[i].ps[j].dark->v[2];
+		hd[i].ps[j].dark->vdt[5] -= hd[i].ps[j].dark->v[1]*hd[i].ps[j].dark->v[2];
 		}
 	    if (gi.starcontained) {
-		hd[i].ps[j].star->v2[3] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[1];
-		hd[i].ps[j].star->v2[4] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[2];
-		hd[i].ps[j].star->v2[5] -= hd[i].ps[j].star->v[1]*hd[i].ps[j].star->v[2];
+		hd[i].ps[j].star->vdt[3] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[1];
+		hd[i].ps[j].star->vdt[4] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[2];
+		hd[i].ps[j].star->vdt[5] -= hd[i].ps[j].star->v[1]*hd[i].ps[j].star->v[2];
 		}
+	    hd[i].ps[j].tot->vradsmooth /= hd[i].ps[j].tot->M;
 	    }
 	for (j = 1; j < hd[i].NBin; j++) {
-	    for (k = 0; k < 3; k++) {
-		hd[i].ps[j].tot->vsmooth[k] = (hd[i].ps[j-1].tot->v[k]+hd[i].ps[j].tot->v[k]+hd[i].ps[j+1].tot->v[k])/3.0;
-		}
+	    vradsmooth[j] = (hd[i].ps[j-1].tot->vradsmooth+hd[i].ps[j].tot->vradsmooth+hd[i].ps[j+1].tot->vradsmooth)/3.0;
 	    }
+	hd[i].ps[0].tot->vradsmooth = 0;
+	for (j = 1; j < hd[i].NBin; j++) {
+	    hd[i].ps[j].tot->vradsmooth = vradsmooth[j];
+	    }
+	hd[i].ps[hd[i].NBin].tot->vradsmooth = 0;
 	/*
 	** Calculate rbg, Mrbg, rcrit & Mrcrit
 	*/
 	for (j = 1; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].ro;
 	    radius[1] = hd[i].ps[j].ro;
-	    rhoenc[0] = 3*hd[i].ps[j-1].tot->Menc/(4*M_PI*hd[i].ps[j-1].ro*hd[i].ps[j-1].ro*hd[i].ps[j-1].ro);
-	    rhoenc[1] = 3*hd[i].ps[j].tot->Menc/(4*M_PI*hd[i].ps[j].ro*hd[i].ps[j].ro*hd[i].ps[j].ro);
+	    rhoenc[0] = hd[i].ps[j-1].tot->Menc/hd[i].ps[j-1].Venc;
+	    rhoenc[1] = hd[i].ps[j].tot->Menc/hd[i].ps[j].Venc;
 	    Menc[0] = hd[i].ps[j-1].tot->Menc;
 	    Menc[1] = hd[i].ps[j].tot->Menc;
 	    /*
@@ -1842,14 +1889,14 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    if ((hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro) && (hd[i].ps[j].rm <= gi.fincludermin*hd[i].ps[0].ro) && (hd[i].rstatic == 0)) {
 		NBin++;
-		vradmean += hd[i].ps[j].tot->vsmooth[0];
-		vraddisp += pow(hd[i].ps[j].tot->vsmooth[0],2);
+		vradmean += hd[i].ps[j].tot->vradsmooth;
+		vraddisp += pow(hd[i].ps[j].tot->vradsmooth,2);
 		hd[i].vradmean = vradmean/NBin;
 		hd[i].vraddisp = sqrt(vraddisp/NBin-pow(hd[i].vradmean,2));
 		barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
 		}
-	    vsigma[0] = (hd[i].ps[j-1].tot->vsmooth[0]-hd[i].vradmean)/barrier;
-	    vsigma[1] = (hd[i].ps[j].tot->vsmooth[0]-hd[i].vradmean)/barrier;
+	    vsigma[0] = (hd[i].ps[j-1].tot->vradsmooth-hd[i].vradmean)/barrier;
+	    vsigma[1] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
 	    /*
 	    ** Make sure vsigma[0] is on the other side of the barrier
 	    */
@@ -1871,7 +1918,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		Scheck = 0;
 		for (k = j; (hd[i].ps[k].rm <= gi.fcheckrstatic*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
-		    Qcomp = (hd[i].ps[k].tot->vsmooth[0]-hd[i].vradmean)/barrier;
+		    Qcomp = (hd[i].ps[k].tot->vradsmooth-hd[i].vradmean)/barrier;
 		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
 		    }
 		if ((Scheck == Ncheck) && (rcheck > gi.fexcludermin*hd[i].ps[0].ro)) {
@@ -1887,15 +1934,15 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	Extreme = -1;
 	barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
 	for (j = hd[i].NBin; j > 0; j--) {
-	    Qcomp = (hd[i].ps[j].tot->vsmooth[0]-hd[i].vradmean)/barrier;
+	    Qcomp = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
 	    if ((fabs(Qcomp) > gi.fextremerstatic*gi.Nsigma) && (hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro)) Extreme = j;
 	    }
 	/*
 	** Get location where barrier is pierced
 	*/
 	for (j = Extreme; j > 0; j--) {
-	    vsigma[0] = (hd[i].ps[j-1].tot->vsmooth[0]-hd[i].vradmean)/barrier;
-	    vsigma[1] = (hd[i].ps[j].tot->vsmooth[0]-hd[i].vradmean)/barrier;
+	    vsigma[0] = (hd[i].ps[j-1].tot->vradsmooth-hd[i].vradmean)/barrier;
+	    vsigma[1] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
 	    /*
 	    ** Make sure vsigma[0] is on the other side of the barrier
 	    */
@@ -1992,10 +2039,10 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    rhodarkmin = 1e100;
 	    rhostarmin = 1e100;
 	    for (j = hd[i].truncated; j > 0; j--) {
-		rhotot = hd[i].ps[j].tot->M/hd[i].ps[j].vol;
-		if (gi.gascontained) rhogas = hd[i].ps[j].gas->M/hd[i].ps[j].vol;
-		if (gi.darkcontained) rhodark = hd[i].ps[j].dark->M/hd[i].ps[j].vol;
-		if (gi.starcontained) rhostar = hd[i].ps[j].star->M/hd[i].ps[j].vol;
+		rhotot = hd[i].ps[j].tot->M/hd[i].ps[j].V;
+		if (gi.gascontained) rhogas = hd[i].ps[j].gas->M/hd[i].ps[j].V;
+		if (gi.darkcontained) rhodark = hd[i].ps[j].dark->M/hd[i].ps[j].V;
+		if (gi.starcontained) rhostar = hd[i].ps[j].star->M/hd[i].ps[j].V;
 		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j].ro > gi.fexcludermin*hd[i].ps[0].ro)) {
 		    if (rhotot < rhototmin) rhototmin = rhotot;
 		    if (gi.gascontained && rhogas < rhogasmin) rhogasmin = rhogas;
@@ -2024,8 +2071,8 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	if (hd[i].truncated == 1) {
 	    hd[i].Mrtrunc -= hd[i].rhobgtot*4*M_PI*pow(hd[i].rtrunc,3)/3.0;
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
-		hd[i].ps[j].tot->Mencremove  -= hd[i].rhobgtot*4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
-		hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
+		hd[i].ps[j].tot->Mencremove  -= hd[i].rhobgtot*hd[i].ps[j].Venc;
+		hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*hd[i].ps[j].Venc;
 		}
 	    }
 	/*
@@ -2133,6 +2180,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		if ((hd[i].rvcmaxtot != 0) && (hd[i].rvcmaxdark != 0)) break;
 		}
 	    }
+	free(vradsmooth);
 	}
     }
 
@@ -2164,17 +2212,17 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.profiles.tot",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mtot/6 Menctot/7 rhoMtot/8 Ntot/9 Nenctot/10 rhoNtot/11 vtotrad/12 vtotphi/13 vtottheta/14 v2totradrad/15 v2totphiphi/16 v2totthetatheta/17 v2totradphi/18 v2totradtheta/19 v2totphitheta/20 Ltotx/21 Ltoty/22 Ltotz/23 vtotsmoothrad/24 vtotsmoothphi/25 vtotsmooththeta/26\n");
+    fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 Mtot/7 Menctot/8 Ntot/9 Nenctot/10 vtot_1/11 vtot_2/12 vtot_3/13 vdttot_11/14 vdttot_22/15 vdttot_33/16 vdttot_12/17 vdttot_13/18 vdttot_23/19 Ltot_x/20 Ltot_y/21 Ltot_z/22 vradsmooth/23\n");
     for (i = 0; i < gi.NHalo; i++) {
 	for (j = 0; j < (hd[i].NBin+1); j++) {
 	    fprintf(outputfile,"%d",hd[i].ID);
-	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-	    fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].tot->M,hd[i].ps[j].tot->Menc,hd[i].ps[j].tot->M/hd[i].ps[j].vol);
-	    fprintf(outputfile," %ld %ld %.6e",hd[i].ps[j].tot->N,hd[i].ps[j].tot->Nenc,hd[i].ps[j].tot->N/hd[i].ps[j].vol);
+	    fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
+	    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].tot->M,hd[i].ps[j].tot->Menc);
+	    fprintf(outputfile," %ld %ld",hd[i].ps[j].tot->N,hd[i].ps[j].tot->Nenc);
 	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->v[k]);
-	    for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->v2[k]);
+	    for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->vdt[k]);
 	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->L[k]);
-	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->vsmooth[k]);
+	    fprintf(outputfile," %.6e",hd[i].ps[j].tot->vradsmooth);
 	    fprintf(outputfile,"\n");
 	    }
 	}
@@ -2186,15 +2234,15 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.gas",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mgas/6 Mencgas/7 rhoMgas/8 Ngas/9 Nencgas/10 rhoNgas/11 vgasrad/12 vgasphi/13 vgastheta/14 v2gasradrad/15 v2gasphiphi/16 v2gasthetatheta/17 v2gasradphi/18 v2gasradtheta/19 v2gasphitheta/20 Lgasx/21 Lgasy/22 Lgasz/23\n");
+	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 Mgas/7 Mencgas/8 Ngas/9 Nencgas/10 vgas_1/11 vgas_2/12 vgas_3/13 vdtgas_11/14 vdtgas_22/15 vdtgas_33/16 vdtgas_12/17 vdtgas_13/18 vdtgas_23/19 Lgas_x/20 Lgas_y/21 Lgas_z/22\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
-		fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->M,hd[i].ps[j].gas->Menc,hd[i].ps[j].gas->M/hd[i].ps[j].vol);
-		fprintf(outputfile," %ld %ld %.6e",hd[i].ps[j].gas->N,hd[i].ps[j].gas->Nenc,hd[i].ps[j].gas->N/hd[i].ps[j].vol);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M,hd[i].ps[j].gas->Menc);
+		fprintf(outputfile," %ld %ld",hd[i].ps[j].gas->N,hd[i].ps[j].gas->Nenc);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->v[k]);
-		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->v2[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->vdt[k]);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->L[k]);
 		fprintf(outputfile,"\n");
 		}
@@ -2208,15 +2256,15 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.dark",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mdark/6 Mencdark/7 rhoMdark/8 Ndark/9 Nencdark/10 rhoNdark/11 vdarkrad/12 vdarkphi/13 vdarktheta/14 v2darkradrad/15 v2darkphiphi/16 v2darkthetatheta/17 v2darkradphi/18 v2darkradtheta/19 v2darkphitheta/20 Ldarkx/21 Ldarky/22 Ldarkz/23\n");
+	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 Mdark/7 Mencdark/8 Ndark/9 Nencdark/10 vdark_1/11 vdark_2/12 vdark_3/13 vdtdark_11/14 vdtdark_22/15 vdtdark_33/16 vdtdark_12/17 vdtdark_13/18 vdtdark_23/19 Ldark_x/20 Ldark_y/21 Ldark_z/22\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
-		fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].dark->M,hd[i].ps[j].dark->Menc,hd[i].ps[j].dark->M/hd[i].ps[j].vol);
-		fprintf(outputfile," %ld %ld %.6e",hd[i].ps[j].dark->N,hd[i].ps[j].dark->Nenc,hd[i].ps[j].dark->N/hd[i].ps[j].vol);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].dark->M,hd[i].ps[j].dark->Menc);
+		fprintf(outputfile," %ld %ld",hd[i].ps[j].dark->N,hd[i].ps[j].dark->Nenc);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->v[k]);
-		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->v2[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->vdt[k]);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->L[k]);
 		fprintf(outputfile,"\n");
 		}
@@ -2230,15 +2278,15 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.star",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 vol/5 Mstar/6 Mencstar/7 rhoMstar/8 Nstar/9 Nencstar/10 rhoNstar/11 vstarrad/12 vstarphi/13 vstartheta/14 v2starradrad/15 v2starphiphi/16 v2starthetatheta/17 v2starradphi/18 v2starradtheta/19 v2starphitheta/20 Lstarx/21 Lstary/22 Lstarz/23\n");
+	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 Mstar/7 Mencstar/8 Nstar/9 Nencstar/10 vstar_1/11 vstar_2/12 vstar_3/13 vdtstar_11/14 vdtstar_22/15 vdtstar_33/16 vdtstar_12/17 vdtstar_13/18 vdtstar_23/19 Lstar_x/20 Lstar_y/21 Lstar_z/22\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
-		fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].vol);
-		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].star->M,hd[i].ps[j].star->Menc,hd[i].ps[j].star->M/hd[i].ps[j].vol);
-		fprintf(outputfile," %ld %ld %.6e",hd[i].ps[j].star->N,hd[i].ps[j].star->Nenc,hd[i].ps[j].star->N/hd[i].ps[j].vol);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].star->M,hd[i].ps[j].star->Menc);
+		fprintf(outputfile," %ld %ld",hd[i].ps[j].star->N,hd[i].ps[j].star->Nenc);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->v[k]);
-		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->v2[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->vdt[k]);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->L[k]);
 		fprintf(outputfile,"\n");
 		}
