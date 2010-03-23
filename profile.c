@@ -2329,7 +2329,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->vdt[k]);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->L[k]);
 		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].star->metallicity_SNII,hd[i].ps[j].star->metallicity_SNIa);
-		fprintf(outputfile," %.6e",hd[i].ps[j].star->t_form,);
+		fprintf(outputfile," %.6e",hd[i].ps[j].star->t_form);
 		fprintf(outputfile,"\n");
 		}
 	    }
