@@ -551,7 +551,7 @@ int main(int argc, char **argv) {
 	}
     else if (dataformat == 1) {
 	prepare_art_data(&ad);
-	gi.ascale = ad.ah.aunin;
+	gi.ascale = ad.ah.abox;
 	gi.cp.OmegaM0 = ad.ah.OmM0;
 	gi.cp.OmegaB0 = ad.ah.OmB0;
 	gi.cp.OmegaDM0 = gi.cp.OmegaM0 - gi.cp.OmegaB0;
