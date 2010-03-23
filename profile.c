@@ -1004,7 +1004,15 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"Wp5      : %.6e\n",ad.ah.Wp5);
 	    fprintf(stderr,"OmK0     : %.6e\n",ad.ah.OmK0);
 	    fprintf(stderr,"OmB0     : %.6e\n",ad.ah.OmB0);
+	    fprintf(stderr,"magic1   : %.6e\n",ad.ah.magic1);
+	    fprintf(stderr,"DelDC    : %.6e\n",ad.ah.DelDC);
+	    fprintf(stderr,"abox     : %.6e\n",ad.ah.abox);
+	    fprintf(stderr,"Hbox     : %.6e\n",ad.ah.Hbox);
+	    fprintf(stderr,"magic2   : %.6e\n",ad.ah.magic2);
 	    fprintf(stderr,"Banner   : %s\n",ad.Banner);
+	    for (i = 0; i < 10; i++) {
+		fprintf(stderr,"mass[%ld] : %.6e num[%ld] : %d\n",i,ad.ah.mass[i],i,ad.ah.num[i]);
+		}
 	    fprintf(stderr,"\n");
 	    fprintf(stderr,"ART data properties:\n\n");
 	    fprintf(stderr,"Nparticleperrecord : %d\n",ad.Nparticleperrecord);
