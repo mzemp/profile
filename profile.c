@@ -29,7 +29,7 @@ typedef struct profile_tot_properties {
     double L[3];
     double Mencremove;
     double vradsmooth;
-    } PTP;
+    } PROFILE_TOT_PROPERTIES;
 
 typedef struct profile_gas_properties {
 
@@ -40,15 +40,17 @@ typedef struct profile_gas_properties {
     double v[3];
     double vdt[6];
     double L[3];
+    double metallicity;
     double metallicity_SNII;
     double metallicity_SNIa;
-    double N_HI;
-    double N_HII;
-    double N_HeI;
-    double N_HeII;
-    double N_HeIII;
-    double N_H2;
-    } PGP;
+    double M_HI;
+    double M_HII;
+    double M_HeI;
+    double M_HeII;
+    double M_HeIII;
+    double M_H2;
+    double M_metals;
+    } PROFILE_GAS_PROPERTIES;
 
 typedef struct profile_dark_properties {
 
@@ -60,7 +62,7 @@ typedef struct profile_dark_properties {
     double vdt[6];
     double L[3];
     double Mencremove;
-    } PDP;
+    } PROFILE_DARK_PROPERTIES;
 
 typedef struct profile_star_properties {
 
@@ -71,10 +73,12 @@ typedef struct profile_star_properties {
     double v[3];
     double vdt[6];
     double L[3];
+    double metallicity;
     double metallicity_SNII;
     double metallicity_SNIa;
+    double M_metals;
     double t_form;
-    } PSP;
+    } PROFILE_STAR_PROPERTIES;
 
 typedef struct profile_structure {
 
@@ -83,11 +87,11 @@ typedef struct profile_structure {
     double ro;
     double V;
     double Venc;
-    PTP *tot;
-    PGP *gas;
-    PDP *dark;
-    PSP *star;
-    } PS;
+    PROFILE_TOT_PROPERTIES *tot;
+    PROFILE_GAS_PROPERTIES *gas;
+    PROFILE_DARK_PROPERTIES *dark;
+    PROFILE_STAR_PROPERTIES *star;
+    } PROFILE_STRUCTURE;
 
 typedef struct halo_data {
 
@@ -106,38 +110,42 @@ typedef struct halo_data {
     double rminMenc;
     double rmin, rmax;
     double vradmean, vraddisp;
-    PS *ps;
+    PROFILE_STRUCTURE *ps;
     } HALO_DATA;
 
 typedef struct profile_gas_particle {
 
     double r[3];
     double v[3];
-    double mass;
+    double M;
+    double metallicity;
     double metallicity_SNII;
     double metallicity_SNIa;
-    double N_HI;
-    double N_HII;
-    double N_HeI;
-    double N_HeII;
-    double N_HeIII;
-    double N_H2;
+    double M_HI;
+    double M_HII;
+    double M_HeI;
+    double M_HeII;
+    double M_HeIII;
+    double M_H2;
+    double M_metals;
     } PROFILE_GAS_PARTICLE;
 
 typedef struct profile_dark_particle {
 
     double r[3];
     double v[3];
-    double mass;
+    double M;
     } PROFILE_DARK_PARTICLE;
 
 typedef struct profile_star_particle {
 
     double r[3];
     double v[3];
-    double mass;
+    double M;
+    double metallicity;
     double metallicity_SNII;
     double metallicity_SNIa;
+    double M_metals;
     double t_form;
     } PROFILE_STAR_PARTICLE;
 
@@ -647,7 +655,7 @@ int main(int argc, char **argv) {
 		    pgp[Icurrentblockgas].r[k] = gp.pos[k];
 		    pgp[Icurrentblockgas].v[k] = gp.vel[k];
 		    }
-		pgp[Icurrentblockgas].mass = gp.mass;
+		pgp[Icurrentblockgas].M = gp.mass;
 		}
 	    else if (positionprecision == 1) {
 		read_tipsy_xdr_gas_dpp(&xdrs,&gpdpp);
@@ -655,7 +663,7 @@ int main(int argc, char **argv) {
 		    pgp[Icurrentblockgas].r[k] = gpdpp.pos[k];
 		    pgp[Icurrentblockgas].v[k] = gpdpp.vel[k];
 		    }
-		pgp[Icurrentblockgas].mass = gpdpp.mass;
+		pgp[Icurrentblockgas].M = gpdpp.mass;
 		}
 	    Nparticleread++;
 	    Icurrentblockgas++;
@@ -685,7 +693,7 @@ int main(int argc, char **argv) {
 		    pdp[Icurrentblockdark].r[k] = dp.pos[k];
 		    pdp[Icurrentblockdark].v[k] = dp.vel[k];
 		    }
-		pdp[Icurrentblockdark].mass = dp.mass;
+		pdp[Icurrentblockdark].M = dp.mass;
 		}
 	    else if (positionprecision == 1) {
 		read_tipsy_xdr_dark_dpp(&xdrs,&dpdpp);
@@ -693,7 +701,7 @@ int main(int argc, char **argv) {
 		    pdp[Icurrentblockdark].r[k] = dpdpp.pos[k];
 		    pdp[Icurrentblockdark].v[k] = dpdpp.vel[k];
 		    }
-		pdp[Icurrentblockdark].mass = dpdpp.mass;
+		pdp[Icurrentblockdark].M = dpdpp.mass;
 		}
 	    Nparticleread++;
 	    Icurrentblockdark++;
@@ -723,7 +731,7 @@ int main(int argc, char **argv) {
 		    psp[Icurrentblockstar].r[k] = sp.pos[k];
 		    psp[Icurrentblockstar].v[k] = sp.vel[k];
 		    }
-		psp[Icurrentblockstar].mass = sp.mass;
+		psp[Icurrentblockstar].M = sp.mass;
 		}
 	    else if (positionprecision == 1) {
 		read_tipsy_xdr_star_dpp(&xdrs,&spdpp);
@@ -731,7 +739,7 @@ int main(int argc, char **argv) {
 		    psp[Icurrentblockstar].r[k] = spdpp.pos[k];
 		    psp[Icurrentblockstar].v[k] = spdpp.vel[k];
 		    }
-		psp[Icurrentblockstar].mass = spdpp.mass;
+		psp[Icurrentblockstar].M = spdpp.mass;
 		}
 	    Nparticleread++;
 	    Icurrentblockstar++;
@@ -828,15 +836,17 @@ int main(int argc, char **argv) {
 			    pgp[Icurrentblockgas].r[k] = r[k];
 			    pgp[Icurrentblockgas].v[k] = agp.momentum[k]/agp.gas_density;
 			    }
-			pgp[Icurrentblockgas].mass = cellvolume*agp.gas_density;
+			pgp[Icurrentblockgas].M = cellvolume*agp.gas_density;
+			pgp[Icurrentblockgas].metallicity      = (agp.metal_density_SNII+agp.metal_density_SNIa)/agp.gas_density;
 			pgp[Icurrentblockgas].metallicity_SNII = agp.metal_density_SNII/agp.gas_density;
 			pgp[Icurrentblockgas].metallicity_SNIa = agp.metal_density_SNIa/agp.gas_density;
-			pgp[Icurrentblockgas].N_HI    = cellvolume*agp.HI_number_density;
-			pgp[Icurrentblockgas].N_HII   = cellvolume*agp.HII_number_density;
-			pgp[Icurrentblockgas].N_HeI   = cellvolume*agp.HeI_number_density;
-			pgp[Icurrentblockgas].N_HeII  = cellvolume*agp.HeII_number_density;
-			pgp[Icurrentblockgas].N_HeIII = cellvolume*agp.HeIII_number_density;
-			pgp[Icurrentblockgas].N_H2    = cellvolume*agp.H2_number_density;
+			pgp[Icurrentblockgas].M_HI     = cellvolume*agp.HI_density;
+			pgp[Icurrentblockgas].M_HII    = cellvolume*agp.HII_density;
+			pgp[Icurrentblockgas].M_HeI    = cellvolume*agp.HeI_density;
+			pgp[Icurrentblockgas].M_HeII   = cellvolume*agp.HeII_density;
+			pgp[Icurrentblockgas].M_HeIII  = cellvolume*agp.HeIII_density;
+			pgp[Icurrentblockgas].M_H2     = cellvolume*agp.H2_density;
+			pgp[Icurrentblockgas].M_metals = cellvolume*(agp.metal_density_SNII+agp.metal_density_SNIa);
 			Icurrentblockgas++;
 			if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Ngasread == ad.Ngas)) {
 			    /*
@@ -923,7 +933,7 @@ int main(int argc, char **argv) {
 			for (k = ad.Lmaxdark; k >=0; k--) {
 			    if (ad.ah.num[k] >= Nparticleread) L = ad.Lmaxdark-k;
 			    }
-			pdp[Icurrentblockdark].mass = ad.massdark[L];
+			pdp[Icurrentblockdark].M = ad.massdark[L];
 			Nparticleread++;
 			Icurrentblockdark++;
 			if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == ad.Ndark)) {
@@ -947,9 +957,11 @@ int main(int argc, char **argv) {
 			** Get other star properties
 			*/
 			read_art_nb_star_properties(ad,&asp);
-			psp[Icurrentblockstar].mass = asp.mass;
+			psp[Icurrentblockstar].M = asp.mass;
+			psp[Icurrentblockstar].metallicity      = asp.metallicity_SNII+asp.metallicity_SNIa;
 			psp[Icurrentblockstar].metallicity_SNII = asp.metallicity_SNII;
 			psp[Icurrentblockstar].metallicity_SNIa = asp.metallicity_SNIa;
+			psp[Icurrentblockstar].M_metals = asp.mass*(asp.metallicity_SNII+asp.metallicity_SNIa);
 			psp[Icurrentblockstar].t_form = asp.t_form;
 			Nparticleread++;
 			Icurrentblockstar++;
@@ -1310,27 +1322,27 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	hd[i].rmin = (gi->rmin != 0)?gi->rmin:rmin;
 	hd[i].rmax = (gi->rmax != 0)?gi->rmax:rmax;
 	hd[i].NBin = (gi->NBin != 0)?gi->NBin:NBin;
-	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PS));
+	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
 	for (j = 0; j < hd[i].NBin+1; j++) {
-	    hd[i].ps[j].tot = realloc(hd[i].ps[j].tot,sizeof(PTP));
+	    hd[i].ps[j].tot = realloc(hd[i].ps[j].tot,sizeof(PROFILE_TOT_PROPERTIES));
 	    assert(hd[i].ps[j].tot != NULL);
 	    if (gi->gascontained) {
-		hd[i].ps[j].gas = realloc(hd[i].ps[j].gas,sizeof(PGP));
+		hd[i].ps[j].gas = realloc(hd[i].ps[j].gas,sizeof(PROFILE_GAS_PROPERTIES));
 		assert(hd[i].ps[j].gas != NULL);
 		}
 	    else {
 		hd[i].ps[j].gas = NULL;
 		}
 	    if (gi->darkcontained) {
-		hd[i].ps[j].dark = realloc(hd[i].ps[j].dark,sizeof(PDP));
+		hd[i].ps[j].dark = realloc(hd[i].ps[j].dark,sizeof(PROFILE_DARK_PROPERTIES));
 		assert(hd[i].ps[j].dark != NULL);
 		}
 	    else {
 		hd[i].ps[j].dark = NULL;
 		}
 	    if (gi->gascontained) {
-		hd[i].ps[j].star = realloc(hd[i].ps[j].star,sizeof(PSP));
+		hd[i].ps[j].star = realloc(hd[i].ps[j].star,sizeof(PROFILE_STAR_PROPERTIES));
 		assert(hd[i].ps[j].star != NULL);
 		}
 	    else {
@@ -1431,27 +1443,27 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	    hd[i].rmax = gi->rmax;
 	    }
 	hd[i].NBin = gi->NBin;
-	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PS));
+	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
 	for (j = 0; j < hd[i].NBin+1; j++) {
-	    hd[i].ps[j].tot = realloc(hd[i].ps[j].tot,sizeof(PTP));
+	    hd[i].ps[j].tot = realloc(hd[i].ps[j].tot,sizeof(PROFILE_TOT_PROPERTIES));
 	    assert(hd[i].ps[j].tot != NULL);
 	    if (gi->gascontained) {
-		hd[i].ps[j].gas = realloc(hd[i].ps[j].gas,sizeof(PGP));
+		hd[i].ps[j].gas = realloc(hd[i].ps[j].gas,sizeof(PROFILE_GAS_PROPERTIES));
 		assert(hd[i].ps[j].gas != NULL);
 		}
 	    else {
 		hd[i].ps[j].gas = NULL;
 		}
 	    if (gi->darkcontained) {
-		hd[i].ps[j].dark = realloc(hd[i].ps[j].dark,sizeof(PDP));
+		hd[i].ps[j].dark = realloc(hd[i].ps[j].dark,sizeof(PROFILE_DARK_PROPERTIES));
 		assert(hd[i].ps[j].dark != NULL);
 		}
 	    else {
 		hd[i].ps[j].dark = NULL;
 		}
 	    if (gi->gascontained) {
-		hd[i].ps[j].star = realloc(hd[i].ps[j].star,sizeof(PSP));
+		hd[i].ps[j].star = realloc(hd[i].ps[j].star,sizeof(PROFILE_STAR_PROPERTIES));
 		assert(hd[i].ps[j].star != NULL);
 		}
 	    else {
@@ -1529,14 +1541,16 @@ void initialise_halo_profile (HALO_DATA *hd){
 	    hd->ps[j].gas->Nenc = 0;
 	    hd->ps[j].gas->M = 0;
 	    hd->ps[j].gas->Menc = 0;
+	    hd->ps[j].gas->metallicity = 0;
 	    hd->ps[j].gas->metallicity_SNII = 0;
 	    hd->ps[j].gas->metallicity_SNIa = 0;
-	    hd->ps[j].gas->N_HI = 0;
-	    hd->ps[j].gas->N_HII = 0;
-	    hd->ps[j].gas->N_HeI = 0;
-	    hd->ps[j].gas->N_HeII = 0;
-	    hd->ps[j].gas->N_HeIII = 0;
-	    hd->ps[j].gas->N_H2 = 0;
+	    hd->ps[j].gas->M_HI = 0;
+	    hd->ps[j].gas->M_HII = 0;
+	    hd->ps[j].gas->M_HeI = 0;
+	    hd->ps[j].gas->M_HeII = 0;
+	    hd->ps[j].gas->M_HeIII = 0;
+	    hd->ps[j].gas->M_H2 = 0;
+	    hd->ps[j].gas->M_metals = 0;
 	    for (k = 0; k < 3; k++) {
 		hd->ps[j].gas->v[k] = 0;
 		hd->ps[j].gas->L[k] = 0;
@@ -1570,8 +1584,10 @@ void initialise_halo_profile (HALO_DATA *hd){
 	    hd->ps[j].star->Nenc = 0;
 	    hd->ps[j].star->M = 0;
 	    hd->ps[j].star->Menc = 0;
+	    hd->ps[j].star->metallicity = 0;
 	    hd->ps[j].star->metallicity_SNII = 0;
 	    hd->ps[j].star->metallicity_SNIa = 0;
+	    hd->ps[j].star->M_metals = 0;
 	    hd->ps[j].star->t_form = 0;
 	    for (k = 0; k < 3; k++) {
 		hd->ps[j].star->v[k] = 0;
@@ -1619,27 +1635,29 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
 			    }
-			hd[j].ps[l].tot->vradsmooth += pgp[i].mass*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+			hd[j].ps[l].tot->vradsmooth += pgp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
 			hd[j].ps[l].gas->N++;
-			hd[j].ps[l].gas->M += pgp[i].mass;
+			hd[j].ps[l].gas->M += pgp[i].M;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].gas->v[k]  += pgp[i].mass*vproj[k];
-			    hd[j].ps[l].gas->vdt[k] += pgp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].gas->v[k]  += pgp[i].M*vproj[k];
+			    hd[j].ps[l].gas->vdt[k] += pgp[i].M*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].gas->vdt[3] += pgp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].gas->vdt[4] += pgp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].gas->vdt[5] += pgp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].gas->L[0]  += pgp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].gas->L[1]  += pgp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].gas->L[2]  += pgp[i].mass*(r[0]*v[1] - r[1]*v[0]);
-			hd[j].ps[l].gas->metallicity_SNII += pgp[i].mass*pgp[i].metallicity_SNII;
-			hd[j].ps[l].gas->metallicity_SNIa += pgp[i].mass*pgp[i].metallicity_SNIa;
-			hd[j].ps[l].gas->N_HI    += pgp[i].N_HI;
-			hd[j].ps[l].gas->N_HII   += pgp[i].N_HII;
-			hd[j].ps[l].gas->N_HeI   += pgp[i].N_HeI;
-			hd[j].ps[l].gas->N_HeII  += pgp[i].N_HeII;
-			hd[j].ps[l].gas->N_HeIII += pgp[i].N_HeIII;
-			hd[j].ps[l].gas->N_H2    += pgp[i].N_H2;
+			hd[j].ps[l].gas->vdt[3] += pgp[i].M*vproj[0]*vproj[1];
+			hd[j].ps[l].gas->vdt[4] += pgp[i].M*vproj[0]*vproj[2];
+			hd[j].ps[l].gas->vdt[5] += pgp[i].M*vproj[1]*vproj[2];
+			hd[j].ps[l].gas->L[0]  += pgp[i].M*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].gas->L[1]  += pgp[i].M*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].gas->L[2]  += pgp[i].M*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].gas->metallicity      += pgp[i].M*pgp[i].metallicity;
+			hd[j].ps[l].gas->metallicity_SNII += pgp[i].M*pgp[i].metallicity_SNII;
+			hd[j].ps[l].gas->metallicity_SNIa += pgp[i].M*pgp[i].metallicity_SNIa;
+			hd[j].ps[l].gas->M_HI     += pgp[i].M_HI;
+			hd[j].ps[l].gas->M_HII    += pgp[i].M_HII;
+			hd[j].ps[l].gas->M_HeI    += pgp[i].M_HeI;
+			hd[j].ps[l].gas->M_HeII   += pgp[i].M_HeII;
+			hd[j].ps[l].gas->M_HeIII  += pgp[i].M_HeIII;
+			hd[j].ps[l].gas->M_H2     += pgp[i].M_H2;
+			hd[j].ps[l].gas->M_metals += pgp[i].M_metals;
 			break;
 			}
 		    }
@@ -1683,19 +1701,19 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
 			    }
-			hd[j].ps[l].tot->vradsmooth += pdp[i].mass*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+			hd[j].ps[l].tot->vradsmooth += pdp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
 			hd[j].ps[l].dark->N++;
-			hd[j].ps[l].dark->M += pdp[i].mass;
+			hd[j].ps[l].dark->M += pdp[i].M;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].dark->v[k]  += pdp[i].mass*vproj[k];
-			    hd[j].ps[l].dark->vdt[k] += pdp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].dark->v[k]  += pdp[i].M*vproj[k];
+			    hd[j].ps[l].dark->vdt[k] += pdp[i].M*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].dark->vdt[3] += pdp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].dark->vdt[4] += pdp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].dark->vdt[5] += pdp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].dark->L[0]  += pdp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].dark->L[1]  += pdp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].dark->L[2]  += pdp[i].mass*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].dark->vdt[3] += pdp[i].M*vproj[0]*vproj[1];
+			hd[j].ps[l].dark->vdt[4] += pdp[i].M*vproj[0]*vproj[2];
+			hd[j].ps[l].dark->vdt[5] += pdp[i].M*vproj[1]*vproj[2];
+			hd[j].ps[l].dark->L[0]  += pdp[i].M*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].dark->L[1]  += pdp[i].M*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].dark->L[2]  += pdp[i].M*(r[0]*v[1] - r[1]*v[0]);
 			break;
 			}
 		    }
@@ -1739,21 +1757,23 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
 			    }
-			hd[j].ps[l].tot->vradsmooth += psp[i].mass*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+			hd[j].ps[l].tot->vradsmooth += psp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
 			hd[j].ps[l].star->N++;
-			hd[j].ps[l].star->M += psp[i].mass;
+			hd[j].ps[l].star->M += psp[i].M;
 			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].star->v[k]  += psp[i].mass*vproj[k];
-			    hd[j].ps[l].star->vdt[k] += psp[i].mass*vproj[k]*vproj[k];
+			    hd[j].ps[l].star->v[k]  += psp[i].M*vproj[k];
+			    hd[j].ps[l].star->vdt[k] += psp[i].M*vproj[k]*vproj[k];
 			    }
-			hd[j].ps[l].star->vdt[3] += psp[i].mass*vproj[0]*vproj[1];
-			hd[j].ps[l].star->vdt[4] += psp[i].mass*vproj[0]*vproj[2];
-			hd[j].ps[l].star->vdt[5] += psp[i].mass*vproj[1]*vproj[2];
-			hd[j].ps[l].star->L[0]  += psp[i].mass*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].star->L[1]  += psp[i].mass*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].star->L[2]  += psp[i].mass*(r[0]*v[1] - r[1]*v[0]);
-			hd[j].ps[l].star->metallicity_SNII += psp[i].mass*psp[i].metallicity_SNII;
-			hd[j].ps[l].star->metallicity_SNIa += psp[i].mass*psp[i].metallicity_SNIa;
+			hd[j].ps[l].star->vdt[3] += psp[i].M*vproj[0]*vproj[1];
+			hd[j].ps[l].star->vdt[4] += psp[i].M*vproj[0]*vproj[2];
+			hd[j].ps[l].star->vdt[5] += psp[i].M*vproj[1]*vproj[2];
+			hd[j].ps[l].star->L[0]  += psp[i].M*(r[1]*v[2] - r[2]*v[1]);
+			hd[j].ps[l].star->L[1]  += psp[i].M*(r[2]*v[0] - r[0]*v[2]);
+			hd[j].ps[l].star->L[2]  += psp[i].M*(r[0]*v[1] - r[1]*v[0]);
+			hd[j].ps[l].star->metallicity      += psp[i].M*psp[i].metallicity;
+			hd[j].ps[l].star->metallicity_SNII += psp[i].M*psp[i].metallicity_SNII;
+			hd[j].ps[l].star->metallicity_SNIa += psp[i].M*psp[i].metallicity_SNIa;
+			hd[j].ps[l].star->M_metals += psp[i].M_metals;
 			hd[j].ps[l].star->t_form += psp[i].t_form;
 			break;
 			}
@@ -1891,10 +1911,12 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		hd[i].ps[j].tot->vradsmooth /= hd[i].ps[j].tot->M;
 		}
 	    if (hd[i].ps[j].gas->M != 0) {
+		hd[i].ps[j].gas->metallicity      /= hd[i].ps[j].gas->M;
 		hd[i].ps[j].gas->metallicity_SNII /= hd[i].ps[j].gas->M;
 		hd[i].ps[j].gas->metallicity_SNIa /= hd[i].ps[j].gas->M;
 		}
 	    if (hd[i].ps[j].star->M != 0) {
+		hd[i].ps[j].star->metallicity      /= hd[i].ps[j].star->M;
 		hd[i].ps[j].star->metallicity_SNII /= hd[i].ps[j].star->M;
 		hd[i].ps[j].star->metallicity_SNIa /= hd[i].ps[j].star->M;
 		}
@@ -2281,7 +2303,7 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.profiles.tot",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 Mtot/7 Menctot/8 Ntot/9 Nenctot/10 vtot_1/11 vtot_2/12 vtot_3/13 vdttot_11/14 vdttot_22/15 vdttot_33/16 vdttot_12/17 vdttot_13/18 vdttot_23/19 Ltot_x/20 Ltot_y/21 Ltot_z/22 vtotradsmooth/23\n");
+    fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_tot/7 Menc_tot/8 N_tot/9 Nenc_tot/10 v_tot_1/11 v_tot_2/12 v_tot_3/13 vdt_tot_11/14 vdt_tot_22/15 vdt_tot_33/16 vdt_tot_12/17 vdt_tot_13/18 vdt_tot_23/19 L_tot_x/20 L_tot_y/21 L_tot_z/22 v_tot_radsmooth/23\n");
     for (i = 0; i < gi.NHalo; i++) {
 	for (j = 0; j < (hd[i].NBin+1); j++) {
 	    fprintf(outputfile,"%d",hd[i].ID);
@@ -2303,7 +2325,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.gas",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 Mgas/7 Mencgas/8 Ngas/9 Nencgas/10 vgas_1/11 vgas_2/12 vgas_3/13 vdtgas_11/14 vdtgas_22/15 vdtgas_33/16 vdtgas_12/17 vdtgas_13/18 vdtgas_23/19 Lgas_x/20 Lgas_y/21 Lgas_z/22 Z_SNII/23 Z_SNIa/24 N_HI/25 N_HII/26 N_HeI/27 N_HeII/28 N_HeIII/29 N_H2/30\n");
+	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_gas/7 Menc_gas/8 N_gas/9 Nenc_gas/10 v_gas_1/11 v_gas_2/12 v_gas_3/13 vdt_gas_11/14 vdt_gas_22/15 vdt_gas_33/16 vdt_gas_12/17 vdt_gas_13/18 vdt_gas_23/19 L_gas_x/20 L_gas_y/21 L_gas_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_HI/26 M_HII/27 M_HeI/28 M_HeII/29 M_HeIII/30 M_H2/31 M_metals/32\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
@@ -2313,10 +2335,11 @@ void write_output(GI gi, HALO_DATA *hd) {
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->v[k]);
 		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->vdt[k]);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->L[k]);
-		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->metallicity_SNII,hd[i].ps[j].gas->metallicity_SNIa);
-		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->N_HI,hd[i].ps[j].gas->N_HII);
-		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->N_HeI,hd[i].ps[j].gas->N_HeII,hd[i].ps[j].gas->N_HeIII);
-		fprintf(outputfile," %.6e",hd[i].ps[j].gas->N_H2);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->metallicity,hd[i].ps[j].gas->metallicity_SNII,hd[i].ps[j].gas->metallicity_SNIa);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M_HI,hd[i].ps[j].gas->M_HII);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->M_HeI,hd[i].ps[j].gas->M_HeII,hd[i].ps[j].gas->M_HeIII);
+		fprintf(outputfile," %.6e",hd[i].ps[j].gas->M_H2);
+		fprintf(outputfile," %.6e",hd[i].ps[j].gas->M_metals);
 		fprintf(outputfile,"\n");
 		}
 	    }
@@ -2329,7 +2352,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.dark",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 Mdark/7 Mencdark/8 Ndark/9 Nencdark/10 vdark_1/11 vdark_2/12 vdark_3/13 vdtdark_11/14 vdtdark_22/15 vdtdark_33/16 vdtdark_12/17 vdtdark_13/18 vdtdark_23/19 Ldark_x/20 Ldark_y/21 Ldark_z/22\n");
+	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_dark/7 Menc_dark/8 N_dark/9 Nenc_dark/10 v_dark_1/11 v_dark_2/12 v_dark_3/13 vdt_dark_11/14 vdt_dark_22/15 vdt_dark_33/16 vdt_dark_12/17 vdt_dark_13/18 vdt_dark_23/19 L_dark_x/20 L_dark_y/21 L_dark_z/22\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
@@ -2351,7 +2374,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.star",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 Mstar/7 Mencstar/8 Nstar/9 Nencstar/10 vstar_1/11 vstar_2/12 vstar_3/13 vdtstar_11/14 vdtstar_22/15 vdtstar_33/16 vdtstar_12/17 vdtstar_13/18 vdtstar_23/19 Lstar_x/20 Lstar_y/21 Lstar_z/22 Z_SNII/23 Z_SNIa/24 t_form/25\n");
+	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_star/7 Menc_star/8 N_star/9 Nenc_star/10 v_star_1/11 v_star_2/12 v_star_3/13 vdt_star_11/14 vdt_star_22/15 vdt_star_33/16 vdt_star_12/17 vdt_star_13/18 vdt_star_23/19 L_star_x/20 L_star_y/21 L_star_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_metals/26 t_form/27\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
@@ -2361,7 +2384,8 @@ void write_output(GI gi, HALO_DATA *hd) {
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->v[k]);
 		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->vdt[k]);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->L[k]);
-		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].star->metallicity_SNII,hd[i].ps[j].star->metallicity_SNIa);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].star->metallicity,hd[i].ps[j].star->metallicity_SNII,hd[i].ps[j].star->metallicity_SNIa);
+		fprintf(outputfile," %.6e",hd[i].ps[j].star->M_metals);
 		fprintf(outputfile," %.6e",hd[i].ps[j].star->t_form);
 		fprintf(outputfile,"\n");
 		}
