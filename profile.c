@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <assert.h>
+#include <sys/time.h>
 #include <omp.h>
 #include <iof.h>
 #include <art_sfc.h>
@@ -160,6 +161,7 @@ typedef struct general_info {
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
+    int NCell;
     double rhobg, rhocrit;
     double rhoencbg, rhoenccrit;
     double Deltabg, Deltacrit;
@@ -196,6 +198,7 @@ int main(int argc, char **argv) {
     int positionprecision, verboselevel;
     int dataformat, halocatalogueformat;
     int Lmaxgasanalysis;
+    int timestart, timeend, timestartsub, timeendsub, timediff;
     long int i, j, k;
     long int mothercellindex, childcellindex;
     long int Nparticleread, Ngasread, Ngasanalysis;
@@ -205,6 +208,7 @@ int main(int argc, char **argv) {
     long int *Icoordinates = NULL;
     double ***coordinates = NULL;
     double r[3];
+    struct timeval time;
     GI gi;
     TIPSY_HEADER th;
     TIPSY_GAS_PARTICLE gp;
@@ -223,6 +227,9 @@ int main(int argc, char **argv) {
     PROFILE_STAR_PARTICLE *psp = NULL;
     COORDINATE_TRANSFORMATION cosmo2internal_ct;
     XDR xdrs;
+
+    gettimeofday(&time,NULL);
+    timestart = time.tv_sec;
 
     /*
     ** Set some default values
@@ -450,6 +457,12 @@ int main(int argc, char **argv) {
             gi.Nparticleperblockstar = atoi(argv[i]);
             i++;
             }
+        else if (strcmp(argv[i],"-NCell") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.NCell = atoi(argv[i]);
+            i++;
+            }
         else if (strcmp(argv[i],"-Lmaxgasanalysis") == 0) {
             i++;
             if (i >= argc) usage();
@@ -631,8 +644,15 @@ int main(int argc, char **argv) {
     ** Read halo catalogue
     */
 
+    gettimeofday(&time,NULL);
+    timestartsub = time.tv_sec;
+    fprintf(stderr,"Reading halo catalogues ... ");
     if (halocatalogueformat == 0) read_halocatalogue_ascii_generic(&gi,&hd);
     else if (halocatalogueformat == 1) read_halocatalogue_ascii_6DFOF(&gi,&hd);
+    gettimeofday(&time,NULL);
+    timeendsub = time.tv_sec;
+    timediff = timeendsub-timestartsub;
+    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 
     /*
     ** Harvest data
@@ -643,6 +663,8 @@ int main(int argc, char **argv) {
 	**
 	** Gas
 	*/
+	gettimeofday(&time,NULL);
+	timestartsub = time.tv_sec;
 	fprintf(stderr,"Processing gas ... ");
 	pgp = malloc(gi.Nparticleperblockgas*sizeof(PROFILE_GAS_PARTICLE));
 	assert(pgp != NULL);
@@ -677,10 +699,15 @@ int main(int argc, char **argv) {
 		}
 	    }
 	free(pgp);
-	fprintf(stderr,"Done. Processed in total %d gas particles.\n\n",th.ngas);
+	gettimeofday(&time,NULL);
+	timeendsub = time.tv_sec;
+	timediff = timeendsub-timestartsub;
+	fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %d gas particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ngas);
 	/*
 	** Dark Matter
 	*/
+	gettimeofday(&time,NULL);
+	timestartsub = time.tv_sec;
 	fprintf(stderr,"Processing dark matter ... ");
 	pdp = malloc(gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
 	assert(pdp != NULL);
@@ -715,10 +742,15 @@ int main(int argc, char **argv) {
 		}
 	    }
 	free(pdp);
-	fprintf(stderr,"Done. Processed in total %d dark matter particles.\n\n",th.ndark);
+	gettimeofday(&time,NULL);
+	timeendsub = time.tv_sec;
+	timediff = timeendsub-timestartsub;
+	fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %d dark matter particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ndark);
 	/*
 	** Stars
 	*/
+	gettimeofday(&time,NULL);
+	timestartsub = time.tv_sec;
 	fprintf(stderr,"Processing stars ... ");
 	psp = malloc(gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
 	assert(psp != NULL);
@@ -753,7 +785,10 @@ int main(int argc, char **argv) {
 		}
 	    }
 	free(psp);
-	fprintf(stderr,"Done. Processed in total %d star particles.\n\n",th.nstar);
+	gettimeofday(&time,NULL);
+	timeendsub = time.tv_sec;
+	timediff = timeendsub-timestartsub;
+	fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %d star particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.nstar);
 	}
     else if ((dataformat == 1) && (gi.NHalo > 0)) {
 	/*
@@ -763,6 +798,8 @@ int main(int argc, char **argv) {
 	    /*
 	    ** Gas
 	    */
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
 	    fprintf(stderr,"Processing gas ... ");
 	    pgp = malloc(gi.Nparticleperblockgas*sizeof(PROFILE_GAS_PARTICLE));
 	    assert(pgp != NULL);
@@ -900,12 +937,17 @@ int main(int argc, char **argv) {
 	    free(pgp);
 	    free(Icoordinates);
 	    free(cellrefined);
-	    fprintf(stderr,"Done. Processed in total %ld gas particles whereof %ld used for analysis.\n\n",ad.Ngas,Ngasanalysis);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %ld gas particles whereof %ld used for analysis.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ngas,Ngasanalysis);
 	    }
 	if (ad.darkcontained || ad.starcontained) {
 	    /*
 	    ** Dark Matter and Stars
 	    */
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
 	    fprintf(stderr,"Processing dark matter and stars ... ");
 	    ac = malloc(ad.Nparticleperrecord*sizeof(ART_COORDINATES));
 	    assert(ac != NULL);
@@ -927,7 +969,7 @@ int main(int argc, char **argv) {
 			** Dark Matter
 			*/
 			for (k = 0; k < 3; k++) {
-			    pdp[Icurrentblockdark].r[k] = ac[j].r[k] - ad.shift;
+			    pdp[Icurrentblockdark].r[k] = put_in_box(ac[j].r[k]-ad.shift,gi.bc[k],gi.bc[k+3]);
 			    pdp[Icurrentblockdark].v[k] = ac[j].v[k];
 			    }
 			for (k = ad.Lmaxdark; k >=0; k--) {
@@ -950,7 +992,7 @@ int main(int argc, char **argv) {
 			** Star
 			*/
 			for (k = 0; k < 3; k++) {
-			    psp[Icurrentblockstar].r[k] = ac[j].r[k] - ad.shift;
+			    psp[Icurrentblockstar].r[k] = put_in_box(ac[j].r[k]-ad.shift,gi.bc[k],gi.bc[k+3]);
 			    psp[Icurrentblockstar].v[k] = ac[j].v[k];
 			    }
 			/*
@@ -983,7 +1025,10 @@ int main(int argc, char **argv) {
 	    free(ac);
 	    free(pdp);
 	    free(psp);
-	    fprintf(stderr,"Done. Processed in total %ld dark matter and %ld star particles.\n\n",ad.Ndark,ad.Nstar);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %ld dark matter and %ld star particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ndark,ad.Nstar);
 	    }
 	}
 
@@ -997,7 +1042,14 @@ int main(int argc, char **argv) {
     ** Calculate halo properties
     */
 
-    calculate_halo_properties(gi,hd); 
+    gettimeofday(&time,NULL);
+    timestartsub = time.tv_sec;
+    fprintf(stderr,"Calculating halo properties ... ");
+    calculate_halo_properties(gi,hd);
+    gettimeofday(&time,NULL);
+    timeendsub = time.tv_sec;
+    timediff = timeendsub-timestartsub;
+    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 
     /*
     ** Write output
@@ -1128,6 +1180,7 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Nparticleperblockgas  : %d\n",gi.Nparticleperblockgas);
         fprintf(stderr,"Nparticleperblockdark : %d\n",gi.Nparticleperblockdark);
         fprintf(stderr,"Nparticleperblockstar : %d\n",gi.Nparticleperblockstar);
+        fprintf(stderr,"NCell                 : %d\n",gi.NCell);
 	fprintf(stderr,"fexcludermin          : %.6e\n",gi.fexcludermin);
 	fprintf(stderr,"fincludermin          : %.6e\n",gi.fincludermin);
 	fprintf(stderr,"frhobg                : %.6e\n",gi.frhobg);
@@ -1137,9 +1190,13 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fextremerstatic       : %.6e\n",gi.fextremerstatic);
 	fprintf(stderr,"vraddispmin           : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
         fprintf(stderr,"Nsigma                : %.6e\n",gi.Nsigma);
+	fprintf(stderr,"\n");
         }
+    gettimeofday(&time,NULL);
+    timeend = time.tv_sec;
+    timediff = timeend-timestart;
+    fprintf(stderr,"It took %d s = %d h %d m %d s in total.",timediff,timediff/3600,(timediff/60)%60,timediff%60);
     exit(0);
-
     }
 
 void usage(void) {
@@ -1178,6 +1235,7 @@ void usage(void) {
     fprintf(stderr,"-Nparticleperblockgas <value>        : number of gas particles per block (default: 1e7)\n");
     fprintf(stderr,"-Nparticleperblockdark <value>       : number of dark matter particles per block (default: 1e7)\n");
     fprintf(stderr,"-Nparticleperblockstar <value>       : number of star particles per block (default: 1e7)\n");
+    fprintf(stderr,"-NCell <value>                       : number of cells per dimension for linked list (default: 100)\n");
     fprintf(stderr,"-GRAVITY <value>                     : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
     fprintf(stderr,"-HYDRO <value>                       : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
     fprintf(stderr,"-ADVECT_SPECIES <value>              : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
@@ -1234,6 +1292,7 @@ void set_default_values_general_info(GI *gi) {
     gi->Nparticleperblockstar = 10000000;
     gi->Nparticleinblockstar = 0;
     gi->Nblockstar = 0;
+    gi->NCell = 100;
 
     gi->rhobg = 0;
     gi->rhocrit = 0;
@@ -1600,187 +1659,388 @@ void initialise_halo_profile (HALO_DATA *hd){
 	}
     }
 
+int intersect(GI gi, HALO_DATA hd, int index[3], double shift[3]) {
+
+    int i;
+    double celllength, distance;
+    double rhalo[3], rcell[3], d[3];
+    
+    celllength = gi.us.LBox/gi.NCell;
+    for (i = 0; i < 3; i++) {
+	rhalo[i] = hd.rcentre[i];
+	rcell[i] = index[i]*celllength - shift[i];
+	rcell[i] = correct_position(rhalo[i],rcell[i],gi.us.LBox);
+	d[i] = rhalo[i] - rcell[i];
+	if (d[i] > 0) {
+	    d[i] -= celllength;
+	    if (d[i] < 0) {
+		d[i] = 0;
+		}
+	    }
+	}
+    distance = sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
+    if (distance <= hd.ps[hd.NBin].ro) return 1;
+    else return 0;
+    }
+
 void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 
     int i, j, k, l;
+    int index[3];
+    int ***HeadIndex, *NextIndex;
     double r[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
     double d;
+    double shift[3];
 
-    for (i = 0; i < gi.Nparticleinblockgas; i++) {
-#pragma omp parallel for default(none) private(j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(i,hd,pgp,gi)
-	for (j = 0; j < gi.NHalo; j++) {
-	    for (k = 0; k < 3; k++) {
-		r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
-		r[k] = r[k]-hd[j].rcentre[k];
+    /*
+    ** Initialise linked list stuff
+    */
+    HeadIndex = malloc(gi.NCell*sizeof(int **));
+    assert(HeadIndex != NULL);
+    for (i = 0; i < gi.NCell; i ++) {
+	HeadIndex[i] = malloc(gi.NCell*sizeof(int *));
+	assert(HeadIndex[i] != NULL);
+	for (j = 0; j < gi.NCell; j++) {
+	    HeadIndex[i][j] = malloc(gi.NCell*sizeof(int));
+	    assert(HeadIndex[i][j] != NULL);
+	    }
+	}
+    NextIndex = malloc(gi.Nparticleinblockgas*sizeof(int));
+    assert(NextIndex != NULL);
+    for (i = 0; i < gi.NCell; i++) {
+	for (j = 0; j < gi.NCell; j++) {
+	    for (k = 0; k < gi.NCell; k++) {
+		HeadIndex[i][j][k] = 0;
 		}
-	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-	    if (d <= hd[j].ps[hd[j].NBin].ro) {
-		for (k = 0; k < 3; k++) {
-		    v[k] = pgp[i].v[k]-hd[j].vcentre[k];
-		    }
-		/*
-		** Go through bins from outside inwards => larger bin volume further out
-		*/
-		for (l = hd[j].NBin; l >=0; l--) {
-		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-			if (gi.velocityprojection == 0) {
-			    vproj[0] = v[0];
-			    vproj[1] = v[1];
-			    vproj[2] = v[2];
+	    }
+	}
+    for (i = 0; i < gi.Nparticleinblockgas; i++) NextIndex[i] = 0;
+    for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
+    /*
+    ** Generate linked list
+    */
+    for (i = 0; i < gi.Nparticleinblockgas; i++) {
+	for (j = 0; j < 3; j++) {
+	    index[j] = (int)(gi.NCell*(pgp[i].r[j]+shift[j])/gi.us.LBox);
+	    assert(index[j] >= 0 && index[j] < gi.NCell);
+	    }
+	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
+	HeadIndex[index[0]][index[1]][index[2]] = i;
+	}
+    /*
+    ** Go through linked list
+    */
+    for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
+	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
+	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
+#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
+		for (j = 0; j < gi.NHalo; j++) {
+		    if (intersect(gi,hd[j],index,shift)) {
+			i = HeadIndex[index[0]][index[1]][index[2]];
+			while (i != 0) {
+			    for (k = 0; k < 3; k++) {
+				r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
+				r[k] = r[k]-hd[j].rcentre[k];
+				}
+			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+			    if (d <= hd[j].ps[hd[j].NBin].ro) {
+				for (k = 0; k < 3; k++) {
+				    v[k] = pgp[i].v[k]-hd[j].vcentre[k];
+				    }
+				/*
+				** Go through bins from outside inwards => larger bin volume further out
+				*/
+				for (l = hd[j].NBin; l >=0; l--) {
+				    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+					calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+					if (gi.velocityprojection == 0) {
+					    vproj[0] = v[0];
+					    vproj[1] = v[1];
+					    vproj[2] = v[2];
+					    }
+					else if (gi.velocityprojection == 1) {
+					    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+					    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+					    }
+					hd[j].ps[l].tot->vradsmooth += pgp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+					hd[j].ps[l].gas->N++;
+					hd[j].ps[l].gas->M += pgp[i].M;
+					for (k = 0; k < 3; k++) {
+					    hd[j].ps[l].gas->v[k]  += pgp[i].M*vproj[k];
+					    hd[j].ps[l].gas->vdt[k] += pgp[i].M*vproj[k]*vproj[k];
+					    }
+					hd[j].ps[l].gas->vdt[3] += pgp[i].M*vproj[0]*vproj[1];
+					hd[j].ps[l].gas->vdt[4] += pgp[i].M*vproj[0]*vproj[2];
+					hd[j].ps[l].gas->vdt[5] += pgp[i].M*vproj[1]*vproj[2];
+					hd[j].ps[l].gas->L[0]  += pgp[i].M*(r[1]*v[2] - r[2]*v[1]);
+					hd[j].ps[l].gas->L[1]  += pgp[i].M*(r[2]*v[0] - r[0]*v[2]);
+					hd[j].ps[l].gas->L[2]  += pgp[i].M*(r[0]*v[1] - r[1]*v[0]);
+					hd[j].ps[l].gas->metallicity      += pgp[i].M*pgp[i].metallicity;
+					hd[j].ps[l].gas->metallicity_SNII += pgp[i].M*pgp[i].metallicity_SNII;
+					hd[j].ps[l].gas->metallicity_SNIa += pgp[i].M*pgp[i].metallicity_SNIa;
+					hd[j].ps[l].gas->M_HI     += pgp[i].M_HI;
+					hd[j].ps[l].gas->M_HII    += pgp[i].M_HII;
+					hd[j].ps[l].gas->M_HeI    += pgp[i].M_HeI;
+					hd[j].ps[l].gas->M_HeII   += pgp[i].M_HeII;
+					hd[j].ps[l].gas->M_HeIII  += pgp[i].M_HeIII;
+					hd[j].ps[l].gas->M_H2     += pgp[i].M_H2;
+					hd[j].ps[l].gas->M_metals += pgp[i].M_metals;
+					break;
+					}
+				    }
+				}
+			    i = NextIndex[i];
 			    }
-			else if (gi.velocityprojection == 1) {
-			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			    }
-			hd[j].ps[l].tot->vradsmooth += pgp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-			hd[j].ps[l].gas->N++;
-			hd[j].ps[l].gas->M += pgp[i].M;
-			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].gas->v[k]  += pgp[i].M*vproj[k];
-			    hd[j].ps[l].gas->vdt[k] += pgp[i].M*vproj[k]*vproj[k];
-			    }
-			hd[j].ps[l].gas->vdt[3] += pgp[i].M*vproj[0]*vproj[1];
-			hd[j].ps[l].gas->vdt[4] += pgp[i].M*vproj[0]*vproj[2];
-			hd[j].ps[l].gas->vdt[5] += pgp[i].M*vproj[1]*vproj[2];
-			hd[j].ps[l].gas->L[0]  += pgp[i].M*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].gas->L[1]  += pgp[i].M*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].gas->L[2]  += pgp[i].M*(r[0]*v[1] - r[1]*v[0]);
-			hd[j].ps[l].gas->metallicity      += pgp[i].M*pgp[i].metallicity;
-			hd[j].ps[l].gas->metallicity_SNII += pgp[i].M*pgp[i].metallicity_SNII;
-			hd[j].ps[l].gas->metallicity_SNIa += pgp[i].M*pgp[i].metallicity_SNIa;
-			hd[j].ps[l].gas->M_HI     += pgp[i].M_HI;
-			hd[j].ps[l].gas->M_HII    += pgp[i].M_HII;
-			hd[j].ps[l].gas->M_HeI    += pgp[i].M_HeI;
-			hd[j].ps[l].gas->M_HeII   += pgp[i].M_HeII;
-			hd[j].ps[l].gas->M_HeIII  += pgp[i].M_HeIII;
-			hd[j].ps[l].gas->M_H2     += pgp[i].M_H2;
-			hd[j].ps[l].gas->M_metals += pgp[i].M_metals;
-			break;
 			}
 		    }
 		}
 	    }
 	}
+    for (i = 0; i < gi.NCell; i ++) {
+	for (j = 0; j < gi.NCell; j++) {
+	    free(HeadIndex[i][j]);
+	    }
+	free(HeadIndex[i]);
+	}
+    free(HeadIndex);
+    free(NextIndex);
     }
 
 void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 
     int i, j, k, l;
+    int index[3];
+    int ***HeadIndex, *NextIndex;
     double r[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
     double d;
+    double shift[3];
 
-    for (i = 0; i < gi.Nparticleinblockdark; i++) {
-#pragma omp parallel for default(none) private(j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(i,hd,pdp,gi)
-	for (j = 0; j < gi.NHalo; j++) {
-	    for (k = 0; k < 3; k++) {
-		r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
-		r[k] = r[k]-hd[j].rcentre[k];
+    /*
+    ** Initialise linked list stuff
+    */
+    HeadIndex = malloc(gi.NCell*sizeof(int **));
+    assert(HeadIndex != NULL);
+    for (i = 0; i < gi.NCell; i ++) {
+	HeadIndex[i] = malloc(gi.NCell*sizeof(int *));
+	assert(HeadIndex[i] != NULL);
+	for (j = 0; j < gi.NCell; j++) {
+	    HeadIndex[i][j] = malloc(gi.NCell*sizeof(int));
+	    assert(HeadIndex[i][j] != NULL);
+	    }
+	}
+    NextIndex = malloc(gi.Nparticleinblockgas*sizeof(int));
+    assert(NextIndex != NULL);
+    for (i = 0; i < gi.NCell; i++) {
+	for (j = 0; j < gi.NCell; j++) {
+	    for (k = 0; k < gi.NCell; k++) {
+		HeadIndex[i][j][k] = 0;
 		}
-	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-	    if (d <= hd[j].ps[hd[j].NBin].ro) {
-		for (k = 0; k < 3; k++) {
-		    v[k] = pdp[i].v[k]-hd[j].vcentre[k];
-		    }
-		/*
-		** Go through bins from outside inwards => larger bin volume further out
-		*/
-		for (l = hd[j].NBin; l >=0; l--) {
-		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-			if (gi.velocityprojection == 0) {
-			    vproj[0] = v[0];
-			    vproj[1] = v[1];
-			    vproj[2] = v[2];
+	    }
+	}
+    for (i = 0; i < gi.Nparticleinblockgas; i++) NextIndex[i] = 0;
+    for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
+    /*
+    ** Generate linked list
+    */
+    for (i = 0; i < gi.Nparticleinblockgas; i++) {
+	for (j = 0; j < 3; j++) {
+	    index[j] = (int)(gi.NCell*(pdp[i].r[j]+shift[j])/gi.us.LBox);
+	    assert(index[j] >= 0 && index[j] < gi.NCell);
+	    }
+	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
+	HeadIndex[index[0]][index[1]][index[2]] = i;
+	}
+    /*
+    ** Go through linked list
+    */
+    for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
+	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
+	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
+#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,pdp,gi,index,shift,HeadIndex,NextIndex)
+		for (j = 0; j < gi.NHalo; j++) {
+		    if (intersect(gi,hd[j],index,shift)) {
+			i = HeadIndex[index[0]][index[1]][index[2]];
+			while (i != 0) {
+			    for (k = 0; k < 3; k++) {
+				r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
+				r[k] = r[k]-hd[j].rcentre[k];
+				}
+			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+			    if (d <= hd[j].ps[hd[j].NBin].ro) {
+				for (k = 0; k < 3; k++) {
+				    v[k] = pdp[i].v[k]-hd[j].vcentre[k];
+				    }
+				/*
+				** Go through bins from outside inwards => larger bin volume further out
+				*/
+				for (l = hd[j].NBin; l >=0; l--) {
+				    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+					calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+					if (gi.velocityprojection == 0) {
+					    vproj[0] = v[0];
+					    vproj[1] = v[1];
+					    vproj[2] = v[2];
+					    }
+					else if (gi.velocityprojection == 1) {
+					    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+					    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+					    }
+					hd[j].ps[l].tot->vradsmooth += pdp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+					hd[j].ps[l].dark->N++;
+					hd[j].ps[l].dark->M += pdp[i].M;
+					for (k = 0; k < 3; k++) {
+					    hd[j].ps[l].dark->v[k]  += pdp[i].M*vproj[k];
+					    hd[j].ps[l].dark->vdt[k] += pdp[i].M*vproj[k]*vproj[k];
+					    }
+					hd[j].ps[l].dark->vdt[3] += pdp[i].M*vproj[0]*vproj[1];
+					hd[j].ps[l].dark->vdt[4] += pdp[i].M*vproj[0]*vproj[2];
+					hd[j].ps[l].dark->vdt[5] += pdp[i].M*vproj[1]*vproj[2];
+					hd[j].ps[l].dark->L[0]  += pdp[i].M*(r[1]*v[2] - r[2]*v[1]);
+					hd[j].ps[l].dark->L[1]  += pdp[i].M*(r[2]*v[0] - r[0]*v[2]);
+					hd[j].ps[l].dark->L[2]  += pdp[i].M*(r[0]*v[1] - r[1]*v[0]);
+					break;
+					}
+				    }
+				}
+			    i = NextIndex[i];
 			    }
-			else if (gi.velocityprojection == 1) {
-			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			    }
-			hd[j].ps[l].tot->vradsmooth += pdp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-			hd[j].ps[l].dark->N++;
-			hd[j].ps[l].dark->M += pdp[i].M;
-			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].dark->v[k]  += pdp[i].M*vproj[k];
-			    hd[j].ps[l].dark->vdt[k] += pdp[i].M*vproj[k]*vproj[k];
-			    }
-			hd[j].ps[l].dark->vdt[3] += pdp[i].M*vproj[0]*vproj[1];
-			hd[j].ps[l].dark->vdt[4] += pdp[i].M*vproj[0]*vproj[2];
-			hd[j].ps[l].dark->vdt[5] += pdp[i].M*vproj[1]*vproj[2];
-			hd[j].ps[l].dark->L[0]  += pdp[i].M*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].dark->L[1]  += pdp[i].M*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].dark->L[2]  += pdp[i].M*(r[0]*v[1] - r[1]*v[0]);
-			break;
 			}
 		    }
 		}
 	    }
 	}
+    for (i = 0; i < gi.NCell; i ++) {
+	for (j = 0; j < gi.NCell; j++) {
+	    free(HeadIndex[i][j]);
+	    }
+	free(HeadIndex[i]);
+	}
+    free(HeadIndex);
+    free(NextIndex);
     }
 
 void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 
     int i, j, k, l;
+    int index[3];
+    int ***HeadIndex, *NextIndex;
     double r[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
     double d;
+    double shift[3];
 
-    for (i = 0; i < gi.Nparticleinblockstar; i++) {
-#pragma omp parallel for default(none) private(j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(i,hd,psp,gi)
-	for (j = 0; j < gi.NHalo; j++) {
-	    for (k = 0; k < 3; k++) {
-		r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
-		r[k] = r[k]-hd[j].rcentre[k];
+    /*
+    ** Initialise linked list stuff
+    */
+    HeadIndex = malloc(gi.NCell*sizeof(int **));
+    assert(HeadIndex != NULL);
+    for (i = 0; i < gi.NCell; i ++) {
+	HeadIndex[i] = malloc(gi.NCell*sizeof(int *));
+	assert(HeadIndex[i] != NULL);
+	for (j = 0; j < gi.NCell; j++) {
+	    HeadIndex[i][j] = malloc(gi.NCell*sizeof(int));
+	    assert(HeadIndex[i][j] != NULL);
+	    }
+	}
+    NextIndex = malloc(gi.Nparticleinblockgas*sizeof(int));
+    assert(NextIndex != NULL);
+    for (i = 0; i < gi.NCell; i++) {
+	for (j = 0; j < gi.NCell; j++) {
+	    for (k = 0; k < gi.NCell; k++) {
+		HeadIndex[i][j][k] = 0;
 		}
-	    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-	    if (d <= hd[j].ps[hd[j].NBin].ro) {
-		for (k = 0; k < 3; k++) {
-		    v[k] = psp[i].v[k]-hd[j].vcentre[k];
-		    }
-		/*
-		** Go through bins from outside inwards => larger bin volume further out
-		*/
-		for (l = hd[j].NBin; l >=0; l--) {
-		    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-			calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-			if (gi.velocityprojection == 0) {
-			    vproj[0] = v[0];
-			    vproj[1] = v[1];
-			    vproj[2] = v[2];
+	    }
+	}
+    for (i = 0; i < gi.Nparticleinblockgas; i++) NextIndex[i] = 0;
+    for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
+    /*
+    ** Generate linked list
+    */
+    for (i = 0; i < gi.Nparticleinblockgas; i++) {
+	for (j = 0; j < 3; j++) {
+	    index[j] = (int)(gi.NCell*(psp[i].r[j]+shift[j])/gi.us.LBox);
+	    assert(index[j] >= 0 && index[j] < gi.NCell);
+	    }
+	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
+	HeadIndex[index[0]][index[1]][index[2]] = i;
+	}
+    /*
+    ** Go through linked list
+    */
+    for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
+	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
+	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
+#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,psp,gi,index,shift,HeadIndex,NextIndex)
+		for (j = 0; j < gi.NHalo; j++) {
+		    if (intersect(gi,hd[j],index,shift)) {
+			i = HeadIndex[index[0]][index[1]][index[2]];
+			while (i != 0) {
+			    for (k = 0; k < 3; k++) {
+				r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
+				r[k] = r[k]-hd[j].rcentre[k];
+				}
+			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+			    if (d <= hd[j].ps[hd[j].NBin].ro) {
+				for (k = 0; k < 3; k++) {
+				    v[k] = psp[i].v[k]-hd[j].vcentre[k];
+				    }
+				/*
+				** Go through bins from outside inwards => larger bin volume further out
+				*/
+				for (l = hd[j].NBin; l >=0; l--) {
+				    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+					calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+					if (gi.velocityprojection == 0) {
+					    vproj[0] = v[0];
+					    vproj[1] = v[1];
+					    vproj[2] = v[2];
+					    }
+					else if (gi.velocityprojection == 1) {
+					    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+					    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+					    }
+					hd[j].ps[l].tot->vradsmooth += psp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+					hd[j].ps[l].star->N++;
+					hd[j].ps[l].star->M += psp[i].M;
+					for (k = 0; k < 3; k++) {
+					    hd[j].ps[l].star->v[k]  += psp[i].M*vproj[k];
+					    hd[j].ps[l].star->vdt[k] += psp[i].M*vproj[k]*vproj[k];
+					    }
+					hd[j].ps[l].star->vdt[3] += psp[i].M*vproj[0]*vproj[1];
+					hd[j].ps[l].star->vdt[4] += psp[i].M*vproj[0]*vproj[2];
+					hd[j].ps[l].star->vdt[5] += psp[i].M*vproj[1]*vproj[2];
+					hd[j].ps[l].star->L[0]  += psp[i].M*(r[1]*v[2] - r[2]*v[1]);
+					hd[j].ps[l].star->L[1]  += psp[i].M*(r[2]*v[0] - r[0]*v[2]);
+					hd[j].ps[l].star->L[2]  += psp[i].M*(r[0]*v[1] - r[1]*v[0]);
+					hd[j].ps[l].star->metallicity      += psp[i].M*psp[i].metallicity;
+					hd[j].ps[l].star->metallicity_SNII += psp[i].M*psp[i].metallicity_SNII;
+					hd[j].ps[l].star->metallicity_SNIa += psp[i].M*psp[i].metallicity_SNIa;
+					hd[j].ps[l].star->M_metals += psp[i].M_metals;
+					hd[j].ps[l].star->t_form += psp[i].t_form;
+					break;
+					}
+				    }
+				}
+			    i = NextIndex[i];
 			    }
-			else if (gi.velocityprojection == 1) {
-			    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-			    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-			    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-			    }
-			hd[j].ps[l].tot->vradsmooth += psp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-			hd[j].ps[l].star->N++;
-			hd[j].ps[l].star->M += psp[i].M;
-			for (k = 0; k < 3; k++) {
-			    hd[j].ps[l].star->v[k]  += psp[i].M*vproj[k];
-			    hd[j].ps[l].star->vdt[k] += psp[i].M*vproj[k]*vproj[k];
-			    }
-			hd[j].ps[l].star->vdt[3] += psp[i].M*vproj[0]*vproj[1];
-			hd[j].ps[l].star->vdt[4] += psp[i].M*vproj[0]*vproj[2];
-			hd[j].ps[l].star->vdt[5] += psp[i].M*vproj[1]*vproj[2];
-			hd[j].ps[l].star->L[0]  += psp[i].M*(r[1]*v[2] - r[2]*v[1]);
-			hd[j].ps[l].star->L[1]  += psp[i].M*(r[2]*v[0] - r[0]*v[2]);
-			hd[j].ps[l].star->L[2]  += psp[i].M*(r[0]*v[1] - r[1]*v[0]);
-			hd[j].ps[l].star->metallicity      += psp[i].M*psp[i].metallicity;
-			hd[j].ps[l].star->metallicity_SNII += psp[i].M*psp[i].metallicity_SNII;
-			hd[j].ps[l].star->metallicity_SNIa += psp[i].M*psp[i].metallicity_SNIa;
-			hd[j].ps[l].star->M_metals += psp[i].M_metals;
-			hd[j].ps[l].star->t_form += psp[i].t_form;
-			break;
 			}
 		    }
 		}
 	    }
 	}
+    for (i = 0; i < gi.NCell; i ++) {
+	for (j = 0; j < gi.NCell; j++) {
+	    free(HeadIndex[i][j]);
+	    }
+	free(HeadIndex[i]);
+	}
+    free(HeadIndex);
+    free(NextIndex);
     }
 
 void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
