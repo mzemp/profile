@@ -652,7 +652,7 @@ int main(int argc, char **argv) {
     gettimeofday(&time,NULL);
     timeendsub = time.tv_sec;
     timediff = timeendsub-timestartsub;
-    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 
     /*
     ** Harvest data
@@ -702,7 +702,7 @@ int main(int argc, char **argv) {
 	gettimeofday(&time,NULL);
 	timeendsub = time.tv_sec;
 	timediff = timeendsub-timestartsub;
-	fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %d gas particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ngas);
+	fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d gas particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ngas);
 	/*
 	** Dark Matter
 	*/
@@ -745,7 +745,7 @@ int main(int argc, char **argv) {
 	gettimeofday(&time,NULL);
 	timeendsub = time.tv_sec;
 	timediff = timeendsub-timestartsub;
-	fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %d dark matter particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ndark);
+	fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d dark matter particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ndark);
 	/*
 	** Stars
 	*/
@@ -788,7 +788,7 @@ int main(int argc, char **argv) {
 	gettimeofday(&time,NULL);
 	timeendsub = time.tv_sec;
 	timediff = timeendsub-timestartsub;
-	fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %d star particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.nstar);
+	fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d star particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.nstar);
 	}
     else if ((dataformat == 1) && (gi.NHalo > 0)) {
 	/*
@@ -940,7 +940,7 @@ int main(int argc, char **argv) {
 	    gettimeofday(&time,NULL);
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
-	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %ld gas particles whereof %ld used for analysis.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ngas,Ngasanalysis);
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %ld gas particles whereof %ld used for analysis.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ngas,Ngasanalysis);
 	    }
 	if (ad.darkcontained || ad.starcontained) {
 	    /*
@@ -1028,7 +1028,7 @@ int main(int argc, char **argv) {
 	    gettimeofday(&time,NULL);
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
-	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total. Processed in total %ld dark matter and %ld star particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ndark,ad.Nstar);
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %ld dark matter and %ld star particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ndark,ad.Nstar);
 	    }
 	}
 
@@ -1049,7 +1049,7 @@ int main(int argc, char **argv) {
     gettimeofday(&time,NULL);
     timeendsub = time.tv_sec;
     timediff = timeendsub-timestartsub;
-    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 
     /*
     ** Write output
@@ -1062,7 +1062,7 @@ int main(int argc, char **argv) {
     gettimeofday(&time,NULL);
     timeendsub = time.tv_sec;
     timediff = timeendsub-timestartsub;
-    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 
     /*
     ** Some more output if desired
@@ -1202,7 +1202,7 @@ int main(int argc, char **argv) {
     gettimeofday(&time,NULL);
     timeend = time.tv_sec;
     timediff = timeend-timestart;
-    fprintf(stderr,"It took %d s = %d h %d m %d s in total.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+    fprintf(stderr,"Done with profiling. It took %d s = %d h %d m %d s in total.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
     exit(0);
     }
 
