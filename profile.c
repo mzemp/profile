@@ -1195,7 +1195,7 @@ int main(int argc, char **argv) {
     gettimeofday(&time,NULL);
     timeend = time.tv_sec;
     timediff = timeend-timestart;
-    fprintf(stderr,"It took %d s = %d h %d m %d s in total.",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+    fprintf(stderr,"It took %d s = %d h %d m %d s in total.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
     exit(0);
     }
 
@@ -1292,7 +1292,7 @@ void set_default_values_general_info(GI *gi) {
     gi->Nparticleperblockstar = 10000000;
     gi->Nparticleinblockstar = 0;
     gi->Nblockstar = 0;
-    gi->NCell = 100;
+    gi->NCell = 25;
 
     gi->rhobg = 0;
     gi->rhocrit = 0;
@@ -1723,6 +1723,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     for (i = 0; i < gi.Nparticleinblockgas; i++) {
 	for (j = 0; j < 3; j++) {
 	    index[j] = (int)(gi.NCell*(pgp[i].r[j]+shift[j])/gi.us.LBox);
+	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where particles are exactly on the boundary */
 	    assert(index[j] >= 0 && index[j] < gi.NCell);
 	    }
 	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
@@ -1848,6 +1849,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     for (i = 0; i < gi.Nparticleinblockgas; i++) {
 	for (j = 0; j < 3; j++) {
 	    index[j] = (int)(gi.NCell*(pdp[i].r[j]+shift[j])/gi.us.LBox);
+	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where particles are exactly on the boundary */
 	    assert(index[j] >= 0 && index[j] < gi.NCell);
 	    }
 	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
@@ -1963,6 +1965,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     for (i = 0; i < gi.Nparticleinblockgas; i++) {
 	for (j = 0; j < 3; j++) {
 	    index[j] = (int)(gi.NCell*(psp[i].r[j]+shift[j])/gi.us.LBox);
+	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where particles are exactly on the boundary */
 	    assert(index[j] >= 0 && index[j] < gi.NCell);
 	    }
 	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
