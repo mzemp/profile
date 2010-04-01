@@ -1055,7 +1055,14 @@ int main(int argc, char **argv) {
     ** Write output
     */
 
+    gettimeofday(&time,NULL);
+    timestartsub = time.tv_sec;
+    fprintf(stderr,"Writing output ... ");
     write_output(gi,hd);
+    gettimeofday(&time,NULL);
+    timeendsub = time.tv_sec;
+    timediff = timeendsub-timestartsub;
+    fprintf(stderr,"Done. It took %d s = %d h %d m %d s in total.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 
     /*
     ** Some more output if desired
@@ -1766,7 +1773,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
 					    }
 					hd[j].ps[l].tot->vradsmooth += pgp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-					hd[j].ps[l].gas->N++;
+					hd[j].ps[l].gas->N += 1;
 					hd[j].ps[l].gas->M += pgp[i].M;
 					for (k = 0; k < 3; k++) {
 					    hd[j].ps[l].gas->v[k]  += pgp[i].M*vproj[k];
@@ -1832,7 +1839,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
-    NextIndex = malloc(gi.Nparticleinblockgas*sizeof(int));
+    NextIndex = malloc(gi.Nparticleinblockdark*sizeof(int));
     assert(NextIndex != NULL);
     for (i = 0; i < gi.NCell; i++) {
 	for (j = 0; j < gi.NCell; j++) {
@@ -1841,12 +1848,12 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 		}
 	    }
 	}
-    for (i = 0; i < gi.Nparticleinblockgas; i++) NextIndex[i] = 0;
+    for (i = 0; i < gi.Nparticleinblockdark; i++) NextIndex[i] = 0;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
     */
-    for (i = 0; i < gi.Nparticleinblockgas; i++) {
+    for (i = 0; i < gi.Nparticleinblockdark; i++) {
 	for (j = 0; j < 3; j++) {
 	    index[j] = (int)(gi.NCell*(pdp[i].r[j]+shift[j])/gi.us.LBox);
 	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where particles are exactly on the boundary */
@@ -1892,7 +1899,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
 					    }
 					hd[j].ps[l].tot->vradsmooth += pdp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-					hd[j].ps[l].dark->N++;
+					hd[j].ps[l].dark->N += 1;
 					hd[j].ps[l].dark->M += pdp[i].M;
 					for (k = 0; k < 3; k++) {
 					    hd[j].ps[l].dark->v[k]  += pdp[i].M*vproj[k];
@@ -1948,7 +1955,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
-    NextIndex = malloc(gi.Nparticleinblockgas*sizeof(int));
+    NextIndex = malloc(gi.Nparticleinblockstar*sizeof(int));
     assert(NextIndex != NULL);
     for (i = 0; i < gi.NCell; i++) {
 	for (j = 0; j < gi.NCell; j++) {
@@ -1957,12 +1964,12 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 		}
 	    }
 	}
-    for (i = 0; i < gi.Nparticleinblockgas; i++) NextIndex[i] = 0;
+    for (i = 0; i < gi.Nparticleinblockstar; i++) NextIndex[i] = 0;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
     */
-    for (i = 0; i < gi.Nparticleinblockgas; i++) {
+    for (i = 0; i < gi.Nparticleinblockstar; i++) {
 	for (j = 0; j < 3; j++) {
 	    index[j] = (int)(gi.NCell*(psp[i].r[j]+shift[j])/gi.us.LBox);
 	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where particles are exactly on the boundary */
@@ -2008,7 +2015,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
 					    }
 					hd[j].ps[l].tot->vradsmooth += psp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-					hd[j].ps[l].star->N++;
+					hd[j].ps[l].star->N += 1;
 					hd[j].ps[l].star->M += psp[i].M;
 					for (k = 0; k < 3; k++) {
 					    hd[j].ps[l].star->v[k]  += psp[i].M*vproj[k];
