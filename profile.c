@@ -110,6 +110,7 @@ typedef struct halo_data {
     double rhobgtot, rhobggas, rhobgdark, rhobgstar;
     double rminMenc;
     double rmin, rmax;
+    double rvradrangelower, rvradrangeupper;
     double vradmean, vraddisp;
     PROFILE_STRUCTURE *ps;
     } HALO_DATA;
@@ -171,7 +172,7 @@ typedef struct general_info {
     double binfactor;
     double fexcludermin, fincludermin, frhobg;
     double fcheckrvcmax, fcheckrstatic, fchecktruncated;
-    double fextremerstatic, Nsigma, vraddispmin;
+    double Nsigmavrad, Nsigmaextreme, vraddispmin;
     COSMOLOGICAL_PARAMETERS cp;
     UNIT_SYSTEM us, cosmous;
     char HaloCatalogueFileName[256], OutputName[256];
@@ -367,22 +368,22 @@ int main(int argc, char **argv) {
 	    gi.fchecktruncated = atof(argv[i]);
 	    i++;
 	    }
-	else if (strcmp(argv[i],"-fextremerstatic") == 0) {
-	    i++;
-            if (i >= argc) usage();
-	    gi.fextremerstatic = atof(argv[i]);
-	    i++;
-	    }
 	else if (strcmp(argv[i],"-vraddispmin") == 0) {
 	    i++;
             if (i >= argc) usage();
 	    gi.vraddispmin = atof(argv[i]);
 	    i++;
 	    }
-	else if (strcmp(argv[i],"-Nsigma") == 0) {
+	else if (strcmp(argv[i],"-Nsigmavrad") == 0) {
 	    i++;
             if (i >= argc) usage();
-	    gi.Nsigma = atof(argv[i]);
+	    gi.Nsigmavrad = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-Nsigmaextreme") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.Nsigmaextreme = atof(argv[i]);
 	    i++;
 	    }
         else if (strcmp(argv[i],"-OmegaM0") == 0) {
@@ -1194,9 +1195,9 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fcheckrvcmax          : %.6e\n",gi.fcheckrvcmax);
 	fprintf(stderr,"fcheckrstatic         : %.6e\n",gi.fcheckrstatic);
 	fprintf(stderr,"fchecktruncated       : %.6e\n",gi.fchecktruncated);
-	fprintf(stderr,"fextremerstatic       : %.6e\n",gi.fextremerstatic);
 	fprintf(stderr,"vraddispmin           : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
-        fprintf(stderr,"Nsigma                : %.6e\n",gi.Nsigma);
+        fprintf(stderr,"Nsigmavrad            : %.6e\n",gi.Nsigmavrad);
+	fprintf(stderr,"Nsigmaextreme         : %.6e\n",gi.Nsigmaextreme);
 	fprintf(stderr,"\n");
         }
     gettimeofday(&time,NULL);
@@ -1315,9 +1316,9 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrvcmax = 5;
     gi->fcheckrstatic = 3;
     gi->fchecktruncated = 0;
-    gi->fextremerstatic = 3;
     gi->vraddispmin = 2;
-    gi->Nsigma = 1.5;
+    gi->Nsigmavrad = 1.5;
+    gi->Nsigmaextreme = 4.5;
     }
 
 void calculate_densities(GI *gi) {
@@ -1570,6 +1571,8 @@ void initialise_halo_profile (HALO_DATA *hd){
     hd->rhobgdark = 0;
     hd->rhobgstar = 0;
     hd->rminMenc = 0;
+    hd->rvradrangelower = 0;
+    hd->rvradrangeupper = 0;
     hd->vradmean = 0;
     hd->vraddisp = 0;
     hd->truncated = 0;
@@ -2099,15 +2102,15 @@ void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
 void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 
     int i, j, k;
-    int Ncheck, Scheck, NBin, Extreme;
+    int Ncheck, Scheck, NBin, Extreme, StartIndex, variant;
     double radius[2], rhoenc[2], Menc[2], logslope[2], vsigma[2];
     double m, d, slope;
     double rcheck, Mrcheck, Qcheck, Qcomp, rmax;
     double rhotot, rhogas, rhodark, rhostar, rhototmin, rhogasmin, rhodarkmin, rhostarmin;
-    double vradmean, vraddisp, barrier;
+    double vradmean, vraddisp, barrier, minvrad;
     double *vradsmooth = NULL;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,vradsmooth) shared(hd,gi)
+#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,StartIndex,variant,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,minvrad,vradsmooth) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
@@ -2243,50 +2246,109 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	vradmean = 0;
 	vraddisp = 0;
 	barrier = 0;
+	minvrad = 1e100;
+	StartIndex = -1;
+	variant = -1;
 	/*
 	** Calculate vradmean & vraddisp
 	** Use only limited range 
+	**
+	** First, find bin that contains fiducial radius
 	*/
-	for (j = 2; j < (hd[i].NBin+1); j++) {
-	    if ((hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro) && (hd[i].ps[j].rm <= gi.fincludermin*hd[i].ps[0].ro) && (hd[i].rstatic == 0)) {
-		NBin++;
-		vradmean += hd[i].ps[j].tot->vradsmooth;
-		vraddisp += pow(hd[i].ps[j].tot->vradsmooth,2);
-		hd[i].vradmean = vradmean/NBin;
-		hd[i].vraddisp = sqrt(vraddisp/NBin-pow(hd[i].vradmean,2));
-		barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
+	for (j = 1; (hd[i].ps[j].rm < gi.fincludermin*hd[i].ps[0].ro) && (j < hd[i].NBin); j++) {
+	    if (fabs(hd[i].ps[j].tot->vradsmooth) < minvrad) {
+		minvrad = fabs(hd[i].ps[j].tot->vradsmooth);
+		StartIndex = j;
 		}
-	    vsigma[0] = (hd[i].ps[j-1].tot->vradsmooth-hd[i].vradmean)/barrier;
-	    vsigma[1] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
+	    }
+	j = StartIndex;
+	while (1) {
+	    NBin++;
+	    vradmean += hd[i].ps[j].tot->vradsmooth;
+	    vraddisp += pow(hd[i].ps[j].tot->vradsmooth,2);
+	    hd[i].vradmean = vradmean/NBin;
+	    hd[i].vraddisp = sqrt(vraddisp/NBin-pow(hd[i].vradmean,2));
+	    barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
+	    if (j <= StartIndex) {
+		vsigma[0] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
+		vsigma[1] = (hd[i].ps[j-1].tot->vradsmooth-hd[i].vradmean)/barrier;
+		}
+	    else if (j > StartIndex) {
+		vsigma[0] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
+		vsigma[1] = (hd[i].ps[j+1].tot->vradsmooth-hd[i].vradmean)/barrier;
+		}
+	    /*
+	    ** check for boundaries of profile
+	    */
+	    if (j == 1) hd[i].rvradrangelower = hd[i].ps[j].ri;
+	    if (j == hd[i].NBin-1) hd[i].rvradrangeupper = hd[i].ps[j].ro;
 	    /*
 	    ** Make sure vsigma[0] is on the other side of the barrier
 	    */
-	    if (vsigma[1] > 0) Ncheck = (vsigma[0] < gi.Nsigma)?1:0;
-	    else Ncheck = (vsigma[0] > -gi.Nsigma)?1:0;
-	    if ((fabs(vsigma[1]) > gi.Nsigma) && Ncheck && (hd[i].rstatic == 0)) {
+	    if (vsigma[1] > 0) Ncheck = (vsigma[0] < gi.Nsigmavrad)?1:0;
+	    else Ncheck = (vsigma[0] > -gi.Nsigmavrad)?1:0;
+	    if ((j <= StartIndex) && (fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd[i].rvradrangelower == 0)) {
 		/*
-		** Calculate rcheck
+		** Lower boundary case
 		*/
-		m = (log(hd[i].ps[j].rm)-log(hd[i].ps[j-1].rm))/(vsigma[1]-vsigma[0]);
-		if (vsigma[1] > 0) d = gi.Nsigma-vsigma[0];
-		else d = -gi.Nsigma-vsigma[0];
-		rcheck = exp(log(hd[i].ps[j-1].rm)+m*d);
-		/*
-		** Check criteria
-		*/
-		Qcheck = gi.Nsigma;
+		rcheck = hd[i].ps[j].ri;
+		Qcheck = gi.Nsigmavrad;
 		Ncheck = 0;
 		Scheck = 0;
-		for (k = j; (hd[i].ps[k].rm <= gi.fcheckrstatic*rcheck) && (k < hd[i].NBin+1); k++) {
+		for (k = j-1; (hd[i].ps[k].rm >= rcheck/gi.fcheckrstatic) && (k >= 0); k--) {
 		    Ncheck++;
 		    Qcomp = (hd[i].ps[k].tot->vradsmooth-hd[i].vradmean)/barrier;
 		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
 		    }
-		if ((Scheck == Ncheck) && (rcheck > gi.fexcludermin*hd[i].ps[0].ro)) {
-		    hd[i].rstatic = rcheck;
+		if (Scheck == Ncheck) {
+		    hd[i].rvradrangelower = rcheck;
 		    }
 		}
-	    if ((hd[i].rstatic != 0) || (hd[i].ps[j].rm > gi.fincludermin*hd[i].ps[0].ro)) break;
+	    else if ((j > StartIndex) && (fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd[i].rvradrangeupper == 0)) {
+		/*
+		** Upper boundary case
+		*/
+		rcheck = hd[i].ps[j].ro;
+		Qcheck = gi.Nsigmavrad;
+		Ncheck = 0;
+		Scheck = 0;
+		for (k = j+1; (hd[i].ps[k].rm <= gi.fcheckrstatic*rcheck) && (k < hd[i].NBin+1); k++) {
+		    Ncheck++;
+		    Qcomp = (hd[i].ps[k].tot->vradsmooth-hd[i].vradmean)/barrier;
+		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
+		    }
+		if (Scheck == Ncheck) {
+		    hd[i].rvradrangeupper = rcheck;
+		    }
+		}
+	    if ((hd[i].rvradrangelower != 0) && (hd[i].rvradrangeupper != 0)) break;
+	    if ((hd[i].rvradrangelower != 0) && (variant == -1)) {
+		/*
+		** Lower boundary was just set
+		** but not yet upper boundary
+		*/
+		variant = 1;
+		j = StartIndex + (StartIndex-j) - 1;
+		}
+	    if ((hd[i].rvradrangeupper != 0) && (variant == -1)) {
+		/*
+		** Upper boundary was just set
+		** but not yet lower boundary
+		*/
+		variant = 0;
+		j = StartIndex - (j-StartIndex);
+		}
+	    k = 0;
+	    if (variant == 0) {
+		j = j-1;
+		}
+	    else if (variant == 1) {
+		j = j+1;
+		}
+	    else {
+		k = (NBin%2)?-1:+1;
+		j = StartIndex + k*(NBin+1)/2;
+		}
 	    }
 	/*
 	** Find innermost extremum
@@ -2296,26 +2358,26 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
 	for (j = hd[i].NBin; j > 0; j--) {
 	    Qcomp = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
-	    if ((fabs(Qcomp) > gi.fextremerstatic*gi.Nsigma) && (hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro)) Extreme = j;
+	    if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro)) Extreme = j;
 	    }
 	/*
 	** Get location where barrier is pierced
 	*/
-	for (j = Extreme; j > 0; j--) {
+	for (j = Extreme; j > 2; j--) {
 	    vsigma[0] = (hd[i].ps[j-1].tot->vradsmooth-hd[i].vradmean)/barrier;
 	    vsigma[1] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
 	    /*
 	    ** Make sure vsigma[0] is on the other side of the barrier
 	    */
-	    if (vsigma[1] > 0) Ncheck = (vsigma[0] < gi.Nsigma)?1:0;
-	    else Ncheck = (vsigma[0] > -gi.Nsigma)?1:0;
-	    if ((fabs(vsigma[1]) > gi.Nsigma) && Ncheck && (hd[i].rstatic == 0)) {
+	    if (vsigma[1] > 0) Ncheck = (vsigma[0] < gi.Nsigmavrad)?1:0;
+	    else Ncheck = (vsigma[0] > -gi.Nsigmavrad)?1:0;
+	    if ((fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd[i].rstatic == 0)) {
 		/*
 		** Calculate rstatic & Mrstatic
 		*/
 		m = (log(hd[i].ps[j].rm)-log(hd[i].ps[j-1].rm))/(vsigma[1]-vsigma[0]);
-		if (vsigma[1] > 0) d = gi.Nsigma-vsigma[0];
-		else d = -gi.Nsigma-vsigma[0];
+		if (vsigma[1] > 0) d = gi.Nsigmavrad-vsigma[0];
+		else d = -gi.Nsigmavrad-vsigma[0];
 		hd[i].rstatic = exp(log(hd[i].ps[j-1].rm)+m*d);
 		if (hd[i].rstatic <= hd[i].ps[j-1].ro) {
 		    radius[0] = hd[i].ps[j-2].ro;
@@ -2559,12 +2621,14 @@ void write_output(GI gi, HALO_DATA *hd) {
     assert(outputfile != NULL);
     fprintf(outputfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rstatic/8 Mrstatic/9 rvcmaxtot/10 Mrvcmaxtot/11 rvcmaxdark/12 Mrvcmaxdark/13 rtrunc/14 Mrtrunc/15 rbg/16 Mrbg/17 rcrit/18 Mrcrit/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 rminMenc/24 vradmean/25 vraddisp/26 truncated/27\n");
     for (i = 0; i < gi.NHalo; i++) {
-	fprintf(outputfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %d\n",
+	fprintf(outputfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %d %.6e %.6e\n",
 		hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],
 		hd[i].rstatic,hd[i].Mrstatic,hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark,hd[i].rtrunc,hd[i].Mrtrunc,
 		hd[i].rbg,hd[i].Mrbg,hd[i].rcrit,hd[i].Mrcrit,
 		hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar,
-		hd[i].rminMenc,hd[i].vradmean,hd[i].vraddisp,hd[i].truncated);
+		hd[i].rminMenc,hd[i].vradmean,hd[i].vraddisp,hd[i].truncated,
+		hd[i].rvradrangelower,hd[i].rvradrangeupper);
+	
 	}
     fclose(outputfile);
     /*
