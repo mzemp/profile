@@ -101,6 +101,8 @@ typedef struct halo_data {
     int truncated;
     double rcentre[3];
     double vcentre[3];
+    double rcentrenew[3];
+    double vcentrenew[3];
     double rstatic, Mrstatic;
     double rvcmaxtot, Mrvcmaxtot;
     double rvcmaxdark, Mrvcmaxdark;
@@ -157,12 +159,11 @@ typedef struct general_info {
     int velocityprojection;
     int rmaxfromhalocatalogue;
     int gascontained, darkcontained, starcontained;
-    int NBin;
-    int NHalo;
+    int NBin, NHalo, NCell;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
-    int NCell;
+    int NLoopRead, NLoopRecentre, NLoopProcessData, ILoopRead;
     double rhobg, rhocrit;
     double rhoencbg, rhoenccrit;
     double Deltabg, Deltacrit;
@@ -170,7 +171,7 @@ typedef struct general_info {
     double rmin, rmax;
     double bc[6];
     double binfactor;
-    double fexcludermin, fincludermin, frhobg;
+    double fexcludermin, fincludermin, frecentrermin, frecentredist, frhobg;
     double fcheckrvcmax, fcheckrstatic, fchecktruncated;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     COSMOLOGICAL_PARAMETERS cp;
@@ -187,6 +188,7 @@ void initialise_halo_profile (HALO_DATA *);
 void put_pgp_in_bins(GI, HALO_DATA *, PROFILE_GAS_PARTICLE *);
 void put_pdp_in_bins(GI, HALO_DATA *, PROFILE_DARK_PARTICLE *);
 void put_psp_in_bins(GI, HALO_DATA *, PROFILE_STAR_PARTICLE *);
+void calculate_recentred_halo_coordinates(GI, HALO_DATA *);
 void calculate_total_matter_distribution(GI, HALO_DATA *);
 void calculate_halo_properties(GI, HALO_DATA *);
 void write_output(GI, HALO_DATA *);
@@ -199,7 +201,7 @@ int main(int argc, char **argv) {
     int positionprecision, verboselevel;
     int dataformat, halocatalogueformat;
     int Lmaxgasanalysis;
-    int timestart, timeend, timestartsub, timeendsub, timediff;
+    int timestart, timeend, timestartsub, timeendsub, timestartloop, timeendloop, timediff;
     long int i, j, k;
     long int mothercellindex, childcellindex;
     long int Nparticleread, Ngasread, Ngasanalysis;
@@ -228,6 +230,8 @@ int main(int argc, char **argv) {
     PROFILE_STAR_PARTICLE *psp = NULL;
     COORDINATE_TRANSFORMATION cosmo2internal_ct;
     XDR xdrs;
+    fpos_t *PosGasFile = NULL, *PosCoordinatesDataFile = NULL, *PosStarPropertiesFile = NULL;
+    u_int PosXDR = 0;
 
     gettimeofday(&time,NULL);
     timestart = time.tv_sec;
@@ -342,6 +346,18 @@ int main(int argc, char **argv) {
 	    i++;
             if (i >= argc) usage();
 	    gi.fincludermin = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-frecentrermin") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.frecentrermin = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-frecentredist") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.frecentredist = atof(argv[i]);
 	    i++;
 	    }
 	else if (strcmp(argv[i],"-frhobg") == 0) {
@@ -462,6 +478,18 @@ int main(int argc, char **argv) {
             i++;
             if (i >= argc) usage();
             gi.NCell = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-NLoopRecentre") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.NLoopRecentre = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-NProcessData") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.NLoopProcessData = atoi(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-Lmaxgasanalysis") == 0) {
@@ -615,6 +643,18 @@ int main(int argc, char **argv) {
 	if (Lmaxgasanalysis == -1) Lmaxgasanalysis = ad.Lmaxgas;
 	assert(Lmaxgasanalysis >= 0);
 	assert(Lmaxgasanalysis <= ad.Lmaxgas);
+	if (ad.gascontained) {
+	    PosGasFile = malloc(2*sizeof(fpos_t));
+	    assert(PosGasFile != NULL);
+	    }
+	if (ad.darkcontained || ad.starcontained) {
+	    PosCoordinatesDataFile = malloc(1*sizeof(fpos_t));
+	    assert(PosCoordinatesDataFile != NULL);
+	    }
+	if (ad.starcontained) {
+	    PosStarPropertiesFile = malloc(ad.Nstarproperties*sizeof(fpos_t));
+	    assert(PosStarPropertiesFile != NULL);
+	    }
 	}
     else {
 	fprintf(stderr,"Not supported format!\n");
@@ -658,144 +698,21 @@ int main(int argc, char **argv) {
     /*
     ** Harvest data
     */
-    if ((dataformat == 0) && (gi.NHalo > 0)) {
-	/*
-	** Tipsy data
-	**
-	** Gas
-	*/
+
+    gi.NLoopRead = gi.NLoopRecentre + gi.NLoopProcessData;
+
+    for (gi.ILoopRead = 0; gi.ILoopRead < gi.NLoopRead; gi.ILoopRead++) {
 	gettimeofday(&time,NULL);
-	timestartsub = time.tv_sec;
-	fprintf(stderr,"Processing gas ... ");
-	pgp = malloc(gi.Nparticleperblockgas*sizeof(PROFILE_GAS_PARTICLE));
-	assert(pgp != NULL);
-	Nparticleread = 0;
-	Icurrentblockgas = 0;
-	for (i = 0; i < th.ngas; i++) {
-	    if (positionprecision == 0) {
-		read_tipsy_xdr_gas(&xdrs,&gp);
-		for (k = 0; k < 3; k++) {
-		    pgp[Icurrentblockgas].r[k] = gp.pos[k];
-		    pgp[Icurrentblockgas].v[k] = gp.vel[k];
-		    }
-		pgp[Icurrentblockgas].M = gp.mass;
-		}
-	    else if (positionprecision == 1) {
-		read_tipsy_xdr_gas_dpp(&xdrs,&gpdpp);
-		for (k = 0; k < 3; k++) {
-		    pgp[Icurrentblockgas].r[k] = gpdpp.pos[k];
-		    pgp[Icurrentblockgas].v[k] = gpdpp.vel[k];
-		    }
-		pgp[Icurrentblockgas].M = gpdpp.mass;
-		}
-	    Nparticleread++;
-	    Icurrentblockgas++;
-	    if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Nparticleread == ad.Ngas)) {
-		/*
-		** Block is full or we reached end of gas particles
-		*/
-		gi.Nparticleinblockgas = Icurrentblockgas;
-		put_pgp_in_bins(gi,hd,pgp);
-		Icurrentblockgas = 0;
-		}
-	    }
-	free(pgp);
-	gettimeofday(&time,NULL);
-	timeendsub = time.tv_sec;
-	timediff = timeendsub-timestartsub;
-	fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d gas particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ngas);
-	/*
-	** Dark Matter
-	*/
-	gettimeofday(&time,NULL);
-	timestartsub = time.tv_sec;
-	fprintf(stderr,"Processing dark matter ... ");
-	pdp = malloc(gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
-	assert(pdp != NULL);
-	Nparticleread = 0;
-	Icurrentblockdark = 0;
-	for (i = 0; i < th.ndark; i++) {
-	    if (positionprecision == 0) {
-		read_tipsy_xdr_dark(&xdrs,&dp);
-		for (k = 0; k < 3; k++) {
-		    pdp[Icurrentblockdark].r[k] = dp.pos[k];
-		    pdp[Icurrentblockdark].v[k] = dp.vel[k];
-		    }
-		pdp[Icurrentblockdark].M = dp.mass;
-		}
-	    else if (positionprecision == 1) {
-		read_tipsy_xdr_dark_dpp(&xdrs,&dpdpp);
-		for (k = 0; k < 3; k++) {
-		    pdp[Icurrentblockdark].r[k] = dpdpp.pos[k];
-		    pdp[Icurrentblockdark].v[k] = dpdpp.vel[k];
-		    }
-		pdp[Icurrentblockdark].M = dpdpp.mass;
-		}
-	    Nparticleread++;
-	    Icurrentblockdark++;
-	    if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == ad.Ndark)) {
-		/*
-		** Block is full or we reached end of dark matter particles
-		*/
-		gi.Nparticleinblockdark = Icurrentblockdark;
-		put_pdp_in_bins(gi,hd,pdp);
-		Icurrentblockdark = 0;
-		}
-	    }
-	free(pdp);
-	gettimeofday(&time,NULL);
-	timeendsub = time.tv_sec;
-	timediff = timeendsub-timestartsub;
-	fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d dark matter particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ndark);
-	/*
-	** Stars
-	*/
-	gettimeofday(&time,NULL);
-	timestartsub = time.tv_sec;
-	fprintf(stderr,"Processing stars ... ");
-	psp = malloc(gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
-	assert(psp != NULL);
-	Nparticleread = 0;
-	Icurrentblockstar = 0;
-	for (i = 0; i < th.nstar; i++) {
-	    if (positionprecision == 0) {
-		read_tipsy_xdr_star(&xdrs,&sp);
-		for (k = 0; k < 3; k++) {
-		    psp[Icurrentblockstar].r[k] = sp.pos[k];
-		    psp[Icurrentblockstar].v[k] = sp.vel[k];
-		    }
-		psp[Icurrentblockstar].M = sp.mass;
-		}
-	    else if (positionprecision == 1) {
-		read_tipsy_xdr_star_dpp(&xdrs,&spdpp);
-		for (k = 0; k < 3; k++) {
-		    psp[Icurrentblockstar].r[k] = spdpp.pos[k];
-		    psp[Icurrentblockstar].v[k] = spdpp.vel[k];
-		    }
-		psp[Icurrentblockstar].M = spdpp.mass;
-		}
-	    Nparticleread++;
-	    Icurrentblockstar++;
-	    if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == ad.Nstar)) {
-		/*
-		** Block is full or we reached end of star matter particles
-		*/
-		gi.Nparticleinblockstar = Icurrentblockstar;
-		put_psp_in_bins(gi,hd,psp);
-		Icurrentblockstar = 0;
-		}
-	    }
-	free(psp);
-	gettimeofday(&time,NULL);
-	timeendsub = time.tv_sec;
-	timediff = timeendsub-timestartsub;
-	fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d star particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.nstar);
-	}
-    else if ((dataformat == 1) && (gi.NHalo > 0)) {
-	/*
-	** ART data
-	*/
-	if (ad.gascontained) {
+	timestartloop = time.tv_sec;
+	fprintf(stderr,"Doing loop %d ...\n",gi.ILoopRead+1);
+	if ((dataformat == 0) && (gi.NHalo > 0)) {
+	    /*
+	    ** Tipsy data
+	    **
+	    ** Set file pointers correctly
+	    */
+	    if (gi.ILoopRead == 0) PosXDR = xdr_getpos(&xdrs);
+	    else xdr_setpos(&xdrs,PosXDR);
 	    /*
 	    ** Gas
 	    */
@@ -804,240 +721,423 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"Processing gas ... ");
 	    pgp = malloc(gi.Nparticleperblockgas*sizeof(PROFILE_GAS_PARTICLE));
 	    assert(pgp != NULL);
-	    coordinates = malloc((ad.Lmaxgas+1)*sizeof(double **));
-	    assert(coordinates != NULL);
-	    Icoordinates = malloc((ad.Lmaxgas+1)*sizeof(long int));
-	    assert(Icoordinates != NULL);
-	    for (i = 0; i < (ad.Lmaxgas+1); i++) {
-		Icoordinates[i] = 0;
-		}
-	    Ngasread = 0;
+	    Nparticleread = 0;
 	    Icurrentblockgas = 0;
-	    Ngasanalysis = 0;
-	    init_sfc(&ad.asfci);
-	    /*
-	    ** Go through all levels
-	    */
-	    for (i = ad.Lmingas; i <= Lmaxgasanalysis; i++) {
-		/*
-		** Calculate level properties and read level header
-		*/
-		celllength = ad.rootcelllength/pow(2,i);
-		cellvolume = celllength*celllength*celllength;
-		read_art_nb_gas_header_level(&ad,i,&cellrefined);
-		/*
-		** get coordinates array ready
-		*/
-		if (i < Lmaxgasanalysis) {
-		    coordinates[i] = malloc(ad.Ncellrefined[i]*sizeof(double *));
-		    assert(coordinates[i] != NULL);
-		    for (j = 0; j < ad.Ncellrefined[i]; j++) {
-			coordinates[i][j] = malloc(3*sizeof(double));
-			assert(coordinates[i][j] != NULL);
+	    for (i = 0; i < th.ngas; i++) {
+		if (positionprecision == 0) {
+		    read_tipsy_xdr_gas(&xdrs,&gp);
+		    for (k = 0; k < 3; k++) {
+			pgp[Icurrentblockgas].r[k] = gp.pos[k];
+			pgp[Icurrentblockgas].v[k] = gp.vel[k];
 			}
+		    pgp[Icurrentblockgas].M = gp.mass;
 		    }
-		/*
-		** Move file positions
-		*/
-		move_art_nb_gas_filepositions_level_begin(ad,i);
-		/*
-		** Go through cells in this level
-		*/
-		for (j = 0; j < ad.Ncell[i]; j++) {
-		    read_art_nb_gas_properties(ad,&agp);
-		    Ngasread++;
+		else if (positionprecision == 1) {
+		    read_tipsy_xdr_gas_dpp(&xdrs,&gpdpp);
+		    for (k = 0; k < 3; k++) {
+			pgp[Icurrentblockgas].r[k] = gpdpp.pos[k];
+			pgp[Icurrentblockgas].v[k] = gpdpp.vel[k];
+			}
+		    pgp[Icurrentblockgas].M = gpdpp.mass;
+		    }
+		Nparticleread++;
+		Icurrentblockgas++;
+		if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Nparticleread == ad.Ngas)) {
 		    /*
-		    ** Calculate coordinates
+		    ** Block is full or we reached end of gas particles
 		    */
-		    if (i == ad.Lmingas) {
-			sfc_coords(ad.asfci,j,index);
-			for (k = 0; k < 3; k++) {
-			    r[k] = index[k] + 0.5;
-			    }
-			}
-		    else {
-			for (k = 0; k < 3; k++) {
-			    mothercellindex = j/8;
-			    childcellindex = j%8;
-			    r[k] = coordinates[i-1][mothercellindex][k] + celllength*art_cell_delta[childcellindex][k];
-			    }
-			}
-		    /*
-		    ** Check if cell is refined
-		    */
-		    if ((cellrefined[j] == 0) || (i == Lmaxgasanalysis)) {
-			/*
-			** not refined or maximum level reached => add it for analysis
-			*/
-			Ngasanalysis++;
-			for (k = 0; k < 3; k++) {
-			    pgp[Icurrentblockgas].r[k] = r[k];
-			    pgp[Icurrentblockgas].v[k] = agp.momentum[k]/agp.gas_density;
-			    }
-			pgp[Icurrentblockgas].M = cellvolume*agp.gas_density;
-			pgp[Icurrentblockgas].metallicity      = (agp.metal_density_SNII+agp.metal_density_SNIa)/agp.gas_density;
-			pgp[Icurrentblockgas].metallicity_SNII = agp.metal_density_SNII/agp.gas_density;
-			pgp[Icurrentblockgas].metallicity_SNIa = agp.metal_density_SNIa/agp.gas_density;
-			pgp[Icurrentblockgas].M_HI     = cellvolume*agp.HI_density;
-			pgp[Icurrentblockgas].M_HII    = cellvolume*agp.HII_density;
-			pgp[Icurrentblockgas].M_HeI    = cellvolume*agp.HeI_density;
-			pgp[Icurrentblockgas].M_HeII   = cellvolume*agp.HeII_density;
-			pgp[Icurrentblockgas].M_HeIII  = cellvolume*agp.HeIII_density;
-			pgp[Icurrentblockgas].M_H2     = cellvolume*agp.H2_density;
-			pgp[Icurrentblockgas].M_metals = cellvolume*(agp.metal_density_SNII+agp.metal_density_SNIa);
-			Icurrentblockgas++;
-			if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Ngasread == ad.Ngas)) {
-			    /*
-			    ** Block is full or we reached end of gas particles
-			    */
-			    gi.Nparticleinblockgas = Icurrentblockgas;
-			    put_pgp_in_bins(gi,hd,pgp);
-			    Icurrentblockgas = 0;
-			    }
-			}
-		    else if (i < Lmaxgasanalysis) {
-			/*
-			** refined and lower level than Lmaxgasanalysis => add it to corresponding coordinates array
-			*/
-			for (k = 0; k < 3; k++) {
-			    coordinates[i][Icoordinates[i]][k] = r[k];
-			    }
-			Icoordinates[i]++;
-			}
+		    gi.Nparticleinblockgas = Icurrentblockgas;
+		    put_pgp_in_bins(gi,hd,pgp);
+		    Icurrentblockgas = 0;
 		    }
-		/*
-		** Move file positions
-		*/
-		move_art_nb_gas_filepositions_level_end(ad,i);
-		/*
-		** Checks and free coordinates of level below
-		*/
-		if (i < Lmaxgasanalysis) assert(Icoordinates[i] == ad.Ncellrefined[i]);
-		if (i > ad.Lmingas) {
-		    for (j = 0; j < ad.Ncellrefined[i-1]; j++) {
-			free(coordinates[i-1][j]);
-			}
-		    free(coordinates[i-1]);
-		    }
-		}
-	    /*
-	    ** Some checks and free remaining arrays
-	    */
-	    if (Lmaxgasanalysis == ad.Lmaxgas) {
-		assert(ad.Ncellrefined[ad.Lmaxgas] == 0);
-		assert(ad.Ngas == Ngasread);
-		j = 0;
-		k = 0;
-		for (i = ad.Lmingas; i <= ad.Lmaxgas; i++) {
-		    j += ad.Ncell[i];
-		    k += ad.Ncellrefined[i];
-		    }
-		assert(ad.Ngas == j);
-		assert(ad.Ngas == k + Ngasanalysis);
 		}
 	    free(pgp);
-	    free(Icoordinates);
-	    free(cellrefined);
 	    gettimeofday(&time,NULL);
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
-	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %ld gas particles whereof %ld used for analysis.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ngas,Ngasanalysis);
-	    }
-	if (ad.darkcontained || ad.starcontained) {
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d gas particles.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ngas);
 	    /*
-	    ** Dark Matter and Stars
+	    ** Dark Matter
 	    */
 	    gettimeofday(&time,NULL);
 	    timestartsub = time.tv_sec;
-	    fprintf(stderr,"Processing dark matter and stars ... ");
-	    ac = malloc(ad.Nparticleperrecord*sizeof(ART_COORDINATES));
-	    assert(ac != NULL);
+	    fprintf(stderr,"Processing dark matter ... ");
 	    pdp = malloc(gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
 	    assert(pdp != NULL);
-	    if (ad.starcontained) {
-		psp = malloc(gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
-		assert(psp != NULL);
-		move_art_nb_star_filepositions_begin(ad);
-		}
 	    Nparticleread = 0;
 	    Icurrentblockdark = 0;
-	    Icurrentblockstar = 0;
-	    for (i = 0; i < ad.Nrecord; i++) {
-		read_art_nb_coordinates_record(ad,ac);
-		for (j = 0; j < ad.Nparticleperrecord; j++) {
-		    if (Nparticleread < ad.Ndark) {
-			/*
-			** Dark Matter
-			*/
-			for (k = 0; k < 3; k++) {
-			    pdp[Icurrentblockdark].r[k] = put_in_box(ac[j].r[k]-ad.shift,gi.bc[k],gi.bc[k+3]);
-			    pdp[Icurrentblockdark].v[k] = ac[j].v[k];
-			    }
-			for (k = ad.Lmaxdark; k >=0; k--) {
-			    if (ad.ah.num[k] >= Nparticleread) L = ad.Lmaxdark-k;
-			    }
-			pdp[Icurrentblockdark].M = ad.massdark[L];
-			Nparticleread++;
-			Icurrentblockdark++;
-			if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == ad.Ndark)) {
-			    /*
-			    ** Block is full or we reached end of dark matter particles
-			    */
-			    gi.Nparticleinblockdark = Icurrentblockdark;
-			    put_pdp_in_bins(gi,hd,pdp);
-			    Icurrentblockdark = 0;
-			    }
+	    for (i = 0; i < th.ndark; i++) {
+		if (positionprecision == 0) {
+		    read_tipsy_xdr_dark(&xdrs,&dp);
+		    for (k = 0; k < 3; k++) {
+			pdp[Icurrentblockdark].r[k] = dp.pos[k];
+			pdp[Icurrentblockdark].v[k] = dp.vel[k];
 			}
-		    else if (Nparticleread < ad.Ndark+ad.Nstar) {
-			/*
-			** Star
-			*/
-			for (k = 0; k < 3; k++) {
-			    psp[Icurrentblockstar].r[k] = put_in_box(ac[j].r[k]-ad.shift,gi.bc[k],gi.bc[k+3]);
-			    psp[Icurrentblockstar].v[k] = ac[j].v[k];
-			    }
-			/*
-			** Get other star properties
-			*/
-			read_art_nb_star_properties(ad,&asp);
-			psp[Icurrentblockstar].M = asp.mass;
-			psp[Icurrentblockstar].metallicity      = asp.metallicity_SNII+asp.metallicity_SNIa;
-			psp[Icurrentblockstar].metallicity_SNII = asp.metallicity_SNII;
-			psp[Icurrentblockstar].metallicity_SNIa = asp.metallicity_SNIa;
-			psp[Icurrentblockstar].M_metals = asp.mass*(asp.metallicity_SNII+asp.metallicity_SNIa);
-			psp[Icurrentblockstar].t_form = asp.t_form;
-			Nparticleread++;
-			Icurrentblockstar++;
-			if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == ad.Ndark+ad.Nstar)) {
-			    /*
-			    ** Block is full or we reached end of star particles
-			    */
-			    gi.Nparticleinblockstar = Icurrentblockstar;
-			    put_psp_in_bins(gi,hd,psp);
-			    Icurrentblockstar = 0;
-			    }
+		    pdp[Icurrentblockdark].M = dp.mass;
+		    }
+		else if (positionprecision == 1) {
+		    read_tipsy_xdr_dark_dpp(&xdrs,&dpdpp);
+		    for (k = 0; k < 3; k++) {
+			pdp[Icurrentblockdark].r[k] = dpdpp.pos[k];
+			pdp[Icurrentblockdark].v[k] = dpdpp.vel[k];
 			}
+		    pdp[Icurrentblockdark].M = dpdpp.mass;
+		    }
+		Nparticleread++;
+		Icurrentblockdark++;
+		if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == ad.Ndark)) {
+		    /*
+		    ** Block is full or we reached end of dark matter particles
+		    */
+		    gi.Nparticleinblockdark = Icurrentblockdark;
+		    put_pdp_in_bins(gi,hd,pdp);
+		    Icurrentblockdark = 0;
 		    }
 		}
-	    if (ad.starcontained) move_art_nb_star_filepositions_end(ad);
-	    /*
-	    ** free arrays
-	    */
-	    free(ac);
 	    free(pdp);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d dark matter particles.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.ndark);
+	    /*
+	    ** Stars
+	    */
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
+	    fprintf(stderr,"Processing stars ... ");
+	    psp = malloc(gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
+	    assert(psp != NULL);
+	    Nparticleread = 0;
+	    Icurrentblockstar = 0;
+	    for (i = 0; i < th.nstar; i++) {
+		if (positionprecision == 0) {
+		    read_tipsy_xdr_star(&xdrs,&sp);
+		    for (k = 0; k < 3; k++) {
+			psp[Icurrentblockstar].r[k] = sp.pos[k];
+			psp[Icurrentblockstar].v[k] = sp.vel[k];
+			}
+		    psp[Icurrentblockstar].M = sp.mass;
+		    }
+		else if (positionprecision == 1) {
+		    read_tipsy_xdr_star_dpp(&xdrs,&spdpp);
+		    for (k = 0; k < 3; k++) {
+			psp[Icurrentblockstar].r[k] = spdpp.pos[k];
+			psp[Icurrentblockstar].v[k] = spdpp.vel[k];
+			}
+		    psp[Icurrentblockstar].M = spdpp.mass;
+		    }
+		Nparticleread++;
+		Icurrentblockstar++;
+		if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == ad.Nstar)) {
+		    /*
+		    ** Block is full or we reached end of star matter particles
+		    */
+		    gi.Nparticleinblockstar = Icurrentblockstar;
+		    put_psp_in_bins(gi,hd,psp);
+		    Icurrentblockstar = 0;
+		    }
+		}
 	    free(psp);
 	    gettimeofday(&time,NULL);
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
-	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %ld dark matter and %ld star particles.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ndark,ad.Nstar);
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d star particles.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,th.nstar);
 	    }
+	else if ((dataformat == 1) && (gi.NHalo > 0)) {
+	    /*
+	    ** ART data
+	    */
+	    if (ad.gascontained) {
+		/*
+		** Gas
+		*/
+		gettimeofday(&time,NULL);
+		timestartsub = time.tv_sec;
+		fprintf(stderr,"Processing gas ... ");
+		/*
+		** Set file pointers correctly
+		*/
+		if (gi.ILoopRead == 0) {
+		    assert(fgetpos(ad.GasFile[0],&PosGasFile[0]) == 0);
+		    if (ad.GRAVITY || ad.RADIATIVE_TRANSFER) assert(fgetpos(ad.GasFile[1],&PosGasFile[1]) == 0);
+		    }
+		else {
+		    assert(fsetpos(ad.GasFile[0],&PosGasFile[0]) == 0);
+		    if (ad.GRAVITY || ad.RADIATIVE_TRANSFER) assert(fsetpos(ad.GasFile[1],&PosGasFile[1]) == 0);
+		    }
+		/*
+		** Get arrays ready
+		*/
+		pgp = malloc(gi.Nparticleperblockgas*sizeof(PROFILE_GAS_PARTICLE));
+		assert(pgp != NULL);
+		coordinates = malloc((ad.Lmaxgas+1)*sizeof(double **));
+		assert(coordinates != NULL);
+		Icoordinates = malloc((ad.Lmaxgas+1)*sizeof(long int));
+		assert(Icoordinates != NULL);
+		for (i = 0; i < (ad.Lmaxgas+1); i++) {
+		    Icoordinates[i] = 0;
+		    ad.Ncellrefined[i] = 0;
+		    }
+		cellrefined = NULL;
+		Ngasread = 0;
+		Icurrentblockgas = 0;
+		Ngasanalysis = 0;
+		init_sfc(&ad.asfci);
+		/*
+		** Go through all levels
+		*/
+		for (i = ad.Lmingas; i <= Lmaxgasanalysis; i++) {
+		    /*
+		    ** Calculate level properties and read level header
+		    */
+		    celllength = ad.rootcelllength/pow(2,i);
+		    cellvolume = celllength*celllength*celllength;
+		    read_art_nb_gas_header_level(&ad,i,&cellrefined);
+		    /*
+		    ** get coordinates array ready
+		    */
+		    if (i < Lmaxgasanalysis) {
+			coordinates[i] = malloc(ad.Ncellrefined[i]*sizeof(double *));
+			assert(coordinates[i] != NULL);
+			for (j = 0; j < ad.Ncellrefined[i]; j++) {
+			    coordinates[i][j] = malloc(3*sizeof(double));
+			    assert(coordinates[i][j] != NULL);
+			    }
+			}
+		    /*
+		    ** Move file positions
+		    */
+		    move_art_nb_gas_filepositions_level_begin(ad,i);
+		    /*
+		    ** Go through cells in this level
+		    */
+		    for (j = 0; j < ad.Ncell[i]; j++) {
+			read_art_nb_gas_properties(ad,&agp);
+			Ngasread++;
+			/*
+			** Calculate coordinates
+			*/
+			if (i == ad.Lmingas) {
+			    sfc_coords(ad.asfci,j,index);
+			    for (k = 0; k < 3; k++) {
+				r[k] = index[k] + 0.5;
+				}
+			    }
+			else {
+			    for (k = 0; k < 3; k++) {
+				mothercellindex = j/8;
+				childcellindex = j%8;
+				r[k] = coordinates[i-1][mothercellindex][k] + celllength*art_cell_delta[childcellindex][k];
+				}
+			    }
+			/*
+			** Check if cell is refined
+			*/
+			if ((cellrefined[j] == 0) || (i == Lmaxgasanalysis)) {
+			    /*
+			    ** not refined or maximum level reached => add it for analysis
+			    */
+			    Ngasanalysis++;
+			    for (k = 0; k < 3; k++) {
+				pgp[Icurrentblockgas].r[k] = r[k];
+				pgp[Icurrentblockgas].v[k] = agp.momentum[k]/agp.gas_density;
+				}
+			    pgp[Icurrentblockgas].M = cellvolume*agp.gas_density;
+			    pgp[Icurrentblockgas].metallicity      = (agp.metal_density_SNII+agp.metal_density_SNIa)/agp.gas_density;
+			    pgp[Icurrentblockgas].metallicity_SNII = agp.metal_density_SNII/agp.gas_density;
+			    pgp[Icurrentblockgas].metallicity_SNIa = agp.metal_density_SNIa/agp.gas_density;
+			    pgp[Icurrentblockgas].M_HI     = cellvolume*agp.HI_density;
+			    pgp[Icurrentblockgas].M_HII    = cellvolume*agp.HII_density;
+			    pgp[Icurrentblockgas].M_HeI    = cellvolume*agp.HeI_density;
+			    pgp[Icurrentblockgas].M_HeII   = cellvolume*agp.HeII_density;
+			    pgp[Icurrentblockgas].M_HeIII  = cellvolume*agp.HeIII_density;
+			    pgp[Icurrentblockgas].M_H2     = cellvolume*agp.H2_density;
+			    pgp[Icurrentblockgas].M_metals = cellvolume*(agp.metal_density_SNII+agp.metal_density_SNIa);
+			    Icurrentblockgas++;
+			    if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Ngasread == ad.Ngas)) {
+				/*
+				** Block is full or we reached end of gas particles
+				*/
+				gi.Nparticleinblockgas = Icurrentblockgas;
+				put_pgp_in_bins(gi,hd,pgp);
+				Icurrentblockgas = 0;
+				}
+			    }
+			else if (i < Lmaxgasanalysis) {
+			    /*
+			    ** refined and lower level than Lmaxgasanalysis => add it to corresponding coordinates array
+			    */
+			    for (k = 0; k < 3; k++) {
+				coordinates[i][Icoordinates[i]][k] = r[k];
+				}
+			    Icoordinates[i]++;
+			    }
+			}
+		    /*
+		    ** Move file positions
+		    */
+		    move_art_nb_gas_filepositions_level_end(ad,i);
+		    /*
+		    ** Checks and free coordinates of level below
+		    */
+		    if (i < Lmaxgasanalysis) assert(Icoordinates[i] == ad.Ncellrefined[i]);
+		    if (i > ad.Lmingas) {
+			for (j = 0; j < ad.Ncellrefined[i-1]; j++) {
+			    free(coordinates[i-1][j]);
+			    }
+			free(coordinates[i-1]);
+			}
+		    }
+		/*
+		** Some checks and free remaining arrays
+		*/
+		if (Lmaxgasanalysis == ad.Lmaxgas) {
+		    assert(ad.Ncellrefined[ad.Lmaxgas] == 0);
+		    assert(ad.Ngas == Ngasread);
+		    j = 0;
+		    k = 0;
+		    for (i = ad.Lmingas; i <= ad.Lmaxgas; i++) {
+			j += ad.Ncell[i];
+			k += ad.Ncellrefined[i];
+			}
+		    assert(ad.Ngas == j);
+		    assert(ad.Ngas == k + Ngasanalysis);
+		    }
+		free(pgp);
+		free(Icoordinates);
+		free(cellrefined);
+		gettimeofday(&time,NULL);
+		timeendsub = time.tv_sec;
+		timediff = timeendsub-timestartsub;
+		fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %ld gas particles whereof %ld used for analysis.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ngas,Ngasanalysis);
+		}
+	    if (ad.darkcontained || ad.starcontained) {
+		/*
+		** Dark Matter and Stars
+		*/
+		gettimeofday(&time,NULL);
+		timestartsub = time.tv_sec;
+		fprintf(stderr,"Processing dark matter and stars ... ");
+		/*
+		** Set file pointers correctly
+		*/
+		if (gi.ILoopRead == 0) {
+		    assert(fgetpos(ad.CoordinatesDataFile,PosCoordinatesDataFile) == 0);
+		    for (i = 0; i < ad.Nstarproperties; i++) {
+			assert(fgetpos(ad.StarPropertiesFile[i],&PosStarPropertiesFile[i]) == 0);
+			}
+		    }
+		else {
+		    assert(fsetpos(ad.CoordinatesDataFile,PosCoordinatesDataFile) == 0);
+		    for (i = 0; i < ad.Nstarproperties; i++) {
+			assert(fsetpos(ad.StarPropertiesFile[i],&PosStarPropertiesFile[i]) == 0);
+			}
+		    }
+		/*
+		** Get arrays ready
+		*/
+		ac = malloc(ad.Nparticleperrecord*sizeof(ART_COORDINATES));
+		assert(ac != NULL);
+		pdp = malloc(gi.Nparticleperblockdark*sizeof(PROFILE_DARK_PARTICLE));
+		assert(pdp != NULL);
+		if (ad.starcontained) {
+		    psp = malloc(gi.Nparticleperblockstar*sizeof(PROFILE_STAR_PARTICLE));
+		    assert(psp != NULL);
+		    move_art_nb_star_filepositions_begin(ad);
+		    }
+		Nparticleread = 0;
+		Icurrentblockdark = 0;
+		Icurrentblockstar = 0;
+		for (i = 0; i < ad.Nrecord; i++) {
+		    read_art_nb_coordinates_record(ad,ac);
+		    for (j = 0; j < ad.Nparticleperrecord; j++) {
+			if (Nparticleread < ad.Ndark) {
+			    /*
+			    ** Dark Matter
+			    */
+			    for (k = 0; k < 3; k++) {
+				pdp[Icurrentblockdark].r[k] = put_in_box(ac[j].r[k]-ad.shift,gi.bc[k],gi.bc[k+3]);
+				pdp[Icurrentblockdark].v[k] = ac[j].v[k];
+				}
+			    for (k = ad.Lmaxdark; k >=0; k--) {
+				if (ad.ah.num[k] >= Nparticleread) L = ad.Lmaxdark-k;
+				}
+			    pdp[Icurrentblockdark].M = ad.massdark[L];
+			    Nparticleread++;
+			    Icurrentblockdark++;
+			    if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == ad.Ndark)) {
+				/*
+				** Block is full or we reached end of dark matter particles
+				*/
+				gi.Nparticleinblockdark = Icurrentblockdark;
+				put_pdp_in_bins(gi,hd,pdp);
+				Icurrentblockdark = 0;
+				}
+			    }
+			else if (Nparticleread < ad.Ndark+ad.Nstar) {
+			    /*
+			    ** Star
+			    */
+			    for (k = 0; k < 3; k++) {
+				psp[Icurrentblockstar].r[k] = put_in_box(ac[j].r[k]-ad.shift,gi.bc[k],gi.bc[k+3]);
+				psp[Icurrentblockstar].v[k] = ac[j].v[k];
+				}
+			    /*
+			    ** Get other star properties
+			    */
+			    read_art_nb_star_properties(ad,&asp);
+			    psp[Icurrentblockstar].M = asp.mass;
+			    psp[Icurrentblockstar].metallicity      = asp.metallicity_SNII+asp.metallicity_SNIa;
+			    psp[Icurrentblockstar].metallicity_SNII = asp.metallicity_SNII;
+			    psp[Icurrentblockstar].metallicity_SNIa = asp.metallicity_SNIa;
+			    psp[Icurrentblockstar].M_metals = asp.mass*(asp.metallicity_SNII+asp.metallicity_SNIa);
+			    psp[Icurrentblockstar].t_form = asp.t_form;
+			    Nparticleread++;
+			    Icurrentblockstar++;
+			    if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == ad.Ndark+ad.Nstar)) {
+				/*
+				** Block is full or we reached end of star particles
+				*/
+				gi.Nparticleinblockstar = Icurrentblockstar;
+				put_psp_in_bins(gi,hd,psp);
+				Icurrentblockstar = 0;
+				}
+			    }
+			}
+		    }
+		if (ad.starcontained) move_art_nb_star_filepositions_end(ad);
+		/*
+		** free arrays
+		*/
+		free(ac);
+		free(pdp);
+		free(psp);
+		gettimeofday(&time,NULL);
+		timeendsub = time.tv_sec;
+		timediff = timeendsub-timestartsub;
+		fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %ld dark matter and %ld star particles.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,ad.Ndark,ad.Nstar);
+		}
+	    }
+	/*
+	** Do loop specific stuff
+	*/
+	if (gi.ILoopRead < gi.NLoopRecentre) {
+	    /*
+	    ** Calculate recentred halo coordinates
+	    */
+	    calculate_recentred_halo_coordinates(gi,hd);
+	    }
+	else {
+	    /*
+	    ** Calculate total matter distribution
+	    */
+	    calculate_total_matter_distribution(gi,hd);
+	    }
+	gettimeofday(&time,NULL);
+	timeendloop = time.tv_sec;
+	timediff = timeendloop-timestartloop;
+	fprintf(stderr,"Done with loop %d. It took %d s = %d h %d m %d s.\n\n",gi.ILoopRead+1,timediff,timediff/3600,(timediff/60)%60,timediff%60);
 	}
-
-    /*
-    ** Calculate total matter distribution
-    */
-
-    calculate_total_matter_distribution(gi,hd);
 
     /*
     ** Calculate halo properties
@@ -1189,8 +1289,13 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Nparticleperblockdark : %d\n",gi.Nparticleperblockdark);
         fprintf(stderr,"Nparticleperblockstar : %d\n",gi.Nparticleperblockstar);
         fprintf(stderr,"NCell                 : %d\n",gi.NCell);
+        fprintf(stderr,"NLoopRecentre         : %d\n",gi.NLoopRecentre);
+        fprintf(stderr,"NLoopProcessData      : %d\n",gi.NLoopProcessData);
+        fprintf(stderr,"NLoopRead             : %d\n",gi.NLoopRead);
 	fprintf(stderr,"fexcludermin          : %.6e\n",gi.fexcludermin);
 	fprintf(stderr,"fincludermin          : %.6e\n",gi.fincludermin);
+	fprintf(stderr,"frecentrermin         : %.6e\n",gi.frecentrermin);
+	fprintf(stderr,"frecentredist         : %.6e\n",gi.frecentredist);
 	fprintf(stderr,"frhobg                : %.6e\n",gi.frhobg);
 	fprintf(stderr,"fcheckrvcmax          : %.6e\n",gi.fcheckrvcmax);
 	fprintf(stderr,"fcheckrstatic         : %.6e\n",gi.fcheckrstatic);
@@ -1244,6 +1349,8 @@ void usage(void) {
     fprintf(stderr,"-Nparticleperblockdark <value>       : number of dark matter particles per block (default: 1e7)\n");
     fprintf(stderr,"-Nparticleperblockstar <value>       : number of star particles per block (default: 1e7)\n");
     fprintf(stderr,"-NCell <value>                       : number of cells per dimension for linked list (default: 25)\n");
+    fprintf(stderr,"-NLoopRecentre <value>               : number of loops for recentering (default: 0)\n");
+    fprintf(stderr,"-NLoopProcessData <value>            : number of loops for processing data (default: 1)\n");
     fprintf(stderr,"-GRAVITY <value>                     : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
     fprintf(stderr,"-HYDRO <value>                       : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
     fprintf(stderr,"-ADVECT_SPECIES <value>              : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
@@ -1300,7 +1407,10 @@ void set_default_values_general_info(GI *gi) {
     gi->Nparticleperblockstar = 10000000;
     gi->Nparticleinblockstar = 0;
     gi->Nblockstar = 0;
+
     gi->NCell = 25;
+    gi->NLoopRecentre = 0;
+    gi->NLoopProcessData = 1;
 
     gi->rhobg = 0;
     gi->rhocrit = 0;
@@ -1312,6 +1422,8 @@ void set_default_values_general_info(GI *gi) {
 
     gi->fexcludermin = 5;
     gi->fincludermin = 100;
+    gi->frecentrermin = 3;
+    gi->frecentredist = 1.5;
     gi->frhobg = 1.2;
     gi->fcheckrvcmax = 5;
     gi->fcheckrstatic = 3;
@@ -1576,6 +1688,11 @@ void initialise_halo_profile (HALO_DATA *hd){
     hd->vradmean = 0;
     hd->vraddisp = 0;
     hd->truncated = 0;
+    
+    for (j = 0; j < 3; j++) {
+	hd->rcentrenew[j] = 0;
+	hd->vcentrenew[j] = 0;
+	}
 
     dr = (log(hd->rmax)-log(hd->rmin))/hd->NBin;
     hd->ps[0].ri = 0;
@@ -1669,7 +1786,7 @@ void initialise_halo_profile (HALO_DATA *hd){
 	}
     }
 
-int intersect(GI gi, HALO_DATA hd, int index[3], double shift[3]) {
+int intersect(GI gi, HALO_DATA hd, int index[3], double shift[3], double size) {
 
     int i;
     double celllength, distance;
@@ -1689,7 +1806,7 @@ int intersect(GI gi, HALO_DATA hd, int index[3], double shift[3]) {
 	    }
 	}
     distance = sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
-    if (distance <= hd.ps[hd.NBin].ro) return 1;
+    if (distance <= size) return 1;
     else return 0;
     }
 
@@ -1747,62 +1864,93 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
 #pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
-		    if (intersect(gi,hd[j],index,shift)) {
-			i = HeadIndex[index[0]][index[1]][index[2]];
-			while (i != 0) {
-			    for (k = 0; k < 3; k++) {
-				r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
-				r[k] = r[k]-hd[j].rcentre[k];
-				}
-			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-			    if (d <= hd[j].ps[hd[j].NBin].ro) {
+		    if (gi.ILoopRead < gi.NLoopRecentre) {
+			/*
+			** Recentre halo coordinates
+			*/
+			d = gi.frecentrermin*hd[j].ps[0].ro;
+			d *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
+			if (intersect(gi,hd[j],index,shift,d)) {
+			    i = HeadIndex[index[0]][index[1]][index[2]];
+			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
-				    v[k] = pgp[i].v[k]-hd[j].vcentre[k];
+				    r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
+				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
-				/*
-				** Go through bins from outside inwards => larger bin volume further out
-				*/
-				for (l = hd[j].NBin; l >=0; l--) {
-				    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-					calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-					if (gi.velocityprojection == 0) {
-					    vproj[0] = v[0];
-					    vproj[1] = v[1];
-					    vproj[2] = v[2];
-					    }
-					else if (gi.velocityprojection == 1) {
-					    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-					    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-					    }
-					hd[j].ps[l].tot->vradsmooth += pgp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-					hd[j].ps[l].gas->N += 1;
-					hd[j].ps[l].gas->M += pgp[i].M;
-					for (k = 0; k < 3; k++) {
-					    hd[j].ps[l].gas->v[k]  += pgp[i].M*vproj[k];
-					    hd[j].ps[l].gas->vdt[k] += pgp[i].M*vproj[k]*vproj[k];
-					    }
-					hd[j].ps[l].gas->vdt[3] += pgp[i].M*vproj[0]*vproj[1];
-					hd[j].ps[l].gas->vdt[4] += pgp[i].M*vproj[0]*vproj[2];
-					hd[j].ps[l].gas->vdt[5] += pgp[i].M*vproj[1]*vproj[2];
-					hd[j].ps[l].gas->L[0]  += pgp[i].M*(r[1]*v[2] - r[2]*v[1]);
-					hd[j].ps[l].gas->L[1]  += pgp[i].M*(r[2]*v[0] - r[0]*v[2]);
-					hd[j].ps[l].gas->L[2]  += pgp[i].M*(r[0]*v[1] - r[1]*v[0]);
-					hd[j].ps[l].gas->metallicity      += pgp[i].M*pgp[i].metallicity;
-					hd[j].ps[l].gas->metallicity_SNII += pgp[i].M*pgp[i].metallicity_SNII;
-					hd[j].ps[l].gas->metallicity_SNIa += pgp[i].M*pgp[i].metallicity_SNIa;
-					hd[j].ps[l].gas->M_HI     += pgp[i].M_HI;
-					hd[j].ps[l].gas->M_HII    += pgp[i].M_HII;
-					hd[j].ps[l].gas->M_HeI    += pgp[i].M_HeI;
-					hd[j].ps[l].gas->M_HeII   += pgp[i].M_HeII;
-					hd[j].ps[l].gas->M_HeIII  += pgp[i].M_HeIII;
-					hd[j].ps[l].gas->M_H2     += pgp[i].M_H2;
-					hd[j].ps[l].gas->M_metals += pgp[i].M_metals;
-					break;
+				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+				if (d <= gi.frecentrermin*hd[j].ps[0].ro) {
+				    hd[j].Mrstatic += pgp[i].M;
+				    for (k = 0; k < 3; k++) {
+					hd[j].rcentrenew[k] += pgp[i].M*correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
+					hd[j].vcentrenew[k] += pgp[i].M*pgp[i].v[k];
 					}
 				    }
+				i = NextIndex[i];
 				}
-			    i = NextIndex[i];
+			    }
+			}
+		    else {
+			/*
+			** Process data
+			*/
+			d = hd[j].ps[hd[j].NBin].ro;
+			if (intersect(gi,hd[j],index,shift,d)) {
+			    i = HeadIndex[index[0]][index[1]][index[2]];
+			    while (i != 0) {
+				for (k = 0; k < 3; k++) {
+				    r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
+				    r[k] = r[k]-hd[j].rcentre[k];
+				    }
+				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+				if (d <= hd[j].ps[hd[j].NBin].ro) {
+				    for (k = 0; k < 3; k++) {
+					v[k] = pgp[i].v[k]-hd[j].vcentre[k];
+					}
+				    /*
+				    ** Go through bins from outside inwards => larger bin volume further out
+				    */
+				    for (l = hd[j].NBin; l >=0; l--) {
+					if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+					    calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+					    if (gi.velocityprojection == 0) {
+						vproj[0] = v[0];
+						vproj[1] = v[1];
+						vproj[2] = v[2];
+						}
+					    else if (gi.velocityprojection == 1) {
+						vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+						vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+						vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+						}
+					    hd[j].ps[l].tot->vradsmooth += pgp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+					    hd[j].ps[l].gas->N += 1;
+					    hd[j].ps[l].gas->M += pgp[i].M;
+					    for (k = 0; k < 3; k++) {
+						hd[j].ps[l].gas->v[k]  += pgp[i].M*vproj[k];
+						hd[j].ps[l].gas->vdt[k] += pgp[i].M*vproj[k]*vproj[k];
+						}
+					    hd[j].ps[l].gas->vdt[3] += pgp[i].M*vproj[0]*vproj[1];
+					    hd[j].ps[l].gas->vdt[4] += pgp[i].M*vproj[0]*vproj[2];
+					    hd[j].ps[l].gas->vdt[5] += pgp[i].M*vproj[1]*vproj[2];
+					    hd[j].ps[l].gas->L[0]  += pgp[i].M*(r[1]*v[2] - r[2]*v[1]);
+					    hd[j].ps[l].gas->L[1]  += pgp[i].M*(r[2]*v[0] - r[0]*v[2]);
+					    hd[j].ps[l].gas->L[2]  += pgp[i].M*(r[0]*v[1] - r[1]*v[0]);
+					    hd[j].ps[l].gas->metallicity      += pgp[i].M*pgp[i].metallicity;
+					    hd[j].ps[l].gas->metallicity_SNII += pgp[i].M*pgp[i].metallicity_SNII;
+					    hd[j].ps[l].gas->metallicity_SNIa += pgp[i].M*pgp[i].metallicity_SNIa;
+					    hd[j].ps[l].gas->M_HI     += pgp[i].M_HI;
+					    hd[j].ps[l].gas->M_HII    += pgp[i].M_HII;
+					    hd[j].ps[l].gas->M_HeI    += pgp[i].M_HeI;
+					    hd[j].ps[l].gas->M_HeII   += pgp[i].M_HeII;
+					    hd[j].ps[l].gas->M_HeIII  += pgp[i].M_HeIII;
+					    hd[j].ps[l].gas->M_H2     += pgp[i].M_H2;
+					    hd[j].ps[l].gas->M_metals += pgp[i].M_metals;
+					    break;
+					    }
+					}
+				    }
+				i = NextIndex[i];
+				}
 			    }
 			}
 		    }
@@ -1873,52 +2021,83 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
 #pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,pdp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
-		    if (intersect(gi,hd[j],index,shift)) {
-			i = HeadIndex[index[0]][index[1]][index[2]];
-			while (i != 0) {
-			    for (k = 0; k < 3; k++) {
-				r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
-				r[k] = r[k]-hd[j].rcentre[k];
-				}
-			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-			    if (d <= hd[j].ps[hd[j].NBin].ro) {
+		    if (gi.ILoopRead < gi.NLoopRecentre) {
+			/*
+			** Recentre halo coordinates
+			*/
+			d = gi.frecentrermin*hd[j].ps[0].ro;
+			d *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
+			if (intersect(gi,hd[j],index,shift,d)) {
+			    i = HeadIndex[index[0]][index[1]][index[2]];
+			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
-				    v[k] = pdp[i].v[k]-hd[j].vcentre[k];
+				    r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
+				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
-				/*
-				** Go through bins from outside inwards => larger bin volume further out
-				*/
-				for (l = hd[j].NBin; l >=0; l--) {
-				    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-					calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-					if (gi.velocityprojection == 0) {
-					    vproj[0] = v[0];
-					    vproj[1] = v[1];
-					    vproj[2] = v[2];
-					    }
-					else if (gi.velocityprojection == 1) {
-					    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-					    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-					    }
-					hd[j].ps[l].tot->vradsmooth += pdp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-					hd[j].ps[l].dark->N += 1;
-					hd[j].ps[l].dark->M += pdp[i].M;
-					for (k = 0; k < 3; k++) {
-					    hd[j].ps[l].dark->v[k]  += pdp[i].M*vproj[k];
-					    hd[j].ps[l].dark->vdt[k] += pdp[i].M*vproj[k]*vproj[k];
-					    }
-					hd[j].ps[l].dark->vdt[3] += pdp[i].M*vproj[0]*vproj[1];
-					hd[j].ps[l].dark->vdt[4] += pdp[i].M*vproj[0]*vproj[2];
-					hd[j].ps[l].dark->vdt[5] += pdp[i].M*vproj[1]*vproj[2];
-					hd[j].ps[l].dark->L[0]  += pdp[i].M*(r[1]*v[2] - r[2]*v[1]);
-					hd[j].ps[l].dark->L[1]  += pdp[i].M*(r[2]*v[0] - r[0]*v[2]);
-					hd[j].ps[l].dark->L[2]  += pdp[i].M*(r[0]*v[1] - r[1]*v[0]);
-					break;
+				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+				if (d <= gi.frecentrermin*hd[j].ps[0].ro) {
+				    hd[j].Mrstatic += pdp[i].M;
+				    for (k = 0; k < 3; k++) {
+					hd[j].rcentrenew[k] += pdp[i].M*correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
+					hd[j].vcentrenew[k] += pdp[i].M*pdp[i].v[k];
 					}
 				    }
+				i = NextIndex[i];
 				}
-			    i = NextIndex[i];
+			    }
+			}
+		    else {
+			/*
+			** Process data
+			*/
+			d = hd[j].ps[hd[j].NBin].ro;
+			if (intersect(gi,hd[j],index,shift,d)) {
+			    i = HeadIndex[index[0]][index[1]][index[2]];
+			    while (i != 0) {
+				for (k = 0; k < 3; k++) {
+				    r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
+				    r[k] = r[k]-hd[j].rcentre[k];
+				    }
+				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+				if (d <= hd[j].ps[hd[j].NBin].ro) {
+				    for (k = 0; k < 3; k++) {
+					v[k] = pdp[i].v[k]-hd[j].vcentre[k];
+					}
+				    /*
+				    ** Go through bins from outside inwards => larger bin volume further out
+				    */
+				    for (l = hd[j].NBin; l >=0; l--) {
+					if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+					    calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+					    if (gi.velocityprojection == 0) {
+						vproj[0] = v[0];
+						vproj[1] = v[1];
+						vproj[2] = v[2];
+						}
+					    else if (gi.velocityprojection == 1) {
+						vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+						vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+						vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+						}
+					    hd[j].ps[l].tot->vradsmooth += pdp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+					    hd[j].ps[l].dark->N += 1;
+					    hd[j].ps[l].dark->M += pdp[i].M;
+					    for (k = 0; k < 3; k++) {
+						hd[j].ps[l].dark->v[k]  += pdp[i].M*vproj[k];
+						hd[j].ps[l].dark->vdt[k] += pdp[i].M*vproj[k]*vproj[k];
+						}
+					    hd[j].ps[l].dark->vdt[3] += pdp[i].M*vproj[0]*vproj[1];
+					    hd[j].ps[l].dark->vdt[4] += pdp[i].M*vproj[0]*vproj[2];
+					    hd[j].ps[l].dark->vdt[5] += pdp[i].M*vproj[1]*vproj[2];
+					    hd[j].ps[l].dark->L[0]  += pdp[i].M*(r[1]*v[2] - r[2]*v[1]);
+					    hd[j].ps[l].dark->L[1]  += pdp[i].M*(r[2]*v[0] - r[0]*v[2]);
+					    hd[j].ps[l].dark->L[2]  += pdp[i].M*(r[0]*v[1] - r[1]*v[0]);
+					    break;
+					    }
+					}
+				    }
+				i = NextIndex[i];
+				}
 			    }
 			}
 		    }
@@ -1989,57 +2168,88 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
 #pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,psp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
-		    if (intersect(gi,hd[j],index,shift)) {
-			i = HeadIndex[index[0]][index[1]][index[2]];
-			while (i != 0) {
-			    for (k = 0; k < 3; k++) {
-				r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
-				r[k] = r[k]-hd[j].rcentre[k];
-				}
-			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-			    if (d <= hd[j].ps[hd[j].NBin].ro) {
+		    if (gi.ILoopRead < gi.NLoopRecentre) {
+			/*
+			** Recentre halo coordinates
+			*/
+			d = gi.frecentrermin*hd[j].ps[0].ro;
+			d *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
+			if (intersect(gi,hd[j],index,shift,d)) {
+			    i = HeadIndex[index[0]][index[1]][index[2]];
+			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
-				    v[k] = psp[i].v[k]-hd[j].vcentre[k];
+				    r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
+				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
-				/*
-				** Go through bins from outside inwards => larger bin volume further out
-				*/
-				for (l = hd[j].NBin; l >=0; l--) {
-				    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-					calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-					if (gi.velocityprojection == 0) {
-					    vproj[0] = v[0];
-					    vproj[1] = v[1];
-					    vproj[2] = v[2];
-					    }
-					else if (gi.velocityprojection == 1) {
-					    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-					    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-					    }
-					hd[j].ps[l].tot->vradsmooth += psp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-					hd[j].ps[l].star->N += 1;
-					hd[j].ps[l].star->M += psp[i].M;
-					for (k = 0; k < 3; k++) {
-					    hd[j].ps[l].star->v[k]  += psp[i].M*vproj[k];
-					    hd[j].ps[l].star->vdt[k] += psp[i].M*vproj[k]*vproj[k];
-					    }
-					hd[j].ps[l].star->vdt[3] += psp[i].M*vproj[0]*vproj[1];
-					hd[j].ps[l].star->vdt[4] += psp[i].M*vproj[0]*vproj[2];
-					hd[j].ps[l].star->vdt[5] += psp[i].M*vproj[1]*vproj[2];
-					hd[j].ps[l].star->L[0]  += psp[i].M*(r[1]*v[2] - r[2]*v[1]);
-					hd[j].ps[l].star->L[1]  += psp[i].M*(r[2]*v[0] - r[0]*v[2]);
-					hd[j].ps[l].star->L[2]  += psp[i].M*(r[0]*v[1] - r[1]*v[0]);
-					hd[j].ps[l].star->metallicity      += psp[i].M*psp[i].metallicity;
-					hd[j].ps[l].star->metallicity_SNII += psp[i].M*psp[i].metallicity_SNII;
-					hd[j].ps[l].star->metallicity_SNIa += psp[i].M*psp[i].metallicity_SNIa;
-					hd[j].ps[l].star->M_metals += psp[i].M_metals;
-					hd[j].ps[l].star->t_form += psp[i].t_form;
-					break;
+				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+				if (d <= gi.frecentrermin*hd[j].ps[0].ro) {
+				    hd[j].Mrstatic += psp[i].M;
+				    for (k = 0; k < 3; k++) {
+					hd[j].rcentrenew[k] += psp[i].M*correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
+					hd[j].vcentrenew[k] += psp[i].M*psp[i].v[k];
 					}
 				    }
+				i = NextIndex[i];
 				}
-			    i = NextIndex[i];
+			    }
+			}
+		    else {
+			/*
+			** Process data
+			*/
+			d = hd[j].ps[hd[j].NBin].ro;
+			if (intersect(gi,hd[j],index,shift,d)) {
+			    i = HeadIndex[index[0]][index[1]][index[2]];
+			    while (i != 0) {
+				for (k = 0; k < 3; k++) {
+				    r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
+				    r[k] = r[k]-hd[j].rcentre[k];
+				    }
+				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+				if (d <= hd[j].ps[hd[j].NBin].ro) {
+				    for (k = 0; k < 3; k++) {
+					v[k] = psp[i].v[k]-hd[j].vcentre[k];
+					}
+				    /*
+				    ** Go through bins from outside inwards => larger bin volume further out
+				    */
+				    for (l = hd[j].NBin; l >=0; l--) {
+					if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+					    calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+					    if (gi.velocityprojection == 0) {
+						vproj[0] = v[0];
+						vproj[1] = v[1];
+						vproj[2] = v[2];
+						}
+					    else if (gi.velocityprojection == 1) {
+						vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+						vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+						vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+						}
+					    hd[j].ps[l].tot->vradsmooth += psp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+					    hd[j].ps[l].star->N += 1;
+					    hd[j].ps[l].star->M += psp[i].M;
+					    for (k = 0; k < 3; k++) {
+						hd[j].ps[l].star->v[k]  += psp[i].M*vproj[k];
+						hd[j].ps[l].star->vdt[k] += psp[i].M*vproj[k]*vproj[k];
+						}
+					    hd[j].ps[l].star->vdt[3] += psp[i].M*vproj[0]*vproj[1];
+					    hd[j].ps[l].star->vdt[4] += psp[i].M*vproj[0]*vproj[2];
+					    hd[j].ps[l].star->vdt[5] += psp[i].M*vproj[1]*vproj[2];
+					    hd[j].ps[l].star->L[0]  += psp[i].M*(r[1]*v[2] - r[2]*v[1]);
+					    hd[j].ps[l].star->L[1]  += psp[i].M*(r[2]*v[0] - r[0]*v[2]);
+					    hd[j].ps[l].star->L[2]  += psp[i].M*(r[0]*v[1] - r[1]*v[0]);
+					    hd[j].ps[l].star->metallicity      += psp[i].M*psp[i].metallicity;
+					    hd[j].ps[l].star->metallicity_SNII += psp[i].M*psp[i].metallicity_SNII;
+					    hd[j].ps[l].star->metallicity_SNIa += psp[i].M*psp[i].metallicity_SNIa;
+					    hd[j].ps[l].star->M_metals += psp[i].M_metals;
+					    hd[j].ps[l].star->t_form += psp[i].t_form;
+					    break;
+					    }
+					}
+				    }
+				i = NextIndex[i];
+				}
 			    }
 			}
 		    }
@@ -2054,6 +2264,21 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 	}
     free(HeadIndex);
     free(NextIndex);
+    }
+
+void calculate_recentred_halo_coordinates(GI gi, HALO_DATA *hd) {
+
+    int i, j;
+
+    for (i = 0; i < gi.NHalo; i++) {
+	for (j = 0; j < 3; j++) {
+	    hd[i].rcentre[j] = hd[i].rcentrenew[j]/hd[i].Mrstatic;
+	    hd[i].vcentre[j] = hd[i].vcentrenew[j]/hd[i].Mrstatic;
+	    hd[i].rcentrenew[j] = 0;
+	    hd[i].vcentrenew[j] = 0;
+	    }
+	hd[i].Mrstatic = 0;
+	}
     }
 
 void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
