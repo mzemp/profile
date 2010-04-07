@@ -1427,10 +1427,10 @@ void set_default_values_general_info(GI *gi) {
     gi->frhobg = 1.2;
     gi->fcheckrvcmax = 5;
     gi->fcheckrstatic = 3;
-    gi->fchecktruncated = 0;
+    gi->fchecktruncated = 1.2;
     gi->vraddispmin = 2;
     gi->Nsigmavrad = 1.5;
-    gi->Nsigmaextreme = 4.5;
+    gi->Nsigmaextreme = 5;
     }
 
 void calculate_densities(GI *gi) {
@@ -1817,7 +1817,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     int ***HeadIndex, *NextIndex;
     double r[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
-    double d;
+    double d, size;
     double shift[3];
 
     /*
@@ -1862,15 +1862,15 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d,size) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
 			/*
 			** Recentre halo coordinates
 			*/
-			d = gi.frecentrermin*hd[j].ps[0].ro;
-			d *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
-			if (intersect(gi,hd[j],index,shift,d)) {
+			size = gi.frecentrermin*hd[j].ps[0].ro;
+			size *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
+			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
@@ -1878,7 +1878,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
 				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-				if (d <= gi.frecentrermin*hd[j].ps[0].ro) {
+				if (d <= size) {
 				    hd[j].Mrstatic += pgp[i].M;
 				    for (k = 0; k < 3; k++) {
 					hd[j].rcentrenew[k] += pgp[i].M*correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
@@ -1893,8 +1893,8 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 			/*
 			** Process data
 			*/
-			d = hd[j].ps[hd[j].NBin].ro;
-			if (intersect(gi,hd[j],index,shift,d)) {
+			size = hd[j].ps[hd[j].NBin].ro;
+			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
@@ -1902,7 +1902,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
 				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-				if (d <= hd[j].ps[hd[j].NBin].ro) {
+				if (d <= size) {
 				    for (k = 0; k < 3; k++) {
 					v[k] = pgp[i].v[k]-hd[j].vcentre[k];
 					}
@@ -1974,7 +1974,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     int ***HeadIndex, *NextIndex;
     double r[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
-    double d;
+    double d, size;
     double shift[3];
 
     /*
@@ -2019,15 +2019,15 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,pdp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d,size) shared(hd,pdp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
 			/*
 			** Recentre halo coordinates
 			*/
-			d = gi.frecentrermin*hd[j].ps[0].ro;
-			d *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
-			if (intersect(gi,hd[j],index,shift,d)) {
+			size = gi.frecentrermin*hd[j].ps[0].ro;
+			size *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
+			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
@@ -2035,7 +2035,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
 				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-				if (d <= gi.frecentrermin*hd[j].ps[0].ro) {
+				if (d <= size) {
 				    hd[j].Mrstatic += pdp[i].M;
 				    for (k = 0; k < 3; k++) {
 					hd[j].rcentrenew[k] += pdp[i].M*correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
@@ -2050,8 +2050,8 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 			/*
 			** Process data
 			*/
-			d = hd[j].ps[hd[j].NBin].ro;
-			if (intersect(gi,hd[j],index,shift,d)) {
+			size = hd[j].ps[hd[j].NBin].ro;
+			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
@@ -2059,7 +2059,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
 				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-				if (d <= hd[j].ps[hd[j].NBin].ro) {
+				if (d <= size) {
 				    for (k = 0; k < 3; k++) {
 					v[k] = pdp[i].v[k]-hd[j].vcentre[k];
 					}
@@ -2121,7 +2121,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     int ***HeadIndex, *NextIndex;
     double r[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
-    double d;
+    double d, size;
     double shift[3];
 
     /*
@@ -2166,15 +2166,15 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d) shared(hd,psp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d,size) shared(hd,psp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
 			/*
 			** Recentre halo coordinates
 			*/
-			d = gi.frecentrermin*hd[j].ps[0].ro;
-			d *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
-			if (intersect(gi,hd[j],index,shift,d)) {
+			size = gi.frecentrermin*hd[j].ps[0].ro;
+			size *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
+			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
@@ -2182,7 +2182,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
 				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-				if (d <= gi.frecentrermin*hd[j].ps[0].ro) {
+				if (d <= size) {
 				    hd[j].Mrstatic += psp[i].M;
 				    for (k = 0; k < 3; k++) {
 					hd[j].rcentrenew[k] += psp[i].M*correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
@@ -2197,8 +2197,8 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 			/*
 			** Process data
 			*/
-			d = hd[j].ps[hd[j].NBin].ro;
-			if (intersect(gi,hd[j],index,shift,d)) {
+			size = hd[j].ps[hd[j].NBin].ro;
+			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i != 0) {
 				for (k = 0; k < 3; k++) {
@@ -2206,7 +2206,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 				    r[k] = r[k]-hd[j].rcentre[k];
 				    }
 				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-				if (d <= hd[j].ps[hd[j].NBin].ro) {
+				if (d <= size) {
 				    for (k = 0; k < 3; k++) {
 					v[k] = psp[i].v[k]-hd[j].vcentre[k];
 					}
@@ -2844,15 +2844,15 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rstatic/8 Mrstatic/9 rvcmaxtot/10 Mrvcmaxtot/11 rvcmaxdark/12 Mrvcmaxdark/13 rtrunc/14 Mrtrunc/15 rbg/16 Mrbg/17 rcrit/18 Mrcrit/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 rminMenc/24 vradmean/25 vraddisp/26 truncated/27\n");
+    fprintf(outputfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mrbg/9 rcrit/10 Mrcrit/11 rstatic/12 Mrstatic/13 rvcmaxtot/14 Mrvcmaxtot/15 rvcmaxdark/16 Mrvcmaxdark/17 rtrunc/18 Mrtrunc/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 rminMenc/24 vradmean/25 vraddisp/26 rvradrangelower/27 rvradrangeupper/28 truncated/29\n");
     for (i = 0; i < gi.NHalo; i++) {
 	fprintf(outputfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %d %.6e %.6e\n",
 		hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],
-		hd[i].rstatic,hd[i].Mrstatic,hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark,hd[i].rtrunc,hd[i].Mrtrunc,
 		hd[i].rbg,hd[i].Mrbg,hd[i].rcrit,hd[i].Mrcrit,
+		hd[i].rstatic,hd[i].Mrstatic,hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark,hd[i].rtrunc,hd[i].Mrtrunc,
 		hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar,
-		hd[i].rminMenc,hd[i].vradmean,hd[i].vraddisp,hd[i].truncated,
-		hd[i].rvradrangelower,hd[i].rvradrangeupper);
+		hd[i].rminMenc,hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper,
+		hd[i].truncated);
 	
 	}
     fclose(outputfile);
