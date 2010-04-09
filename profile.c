@@ -2844,16 +2844,20 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mrbg/9 rcrit/10 Mrcrit/11 rstatic/12 Mrstatic/13 rvcmaxtot/14 Mrvcmaxtot/15 rvcmaxdark/16 Mrvcmaxdark/17 rtrunc/18 Mrtrunc/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 rminMenc/24 vradmean/25 vraddisp/26 rvradrangelower/27 rvradrangeupper/28 truncated/29\n");
+    fprintf(outputfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mrbg/9 rcrit/10 Mrcrit/11 rstatic/12 Mrstatic/13 rvcmaxtot/14 Mrvcmaxtot/15 rvcmaxdark/16 Mrvcmaxdark/17 rtrunc/18 Mrtrunc/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 vradmean/24 vraddisp/25 rvradrangelower/26 rvradrangeupper/27 rminMenc/28 truncated/29\n");
     for (i = 0; i < gi.NHalo; i++) {
-	fprintf(outputfile,"%d %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %d %.6e %.6e\n",
-		hd[i].ID,hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2],hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2],
-		hd[i].rbg,hd[i].Mrbg,hd[i].rcrit,hd[i].Mrcrit,
-		hd[i].rstatic,hd[i].Mrstatic,hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark,hd[i].rtrunc,hd[i].Mrtrunc,
-		hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar,
-		hd[i].rminMenc,hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper,
-		hd[i].truncated);
-	
+	fprintf(outputfile,"%d",hd[i].ID);
+	fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
+	fprintf(outputfile," %.6e %.6e %.6e",hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rbg,hd[i].Mrbg,hd[i].rcrit,hd[i].Mrcrit);
+	fprintf(outputfile," %.6e %.6e",hd[i].rstatic,hd[i].Mrstatic);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark);
+	fprintf(outputfile," %.6e %.6e",hd[i].rtrunc,hd[i].Mrtrunc);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper);
+	fprintf(outputfile," %.6e",hd[i].rminMenc);
+	fprintf(outputfile," %d",hd[i].truncated);
+	fprintf(outputfile,"\n");
 	}
     fclose(outputfile);
     /*
