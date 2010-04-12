@@ -699,6 +699,7 @@ int main(int argc, char **argv) {
     ** Harvest data
     */
 
+    assert(gi.NLoopProcessData == 1);
     gi.NLoopRead = gi.NLoopRecentre + gi.NLoopProcessData;
 
     for (gi.ILoopRead = 0; gi.ILoopRead < gi.NLoopRead; gi.ILoopRead++) {
@@ -747,7 +748,7 @@ int main(int argc, char **argv) {
 		    ** Block is full or we reached end of gas particles
 		    */
 		    gi.Nparticleinblockgas = Icurrentblockgas;
-		    put_pgp_in_bins(gi,hd,pgp);
+		    if (gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,pgp);
 		    Icurrentblockgas = 0;
 		    }
 		}
@@ -847,7 +848,7 @@ int main(int argc, char **argv) {
 	    /*
 	    ** ART data
 	    */
-	    if (ad.gascontained) {
+	    if (ad.gascontained && (gi.ILoopRead >= gi.NLoopRecentre)) {
 		/*
 		** Gas
 		*/
@@ -857,7 +858,7 @@ int main(int argc, char **argv) {
 		/*
 		** Set file pointers correctly
 		*/
-		if (gi.ILoopRead == 0) {
+		if (gi.ILoopRead == gi.NLoopRecentre) {
 		    assert(fgetpos(ad.GasFile[0],&PosGasFile[0]) == 0);
 		    if (ad.GRAVITY || ad.RADIATIVE_TRANSFER) assert(fgetpos(ad.GasFile[1],&PosGasFile[1]) == 0);
 		    }
@@ -959,7 +960,7 @@ int main(int argc, char **argv) {
 				** Block is full or we reached end of gas particles
 				*/
 				gi.Nparticleinblockgas = Icurrentblockgas;
-				put_pgp_in_bins(gi,hd,pgp);
+				if (gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,pgp);
 				Icurrentblockgas = 0;
 				}
 			    }
@@ -1423,7 +1424,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fexcludermin = 5;
     gi->fincludermin = 100;
     gi->frecentrermin = 3;
-    gi->frecentredist = 1.5;
+    gi->frecentredist = 2;
     gi->frhobg = 1.2;
     gi->fcheckrvcmax = 5;
     gi->fcheckrstatic = 3;
@@ -1864,93 +1865,65 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
 #pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d,size) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
-		    if (gi.ILoopRead < gi.NLoopRecentre) {
-			/*
-			** Recentre halo coordinates
-			*/
-			size = gi.frecentrermin*hd[j].ps[0].ro;
-			size *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
-			if (intersect(gi,hd[j],index,shift,size)) {
-			    i = HeadIndex[index[0]][index[1]][index[2]];
-			    while (i != 0) {
-				for (k = 0; k < 3; k++) {
-				    r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
-				    r[k] = r[k]-hd[j].rcentre[k];
-				    }
-				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-				if (d <= size) {
-				    hd[j].Mrstatic += pgp[i].M;
-				    for (k = 0; k < 3; k++) {
-					hd[j].rcentrenew[k] += pgp[i].M*correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
-					hd[j].vcentrenew[k] += pgp[i].M*pgp[i].v[k];
-					}
-				    }
-				i = NextIndex[i];
+		    /*
+		    ** Process data
+		    */
+		    size = hd[j].ps[hd[j].NBin].ro;
+		    if (intersect(gi,hd[j],index,shift,size)) {
+			i = HeadIndex[index[0]][index[1]][index[2]];
+			while (i != 0) {
+			    for (k = 0; k < 3; k++) {
+				r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
+				r[k] = r[k]-hd[j].rcentre[k];
 				}
-			    }
-			}
-		    else {
-			/*
-			** Process data
-			*/
-			size = hd[j].ps[hd[j].NBin].ro;
-			if (intersect(gi,hd[j],index,shift,size)) {
-			    i = HeadIndex[index[0]][index[1]][index[2]];
-			    while (i != 0) {
+			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+			    if (d <= size) {
 				for (k = 0; k < 3; k++) {
-				    r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
-				    r[k] = r[k]-hd[j].rcentre[k];
+				    v[k] = pgp[i].v[k]-hd[j].vcentre[k];
 				    }
-				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-				if (d <= size) {
-				    for (k = 0; k < 3; k++) {
-					v[k] = pgp[i].v[k]-hd[j].vcentre[k];
-					}
-				    /*
-				    ** Go through bins from outside inwards => larger bin volume further out
-				    */
-				    for (l = hd[j].NBin; l >=0; l--) {
-					if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-					    calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-					    if (gi.velocityprojection == 0) {
-						vproj[0] = v[0];
-						vproj[1] = v[1];
-						vproj[2] = v[2];
-						}
-					    else if (gi.velocityprojection == 1) {
-						vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-						vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-						vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
-						}
-					    hd[j].ps[l].tot->vradsmooth += pgp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
-					    hd[j].ps[l].gas->N += 1;
-					    hd[j].ps[l].gas->M += pgp[i].M;
-					    for (k = 0; k < 3; k++) {
-						hd[j].ps[l].gas->v[k]  += pgp[i].M*vproj[k];
-						hd[j].ps[l].gas->vdt[k] += pgp[i].M*vproj[k]*vproj[k];
-						}
-					    hd[j].ps[l].gas->vdt[3] += pgp[i].M*vproj[0]*vproj[1];
-					    hd[j].ps[l].gas->vdt[4] += pgp[i].M*vproj[0]*vproj[2];
-					    hd[j].ps[l].gas->vdt[5] += pgp[i].M*vproj[1]*vproj[2];
-					    hd[j].ps[l].gas->L[0]  += pgp[i].M*(r[1]*v[2] - r[2]*v[1]);
-					    hd[j].ps[l].gas->L[1]  += pgp[i].M*(r[2]*v[0] - r[0]*v[2]);
-					    hd[j].ps[l].gas->L[2]  += pgp[i].M*(r[0]*v[1] - r[1]*v[0]);
-					    hd[j].ps[l].gas->metallicity      += pgp[i].M*pgp[i].metallicity;
-					    hd[j].ps[l].gas->metallicity_SNII += pgp[i].M*pgp[i].metallicity_SNII;
-					    hd[j].ps[l].gas->metallicity_SNIa += pgp[i].M*pgp[i].metallicity_SNIa;
-					    hd[j].ps[l].gas->M_HI     += pgp[i].M_HI;
-					    hd[j].ps[l].gas->M_HII    += pgp[i].M_HII;
-					    hd[j].ps[l].gas->M_HeI    += pgp[i].M_HeI;
-					    hd[j].ps[l].gas->M_HeII   += pgp[i].M_HeII;
-					    hd[j].ps[l].gas->M_HeIII  += pgp[i].M_HeIII;
-					    hd[j].ps[l].gas->M_H2     += pgp[i].M_H2;
-					    hd[j].ps[l].gas->M_metals += pgp[i].M_metals;
-					    break;
+				/*
+				** Go through bins from outside inwards => larger bin volume further out
+				*/
+				for (l = hd[j].NBin; l >=0; l--) {
+				    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
+					calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+					if (gi.velocityprojection == 0) {
+					    vproj[0] = v[0];
+					    vproj[1] = v[1];
+					    vproj[2] = v[2];
 					    }
+					else if (gi.velocityprojection == 1) {
+					    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
+					    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
+					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+					    }
+					hd[j].ps[l].gas->N += 1;
+					hd[j].ps[l].gas->M += pgp[i].M;
+					for (k = 0; k < 3; k++) {
+					    hd[j].ps[l].gas->v[k]  += pgp[i].M*vproj[k];
+					    hd[j].ps[l].gas->vdt[k] += pgp[i].M*vproj[k]*vproj[k];
+					    }
+					hd[j].ps[l].gas->vdt[3] += pgp[i].M*vproj[0]*vproj[1];
+					hd[j].ps[l].gas->vdt[4] += pgp[i].M*vproj[0]*vproj[2];
+					hd[j].ps[l].gas->vdt[5] += pgp[i].M*vproj[1]*vproj[2];
+					hd[j].ps[l].gas->L[0]  += pgp[i].M*(r[1]*v[2] - r[2]*v[1]);
+					hd[j].ps[l].gas->L[1]  += pgp[i].M*(r[2]*v[0] - r[0]*v[2]);
+					hd[j].ps[l].gas->L[2]  += pgp[i].M*(r[0]*v[1] - r[1]*v[0]);
+					hd[j].ps[l].gas->metallicity      += pgp[i].M*pgp[i].metallicity;
+					hd[j].ps[l].gas->metallicity_SNII += pgp[i].M*pgp[i].metallicity_SNII;
+					hd[j].ps[l].gas->metallicity_SNIa += pgp[i].M*pgp[i].metallicity_SNIa;
+					hd[j].ps[l].gas->M_HI     += pgp[i].M_HI;
+					hd[j].ps[l].gas->M_HII    += pgp[i].M_HII;
+					hd[j].ps[l].gas->M_HeI    += pgp[i].M_HeI;
+					hd[j].ps[l].gas->M_HeII   += pgp[i].M_HeII;
+					hd[j].ps[l].gas->M_HeIII  += pgp[i].M_HeIII;
+					hd[j].ps[l].gas->M_H2     += pgp[i].M_H2;
+					hd[j].ps[l].gas->M_metals += pgp[i].M_metals;
+					break;
 					}
 				    }
-				i = NextIndex[i];
 				}
+			    i = NextIndex[i];
 			    }
 			}
 		    }
@@ -2327,7 +2300,7 @@ void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
 void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 
     int i, j, k;
-    int Ncheck, Scheck, NBin, Extreme, StartIndex, variant;
+    int Ncheck, Scheck, NBin, StartIndex, variant;
     double radius[2], rhoenc[2], Menc[2], logslope[2], vsigma[2];
     double m, d, slope;
     double rcheck, Mrcheck, Qcheck, Qcomp, rmax;
@@ -2335,7 +2308,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
     double vradmean, vraddisp, barrier, minvrad;
     double *vradsmooth = NULL;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,Extreme,StartIndex,variant,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,minvrad,vradsmooth) shared(hd,gi)
+#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,StartIndex,variant,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,minvrad,vradsmooth) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
@@ -2405,8 +2378,8 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		hd[i].ps[j].star->vdt[4] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[2];
 		hd[i].ps[j].star->vdt[5] -= hd[i].ps[j].star->v[1]*hd[i].ps[j].star->v[2];
 		}
-	    if (hd[i].ps[j].tot->M != 0) {
-		hd[i].ps[j].tot->vradsmooth /= hd[i].ps[j].tot->M;
+	    if (hd[i].ps[j].dark->M != 0 || hd[i].ps[j].star->M != 0) {
+		hd[i].ps[j].tot->vradsmooth /= hd[i].ps[j].dark->M+hd[i].ps[j].star->M;
 		}
 	    if (hd[i].ps[j].gas->M != 0) {
 		hd[i].ps[j].gas->metallicity      /= hd[i].ps[j].gas->M;
@@ -2579,16 +2552,16 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** Find innermost extremum
 	*/
 	hd[i].rstatic = 0;
-	Extreme = -1;
+	StartIndex = -1;
 	barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
 	for (j = hd[i].NBin; j > 0; j--) {
 	    Qcomp = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
-	    if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro)) Extreme = j;
+	    if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro)) StartIndex = j;
 	    }
 	/*
 	** Get location where barrier is pierced
 	*/
-	for (j = Extreme; j > 2; j--) {
+	for (j = StartIndex; j > 2; j--) {
 	    vsigma[0] = (hd[i].ps[j-1].tot->vradsmooth-hd[i].vradmean)/barrier;
 	    vsigma[1] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
 	    /*
