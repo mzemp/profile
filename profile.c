@@ -1423,7 +1423,7 @@ void set_default_values_general_info(GI *gi) {
 
     gi->fexcludermin = 5;
     gi->fincludermin = 100;
-    gi->frecentrermin = 3;
+    gi->frecentrermin = 5;
     gi->frecentredist = 2;
     gi->frhobg = 1.2;
     gi->fcheckrvcmax = 5;
@@ -1886,13 +1886,13 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 				*/
 				for (l = hd[j].NBin; l >=0; l--) {
 				    if ((hd[j].ps[l].ri <= d) && (hd[j].ps[l].ro > d)) {
-					calculate_unit_vectors_spherical(r,erad,ephi,etheta);
 					if (gi.velocityprojection == 0) {
 					    vproj[0] = v[0];
 					    vproj[1] = v[1];
 					    vproj[2] = v[2];
 					    }
 					else if (gi.velocityprojection == 1) {
+					    calculate_unit_vectors_spherical(r,erad,ephi,etheta);
 					    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
 					    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
 					    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
@@ -2395,14 +2395,14 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		hd[i].ps[j].star->t_form /= hd[i].ps[j].star->N;
 		}
 	    }
+	vradsmooth[0] = 0;
 	for (j = 1; j < hd[i].NBin; j++) {
-	    vradsmooth[j] = (hd[i].ps[j-1].tot->vradsmooth+hd[i].ps[j].tot->vradsmooth+hd[i].ps[j+1].tot->vradsmooth)/3.0;
+	    vradsmooth[j] = (hd[i].ps[j-1].tot->vradsmooth+2*hd[i].ps[j].tot->vradsmooth+hd[i].ps[j+1].tot->vradsmooth)/4.0;
 	    }
-	hd[i].ps[0].tot->vradsmooth = 0;
-	for (j = 1; j < hd[i].NBin; j++) {
+	vradsmooth[hd[i].NBin] = 0;
+	for (j = 0; j < hd[i].NBin+1; j++) {
 	    hd[i].ps[j].tot->vradsmooth = vradsmooth[j];
 	    }
-	hd[i].ps[hd[i].NBin].tot->vradsmooth = 0;
 	/*
 	** Calculate rbg, Mrbg, rcrit & Mrcrit
 	*/
