@@ -298,12 +298,8 @@ int main(int argc, char **argv) {
             gi.centretype = 0;
             i++;
             }
-        else if (strcmp(argv[i],"-ctpotmin") == 0) {
+        else if (strcmp(argv[i],"-ctpotorden") == 0) {
             gi.centretype = 1;
-            i++;
-            }
-        else if (strcmp(argv[i],"-ctdenmax") == 0) {
-            gi.centretype = 2;
             i++;
             }
         else if (strcmp(argv[i],"-vpaxes") == 0) {
@@ -629,7 +625,7 @@ int main(int argc, char **argv) {
 	gi.cp.h0_100 = ad.ah.h100;
 	if(gi.us.LBox == 0) gi.us.LBox = ad.ah.Ngrid;
 	if(gi.us.Hubble0 == 0) gi.us.Hubble0 = 2.0/sqrt(gi.cp.OmegaM0);
-	if(gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1/gi.cp.OmegaM0;
+	if(gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1.0/gi.cp.OmegaM0;
 	gi.bc[0] = 0;
 	gi.bc[1] = 0;
 	gi.bc[2] = 0;
@@ -693,7 +689,7 @@ int main(int argc, char **argv) {
     gettimeofday(&time,NULL);
     timeendsub = time.tv_sec;
     timediff = timeendsub-timestartsub;
-    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+    fprintf(stderr,"Done. Read in %d haloes. It took %d s = %d h %d m %d s.\n\n",gi.NHalo,timediff,timediff/3600,(timediff/60)%60,timediff%60);
 
     /*
     ** Harvest data
@@ -1175,8 +1171,7 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"6DFOF specific parameters:\n\n");
 	    fprintf(stderr,"binfactor             : %.6e\n",gi.binfactor);
 	    if (gi.centretype == 0) fprintf(stderr,"centretype            : com\n");
-	    else if (gi.centretype == 1) fprintf(stderr,"centretype            : potminm\n");
-	    else if (gi.centretype == 2) fprintf(stderr,"centretype            : denmax\n");
+	    else if (gi.centretype == 1) fprintf(stderr,"centretype            : potminm or denmax\n");
 	    fprintf(stderr,"rmaxfromhalocatalogue : %s\n",(gi.rmaxfromhalocatalogue == 0)?"no":"yes");
 	    fprintf(stderr,"\n");
 	    }
@@ -1328,8 +1323,7 @@ void usage(void) {
     fprintf(stderr,"-rmax <value>                        : maximum grid radius (physical) [LU] (default: not set)\n");
     fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax (default: not set)\n");
     fprintf(stderr,"-ctcom                               : set this flag for centre-of-mass centres from 6DFOF file\n");
-    fprintf(stderr,"-ctpotmin                            : set this flag for potmin centres from 6DFOF file\n");
-    fprintf(stderr,"-ctdenmax                            : set this flag for denmax centres from 6DFOF file (default)\n");
+    fprintf(stderr,"-ctpotorden                          : set this flag for potmin centres from 6DFOF file\n");
     fprintf(stderr,"-vpaxes                              : set this flag for velocity projection along coordinate axes (default)\n");
     fprintf(stderr,"-vpspherical                         : set this flag for velocity projection in spherical coordinates\n");
     fprintf(stderr,"-binfactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5)\n");
@@ -1460,7 +1454,7 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = HALO_DATA_SIZE;
     int i, j, idummy, ID, NBin, NHaloRead;
-    float fdummy;
+    double ddummy;
     double rx, ry, rz, vx, vy, vz, rmin, rmax;
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL;
@@ -1475,14 +1469,14 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
     NHaloRead = 0;
     while (1) {
 	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rx = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); ry = put_in_box(fdummy,gi->bc[1],gi->bc[4]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rz = put_in_box(fdummy,gi->bc[2],gi->bc[5]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); vx = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy); vy = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy); vz = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rmin = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rmax = fdummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rx = put_in_box(ddummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); ry = put_in_box(ddummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rz = put_in_box(ddummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); vx = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); vy = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); vz = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rmin = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rmax = ddummy;
 	fscanf(HaloCatalogueFile,"%i",&idummy); NBin = idummy;
 	if (feof(HaloCatalogueFile)) break;
 	NHaloRead++;
@@ -1540,9 +1534,9 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloData = HALO_DATA_SIZE;
     int i, j, ID, N, idummy, NHaloRead;
-    float fdummy;
-    double DarkMass, radius1, radius2, vd1D;
-    double rxcom, rycom, rzcom, rxpotmin, rypotmin, rzpotmin, rxdenmax, rydenmax, rzdenmax, vx, vy, vz;
+    double ddummy;
+    double mass, radius;
+    double rcom[3], rpotorden[3], v[3];
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL;
 
@@ -1557,33 +1551,17 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
     while (1) {
 	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
 	fscanf(HaloCatalogueFile,"%i",&idummy); N = idummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy); DarkMass = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); radius1 = fdummy; /* (sum_j rmax[j]-rmin[j])/6 */
-	fscanf(HaloCatalogueFile,"%g",&fdummy); radius2 = fdummy; /* dispersion in coordinates */
-	fscanf(HaloCatalogueFile,"%g",&fdummy); vd1D = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rxcom = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rycom = put_in_box(fdummy,gi->bc[1],gi->bc[4]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rzcom = put_in_box(fdummy,gi->bc[2],gi->bc[5]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rxpotmin = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rypotmin = put_in_box(fdummy,gi->bc[1],gi->bc[4]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rzpotmin = put_in_box(fdummy,gi->bc[2],gi->bc[5]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rxdenmax = put_in_box(fdummy,gi->bc[0],gi->bc[3]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rydenmax = put_in_box(fdummy,gi->bc[1],gi->bc[4]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); rzdenmax = put_in_box(fdummy,gi->bc[2],gi->bc[5]);
-	fscanf(HaloCatalogueFile,"%g",&fdummy); vx = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy); vy = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy); vz = fdummy;
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
-	fscanf(HaloCatalogueFile,"%g",&fdummy);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); mass = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); radius = ddummy; /* dispersion in coordinates */
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rcom[0] = put_in_box(ddummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rcom[1] = put_in_box(ddummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rcom[2] = put_in_box(ddummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rpotorden[0] = put_in_box(ddummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rpotorden[1] = put_in_box(ddummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rpotorden[2] = put_in_box(ddummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[0] = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[1] = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[2] = ddummy;
 	if (feof(HaloCatalogueFile)) break;
 	NHaloRead++;
 	if (SizeHaloData < NHaloRead){
@@ -1594,29 +1572,18 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	i = NHaloRead-1;
 	hd[i].ID = ID;
 	if (gi->centretype == 0) {
-	    hd[i].rcentre[0] = rxcom;
-	    hd[i].rcentre[1] = rycom;
-	    hd[i].rcentre[2] = rzcom;
+	    for (j = 0; j < 3; j++) hd[i].rcentre[j] = rcom[j];
 	    }
 	else if (gi->centretype == 1) {
-	    hd[i].rcentre[0] = rxpotmin;
-	    hd[i].rcentre[1] = rypotmin;
-	    hd[i].rcentre[2] = rzpotmin;
+	    for (j = 0; j < 3; j++) hd[i].rcentre[j] = rpotorden[j];
 	    }
-	else if (gi->centretype == 2) {
-	    hd[i].rcentre[0] = rxdenmax;
-	    hd[i].rcentre[1] = rydenmax;
-	    hd[i].rcentre[2] = rzdenmax;
-	    }
-	hd[i].vcentre[0] = vx;
-	hd[i].vcentre[1] = vy;
-	hd[i].vcentre[2] = vz;
+	for (j = 0; j < 3; j++) hd[i].vcentre[j] = v[j];
 	hd[i].rmin = gi->rmin;
 	if (gi->rmaxfromhalocatalogue == 1) {
 	    /*
 	    ** Estimate maximum radius; assume isothermal sphere scaling 
 	    */
-	    hd[i].rmax = sqrt((3*DarkMass/(4*M_PI*radius2*radius2*radius2))/gi->rhoencbg)*radius2*gi->binfactor;
+	    hd[i].rmax = sqrt((3.0*mass/(4.0*M_PI*radius*radius*radius))/gi->rhoencbg)*radius*gi->binfactor;
 	    assert(hd[i].rmax > 0);
 	    }
 	else {
