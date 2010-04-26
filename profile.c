@@ -724,7 +724,7 @@ int main(int argc, char **argv) {
 		if (positionprecision == 0) {
 		    read_tipsy_xdr_gas(&xdrs,&gp);
 		    for (k = 0; k < 3; k++) {
-			pgp[Icurrentblockgas].r[k] = gp.pos[k];
+			pgp[Icurrentblockgas].r[k] = put_in_box(gp.pos[k],gi.bc[k],gi.bc[k+3]);
 			pgp[Icurrentblockgas].v[k] = gp.vel[k];
 			}
 		    pgp[Icurrentblockgas].M = gp.mass;
@@ -732,14 +732,14 @@ int main(int argc, char **argv) {
 		else if (positionprecision == 1) {
 		    read_tipsy_xdr_gas_dpp(&xdrs,&gpdpp);
 		    for (k = 0; k < 3; k++) {
-			pgp[Icurrentblockgas].r[k] = gpdpp.pos[k];
+			pgp[Icurrentblockgas].r[k] = put_in_box(gpdpp.pos[k],gi.bc[k],gi.bc[k+3]);
 			pgp[Icurrentblockgas].v[k] = gpdpp.vel[k];
 			}
 		    pgp[Icurrentblockgas].M = gpdpp.mass;
 		    }
 		Nparticleread++;
 		Icurrentblockgas++;
-		if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Nparticleread == ad.Ngas)) {
+		if ((Icurrentblockgas == gi.Nparticleperblockgas) || (Nparticleread == th.ngas)) {
 		    /*
 		    ** Block is full or we reached end of gas particles
 		    */
@@ -767,7 +767,7 @@ int main(int argc, char **argv) {
 		if (positionprecision == 0) {
 		    read_tipsy_xdr_dark(&xdrs,&dp);
 		    for (k = 0; k < 3; k++) {
-			pdp[Icurrentblockdark].r[k] = dp.pos[k];
+			pdp[Icurrentblockdark].r[k] = put_in_box(dp.pos[k],gi.bc[k],gi.bc[k+3]);
 			pdp[Icurrentblockdark].v[k] = dp.vel[k];
 			}
 		    pdp[Icurrentblockdark].M = dp.mass;
@@ -775,14 +775,14 @@ int main(int argc, char **argv) {
 		else if (positionprecision == 1) {
 		    read_tipsy_xdr_dark_dpp(&xdrs,&dpdpp);
 		    for (k = 0; k < 3; k++) {
-			pdp[Icurrentblockdark].r[k] = dpdpp.pos[k];
+			pdp[Icurrentblockdark].r[k] = put_in_box(dpdpp.pos[k],gi.bc[k],gi.bc[k+3]);
 			pdp[Icurrentblockdark].v[k] = dpdpp.vel[k];
 			}
 		    pdp[Icurrentblockdark].M = dpdpp.mass;
 		    }
 		Nparticleread++;
 		Icurrentblockdark++;
-		if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == ad.Ndark)) {
+		if ((Icurrentblockdark == gi.Nparticleperblockdark) || (Nparticleread == th.ndark)) {
 		    /*
 		    ** Block is full or we reached end of dark matter particles
 		    */
@@ -810,7 +810,7 @@ int main(int argc, char **argv) {
 		if (positionprecision == 0) {
 		    read_tipsy_xdr_star(&xdrs,&sp);
 		    for (k = 0; k < 3; k++) {
-			psp[Icurrentblockstar].r[k] = sp.pos[k];
+			psp[Icurrentblockstar].r[k] = put_in_box(sp.pos[k],gi.bc[k],gi.bc[k+3]);
 			psp[Icurrentblockstar].v[k] = sp.vel[k];
 			}
 		    psp[Icurrentblockstar].M = sp.mass;
@@ -818,14 +818,14 @@ int main(int argc, char **argv) {
 		else if (positionprecision == 1) {
 		    read_tipsy_xdr_star_dpp(&xdrs,&spdpp);
 		    for (k = 0; k < 3; k++) {
-			psp[Icurrentblockstar].r[k] = spdpp.pos[k];
+			psp[Icurrentblockstar].r[k] = put_in_box(spdpp.pos[k],gi.bc[k],gi.bc[k+3]);
 			psp[Icurrentblockstar].v[k] = spdpp.vel[k];
 			}
 		    psp[Icurrentblockstar].M = spdpp.mass;
 		    }
 		Nparticleread++;
 		Icurrentblockstar++;
-		if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == ad.Nstar)) {
+		if ((Icurrentblockstar == gi.Nparticleperblockstar) || (Nparticleread == th.nstar)) {
 		    /*
 		    ** Block is full or we reached end of star matter particles
 		    */
@@ -1253,6 +1253,8 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"TU : %.6e Gyr\n",1.0/cosmo2internal_ct.T_usf);
 	fprintf(stderr,"VU : %.6e kpc Gyr^{-1} = %.6e km s^{-1}\n",1.0/cosmo2internal_ct.V_usf,1.0/cosmo2internal_ct.V_usf*ConversionFactors.kpc_per_Gyr_2_km_per_s);
 	fprintf(stderr,"MU : %.6e Mo\n",1.0/cosmo2internal_ct.M_usf);
+	fprintf(stderr,"\n");
+	fprintf(stderr,"Box: [%.6e ... %.6e] x [%.6e ... %.6e] x [%.6e ... %.6e]\n",gi.bc[0],gi.bc[3],gi.bc[1],gi.bc[4],gi.bc[2],gi.bc[5]);
 	fprintf(stderr,"\n");
         fprintf(stderr,"Used values:\n\n");
         fprintf(stderr,"Data format:          : %s\n",(dataformat == 0)?"Tipsy":"ART");
