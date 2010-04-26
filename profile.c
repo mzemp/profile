@@ -1171,7 +1171,7 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"6DFOF specific parameters:\n\n");
 	    fprintf(stderr,"binfactor             : %.6e\n",gi.binfactor);
 	    if (gi.centretype == 0) fprintf(stderr,"centretype            : com\n");
-	    else if (gi.centretype == 1) fprintf(stderr,"centretype            : potminm or denmax\n");
+	    else if (gi.centretype == 1) fprintf(stderr,"centretype            : potmin or denmax\n");
 	    fprintf(stderr,"rmaxfromhalocatalogue : %s\n",(gi.rmaxfromhalocatalogue == 0)?"no":"yes");
 	    fprintf(stderr,"\n");
 	    }
@@ -1325,7 +1325,7 @@ void usage(void) {
     fprintf(stderr,"-rmax <value>                        : maximum grid radius (physical) [LU] (default: not set)\n");
     fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax (default: not set)\n");
     fprintf(stderr,"-ctcom                               : set this flag for centre-of-mass centres from 6DFOF file\n");
-    fprintf(stderr,"-ctpotorden                          : set this flag for potmin centres from 6DFOF file\n");
+    fprintf(stderr,"-ctpotorden                          : set this flag for potmin or denmax centres from 6DFOF file\n");
     fprintf(stderr,"-vpaxes                              : set this flag for velocity projection along coordinate axes (default)\n");
     fprintf(stderr,"-vpspherical                         : set this flag for velocity projection in spherical coordinates\n");
     fprintf(stderr,"-binfactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5)\n");
