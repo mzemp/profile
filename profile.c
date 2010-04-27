@@ -2467,7 +2467,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = (hd[i].ps[k].tot->vradsmooth-hd[i].vradmean)/barrier;
 		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
 		    }
-		if (Scheck == Ncheck) {
+		if ((Scheck == Ncheck) && (NBin > 1)) {
 		    hd[i].rvradrangelower = rcheck;
 		    }
 		}
@@ -2484,7 +2484,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = (hd[i].ps[k].tot->vradsmooth-hd[i].vradmean)/barrier;
 		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
 		    }
-		if (Scheck == Ncheck) {
+		if ((Scheck == Ncheck) && (NBin > 1)) {
 		    hd[i].rvradrangeupper = rcheck;
 		    }
 		}
