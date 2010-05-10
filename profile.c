@@ -45,12 +45,19 @@ typedef struct profile_gas_properties {
     double metallicity_SNII;
     double metallicity_SNIa;
     double M_HI;
+    double Menc_HI;
     double M_HII;
+    double Menc_HII;
     double M_HeI;
+    double Menc_HeI;
     double M_HeII;
+    double Menc_HeII;
     double M_HeIII;
+    double Menc_HeIII;
     double M_H2;
+    double Menc_H2;
     double M_metals;
+    double Menc_metals;
     } PROFILE_GAS_PROPERTIES;
 
 typedef struct profile_dark_properties {
@@ -78,6 +85,7 @@ typedef struct profile_star_properties {
     double metallicity_SNII;
     double metallicity_SNIa;
     double M_metals;
+    double Menc_metals;
     double t_form;
     } PROFILE_STAR_PROPERTIES;
 
@@ -98,18 +106,19 @@ typedef struct halo_data {
 
     int ID;
     int NBin;
-    int truncated;
     double rcentre[3];
     double vcentre[3];
     double rcentrenew[3];
     double vcentrenew[3];
+    double rbg, Mrbg;
+    double rcrit, Mrcrit;
     double rstatic, Mrstatic;
     double rvcmaxtot, Mrvcmaxtot;
     double rvcmaxdark, Mrvcmaxdark;
     double rtrunc, Mrtrunc;
-    double rbg, Mrbg;
-    double rcrit, Mrcrit;
     double rhobgtot, rhobggas, rhobgdark, rhobgstar;
+    double rvcmaxtottrunc, Mrvcmaxtottrunc;
+    double rvcmaxdarktrunc, Mrvcmaxdarktrunc;
     double rminMenc;
     double rmin, rmax;
     double rvradrangelower, rvradrangeupper;
@@ -171,7 +180,7 @@ typedef struct general_info {
     double rmin, rmax;
     double bc[6];
     double binfactor;
-    double fexcludermin, fincludermin, frecentrermin, frecentredist, frhobg;
+    double frecentrermin, frecentredist, frhobg;
     double fcheckrvcmax, fcheckrstatic, fchecktruncated;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     COSMOLOGICAL_PARAMETERS cp;
@@ -291,7 +300,7 @@ int main(int argc, char **argv) {
 	else if (strcmp(argv[i],"-NBin") == 0) {
 	    i++;
             if (i >= argc) usage();
-	    gi.NBin = atoi(argv[i]);
+	    gi.NBin = (int) atof(argv[i]);
 	    i++;
 	    }
         else if (strcmp(argv[i],"-ctcom") == 0) {
@@ -332,18 +341,6 @@ int main(int argc, char **argv) {
             gi.Deltacrit = atof(argv[i]);
             i++;
             }
-	else if (strcmp(argv[i],"-fexcludermin") == 0) {
-	    i++;
-            if (i >= argc) usage();
-	    gi.fexcludermin = atof(argv[i]);
-	    i++;
-	    }
-	else if (strcmp(argv[i],"-fincludermin") == 0) {
-	    i++;
-            if (i >= argc) usage();
-	    gi.fincludermin = atof(argv[i]);
-	    i++;
-	    }
 	else if (strcmp(argv[i],"-frecentrermin") == 0) {
 	    i++;
             if (i >= argc) usage();
@@ -455,43 +452,43 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i],"-Nparticleperblockgas") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.Nparticleperblockgas = atoi(argv[i]);
+            gi.Nparticleperblockgas = (int) atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-Nparticleperblockdark") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.Nparticleperblockdark = atoi(argv[i]);
+            gi.Nparticleperblockdark = (int) atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-Nparticleperblockstar") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.Nparticleperblockstar = atoi(argv[i]);
+            gi.Nparticleperblockstar = (int) atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-NCell") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.NCell = atoi(argv[i]);
+            gi.NCell = (int) atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-NLoopRecentre") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.NLoopRecentre = atoi(argv[i]);
+            gi.NLoopRecentre = (int) atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-NProcessData") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.NLoopProcessData = atoi(argv[i]);
+            gi.NLoopProcessData = (int) atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-Lmaxgasanalysis") == 0) {
             i++;
             if (i >= argc) usage();
-            Lmaxgasanalysis = atoi(argv[i]);
+            Lmaxgasanalysis = (int) atof(argv[i]);
             i++;
             }
 	else if (strcmp(argv[i],"-GRAVITY") == 0) {
@@ -1290,8 +1287,6 @@ int main(int argc, char **argv) {
         fprintf(stderr,"NLoopRecentre         : %d\n",gi.NLoopRecentre);
         fprintf(stderr,"NLoopProcessData      : %d\n",gi.NLoopProcessData);
         fprintf(stderr,"NLoopRead             : %d\n",gi.NLoopRead);
-	fprintf(stderr,"fexcludermin          : %.6e\n",gi.fexcludermin);
-	fprintf(stderr,"fincludermin          : %.6e\n",gi.fincludermin);
 	fprintf(stderr,"frecentrermin         : %.6e\n",gi.frecentrermin);
 	fprintf(stderr,"frecentredist         : %.6e\n",gi.frecentredist);
 	fprintf(stderr,"frhobg                : %.6e\n",gi.frhobg);
@@ -1417,8 +1412,6 @@ void set_default_values_general_info(GI *gi) {
     gi->rmax = 0;
     gi->binfactor = 5;
 
-    gi->fexcludermin = 5;
-    gi->fincludermin = 100;
     gi->frecentrermin = 5;
     gi->frecentredist = 2;
     gi->frhobg = 1.2;
@@ -1636,6 +1629,10 @@ void initialise_halo_profile (HALO_DATA *hd){
     assert(hd->rmax > 0);
     assert(hd->rmax > hd->rmin);
 
+    hd->rbg = 0;
+    hd->Mrbg = 0;
+    hd->rcrit = 0;
+    hd->Mrcrit = 0;
     hd->rstatic = 0;
     hd->Mrstatic = 0;
     hd->rvcmaxtot = 0;
@@ -1644,20 +1641,19 @@ void initialise_halo_profile (HALO_DATA *hd){
     hd->Mrvcmaxdark = 0;
     hd->rtrunc = 0;
     hd->Mrtrunc = 0;
-    hd->rbg = 0;
-    hd->Mrbg = 0;
-    hd->rcrit = 0;
-    hd->Mrcrit = 0;
     hd->rhobgtot = 0;	
     hd->rhobggas = 0;	
     hd->rhobgdark = 0;
     hd->rhobgstar = 0;
+    hd->rvcmaxtottrunc = 0;
+    hd->Mrvcmaxtottrunc = 0;
+    hd->rvcmaxdarktrunc = 0;
+    hd->Mrvcmaxdarktrunc = 0;
     hd->rminMenc = 0;
     hd->rvradrangelower = 0;
     hd->rvradrangeupper = 0;
     hd->vradmean = 0;
     hd->vraddisp = 0;
-    hd->truncated = 0;
     
     for (j = 0; j < 3; j++) {
 	hd->rcentrenew[j] = 0;
@@ -1701,12 +1697,19 @@ void initialise_halo_profile (HALO_DATA *hd){
 	    hd->ps[j].gas->metallicity_SNII = 0;
 	    hd->ps[j].gas->metallicity_SNIa = 0;
 	    hd->ps[j].gas->M_HI = 0;
+	    hd->ps[j].gas->Menc_HI = 0;
 	    hd->ps[j].gas->M_HII = 0;
+	    hd->ps[j].gas->Menc_HII = 0;
 	    hd->ps[j].gas->M_HeI = 0;
+	    hd->ps[j].gas->Menc_HeI = 0;
 	    hd->ps[j].gas->M_HeII = 0;
+	    hd->ps[j].gas->Menc_HeII = 0;
 	    hd->ps[j].gas->M_HeIII = 0;
+	    hd->ps[j].gas->Menc_HeIII = 0;
 	    hd->ps[j].gas->M_H2 = 0;
+	    hd->ps[j].gas->Menc_H2 = 0;
 	    hd->ps[j].gas->M_metals = 0;
+	    hd->ps[j].gas->Menc_metals = 0;
 	    for (k = 0; k < 3; k++) {
 		hd->ps[j].gas->v[k] = 0;
 		hd->ps[j].gas->L[k] = 0;
@@ -1744,6 +1747,7 @@ void initialise_halo_profile (HALO_DATA *hd){
 	    hd->ps[j].star->metallicity_SNII = 0;
 	    hd->ps[j].star->metallicity_SNIa = 0;
 	    hd->ps[j].star->M_metals = 0;
+	    hd->ps[j].star->Menc_metals = 0;
 	    hd->ps[j].star->t_form = 0;
 	    for (k = 0; k < 3; k++) {
 		hd->ps[j].star->v[k] = 0;
@@ -2272,12 +2276,12 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
     int Ncheck, Scheck, NBin, StartIndex, variant;
     double radius[2], rhoenc[2], Menc[2], logslope[2], vsigma[2];
     double m, d, slope;
-    double rcheck, Mrcheck, Qcheck, Qcomp, rmax;
+    double rcheck, Mrcheck, Qcheck, Qcomp, rmin, rmax;
     double rhotot, rhogas, rhodark, rhostar, rhototmin, rhogasmin, rhodarkmin, rhostarmin;
     double vradmean, vraddisp, barrier, minvrad;
     double *vradsmooth = NULL;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,StartIndex,variant,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,minvrad,vradsmooth) shared(hd,gi)
+#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,StartIndex,variant,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmin,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,minvrad,vradsmooth) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
@@ -2299,6 +2303,13 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		if (gi.gascontained) {
 		    hd[i].ps[j].gas->Nenc += hd[i].ps[k].gas->N;
 		    hd[i].ps[j].gas->Menc += hd[i].ps[k].gas->M;
+		    hd[i].ps[j].gas->Menc_HI     += hd[i].ps[k].gas->M_HI;
+		    hd[i].ps[j].gas->Menc_HII    += hd[i].ps[k].gas->M_HII;
+		    hd[i].ps[j].gas->Menc_HeI    += hd[i].ps[k].gas->M_HeI;
+		    hd[i].ps[j].gas->Menc_HeII   += hd[i].ps[k].gas->M_HeII;
+		    hd[i].ps[j].gas->Menc_HeIII  += hd[i].ps[k].gas->M_HeIII;
+		    hd[i].ps[j].gas->Menc_H2     += hd[i].ps[k].gas->M_H2;
+		    hd[i].ps[j].gas->Menc_metals += hd[i].ps[k].gas->M_metals;
 		    }
 		if (gi.darkcontained) {
 		    hd[i].ps[j].dark->Nenc += hd[i].ps[k].dark->N;
@@ -2307,6 +2318,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		if (gi.starcontained) {
 		    hd[i].ps[j].star->Nenc += hd[i].ps[k].star->N;
 		    hd[i].ps[j].star->Menc += hd[i].ps[k].star->M;
+		    hd[i].ps[j].star->Menc_metals += hd[i].ps[k].star->M_metals;
 		    }
 		}
 	    hd[i].ps[j].tot->Mencremove = hd[i].ps[j].tot->Menc;
@@ -2347,7 +2359,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		hd[i].ps[j].star->vdt[4] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[2];
 		hd[i].ps[j].star->vdt[5] -= hd[i].ps[j].star->v[1]*hd[i].ps[j].star->v[2];
 		}
-	    if (hd[i].ps[j].dark->M != 0 || hd[i].ps[j].star->M != 0) {
+	    if ((hd[i].ps[j].dark->M != 0) || (hd[i].ps[j].star->M != 0)) {
 		hd[i].ps[j].tot->vradsmooth /= hd[i].ps[j].dark->M+hd[i].ps[j].star->M;
 		}
 	    if (hd[i].ps[j].gas->M != 0) {
@@ -2369,7 +2381,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    vradsmooth[j] = (hd[i].ps[j-1].tot->vradsmooth+2*hd[i].ps[j].tot->vradsmooth+hd[i].ps[j+1].tot->vradsmooth)/4.0;
 	    }
 	vradsmooth[hd[i].NBin] = 0;
-	for (j = 0; j < hd[i].NBin+1; j++) {
+	for (j = 0; j < (hd[i].NBin+1); j++) {
 	    hd[i].ps[j].tot->vradsmooth = vradsmooth[j];
 	    }
 	/*
@@ -2389,9 +2401,11 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
 		d = log(gi.rhoencbg)-log(rhoenc[0]);
 		hd[i].rbg = exp(log(radius[0])+m*d);
+		assert(hd[i].rbg > 0);
 		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		d = log(hd[i].rbg)-log(radius[0]);
 		hd[i].Mrbg = exp(log(Menc[0])+m*d);
+		assert(hd[i].Mrbg > 0);
 		}
 	    /*
 	    ** rcrit & Mrcrit
@@ -2400,9 +2414,11 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
  		m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
 		d = log(gi.rhoenccrit)-log(rhoenc[0]);
 		hd[i].rcrit = exp(log(radius[0])+m*d);
+		assert(hd[i].rcrit > 0);
 		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		d = log(hd[i].rcrit)-log(radius[0]);
 		hd[i].Mrcrit = exp(log(Menc[0])+m*d);
+		assert(hd[i].Mrcrit > 0);
 		}
 	    if ((hd[i].rbg != 0) && (hd[i].rcrit != 0)) break;
 	    }
@@ -2422,19 +2438,57 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	**
 	** First, find bin that contains fiducial radius
 	*/
-	for (j = 1; (hd[i].ps[j].rm < gi.fincludermin*hd[i].ps[0].ro) && (j < hd[i].NBin); j++) {
-	    if (fabs(hd[i].ps[j].tot->vradsmooth) < minvrad) {
+	rmax = 0;
+	rmax = (hd[i].rbg > rmax)?hd[i].rbg:rmax;
+	rmax = (hd[i].rcrit > rmax)?hd[i].rcrit:rmax;
+	rmax = (5*hd[i].ps[0].ro > rmax)?hd[i].ps[0].ro:rmax;
+	for (j = 1; (hd[i].ps[j].rm < rmax) && (j < hd[i].NBin); j++) {
+	    if ((fabs(hd[i].ps[j].tot->vradsmooth) < minvrad) && ((hd[i].ps[j].dark->M != 0) || (hd[i].ps[j].star->M != 0))) {
 		minvrad = fabs(hd[i].ps[j].tot->vradsmooth);
 		StartIndex = j;
 		}
 	    }
+	/* 
+	** In case nothing was found
+	*/
+	if (StartIndex == -1) {
+	    hd[i].rvradrangelower = hd[i].ps[0].ro;
+	    hd[i].rvradrangeupper = hd[i].ps[0].ro;
+	    }
 	j = StartIndex;
-	while (1) {
-	    NBin++;
-	    vradmean += hd[i].ps[j].tot->vradsmooth;
-	    vraddisp += pow(hd[i].ps[j].tot->vradsmooth,2);
-	    hd[i].vradmean = vradmean/NBin;
-	    hd[i].vraddisp = sqrt(vraddisp/NBin-pow(hd[i].vradmean,2));
+	while (j > 0) {
+	    /*
+	    ** Check for boundaries of profile
+	    */
+	    if (j == 1) hd[i].rvradrangelower = hd[i].ps[j].ri;
+	    if (j == hd[i].NBin-1) hd[i].rvradrangeupper = hd[i].ps[j].ro;
+	    /*
+	    ** Calculate vradmean & vraddisp
+	    */
+	    if ((hd[i].ps[j].dark->M != 0) || (hd[i].ps[j].star->M != 0)) {
+		/*
+		** Not empty bin
+		*/
+		NBin++;
+		vradmean += hd[i].ps[j].tot->vradsmooth;
+		vraddisp += pow(hd[i].ps[j].tot->vradsmooth,2);
+		hd[i].vradmean = vradmean/NBin;
+		hd[i].vraddisp = sqrt(vraddisp/NBin-pow(hd[i].vradmean,2));
+		}
+	    else {
+		/*
+		** Empty bin
+		*/
+		if (j <= StartIndex) {
+		    hd[i].rvradrangelower = hd[i].ps[j].ro;
+		    }
+		else {
+		    hd[i].rvradrangeupper = hd[i].ps[j].ri;
+		    }
+		}
+	    /*
+	    ** Calculate vsigma
+	    */
 	    barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
 	    if (j <= StartIndex) {
 		vsigma[0] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
@@ -2444,11 +2498,6 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		vsigma[0] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
 		vsigma[1] = (hd[i].ps[j+1].tot->vradsmooth-hd[i].vradmean)/barrier;
 		}
-	    /*
-	    ** check for boundaries of profile
-	    */
-	    if (j == 1) hd[i].rvradrangelower = hd[i].ps[j].ri;
-	    if (j == hd[i].NBin-1) hd[i].rvradrangeupper = hd[i].ps[j].ro;
 	    /*
 	    ** Make sure vsigma[0] is on the other side of the barrier
 	    */
@@ -2520,12 +2569,12 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	/*
 	** Find innermost extremum
 	*/
-	hd[i].rstatic = 0;
 	StartIndex = -1;
 	barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
+	rmin = hd[i].rvradrangelower;
 	for (j = hd[i].NBin; j > 0; j--) {
 	    Qcomp = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
-	    if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd[i].ps[j].rm > gi.fexcludermin*hd[i].ps[0].ro)) StartIndex = j;
+	    if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd[i].ps[j].rm >= rmin)) StartIndex = j;
 	    }
 	/*
 	** Get location where barrier is pierced
@@ -2546,6 +2595,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		if (vsigma[1] > 0) d = gi.Nsigmavrad-vsigma[0];
 		else d = -gi.Nsigmavrad-vsigma[0];
 		hd[i].rstatic = exp(log(hd[i].ps[j-1].rm)+m*d);
+		assert(hd[i].rstatic > 0);
 		if (hd[i].rstatic <= hd[i].ps[j-1].ro) {
 		    radius[0] = hd[i].ps[j-2].ro;
 		    radius[1] = hd[i].ps[j-1].ro;
@@ -2562,14 +2612,17 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		    d = log(hd[i].rstatic)-log(radius[0]);
 		    hd[i].Mrstatic = exp(log(Menc[0])+m*d);
+		    assert(hd[i].Mrstatic > 0);
 		    }
 		}
 	    }
 	/*
 	** Search for truncation of halo
-	** Indicator: minimum in enclosed density at scales larger than fexcludermin*rmin
+	** Indicator: local minimum in enclosed density at scales larger than rmin
 	** i.e. bump is significant enough to cause a minimum or saddle in enclosed density
 	*/
+	StartIndex = -1;
+	rmin = 5*hd[i].rvradrangelower;
 	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
@@ -2609,9 +2662,10 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = hd[i].ps[k].tot->Menc/pow(hd[i].ps[k].ro,3);
 		    if (Qcheck <= Qcomp) Scheck++;
 		    }
-		if ((Scheck == Ncheck) && (rcheck > gi.fexcludermin*hd[i].ps[0].ro)) {
-		    hd[i].truncated = j;
+		if ((Scheck == Ncheck) && (rcheck >= rmin) && (hd[i].ps[j-1].tot->M != 0)) {
+		    StartIndex = j;
 		    hd[i].rminMenc = rcheck;
+		    assert(hd[i].rminMenc > 0);
 		    }
 		}
 	    if (hd[i].rminMenc != 0) break;
@@ -2621,7 +2675,8 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** We define the location of the absolute minimum (within specified range of frhobg)
 	** of the density within rminMenc as rtrunc
 	*/
-	if (hd[i].truncated > 0) {
+	rmin = hd[i].rvradrangelower;
+	if (StartIndex > 0) {
 	    rhotot = 0;
 	    rhogas = 0;
 	    rhodark = 0;
@@ -2630,61 +2685,123 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    rhogasmin = 1e100;
 	    rhodarkmin = 1e100;
 	    rhostarmin = 1e100;
-	    for (j = hd[i].truncated; j > 0; j--) {
+	    for (j = StartIndex; j > 0; j--) {
 		rhotot = hd[i].ps[j].tot->M/hd[i].ps[j].V;
-		if (gi.gascontained) rhogas = hd[i].ps[j].gas->M/hd[i].ps[j].V;
-		if (gi.darkcontained) rhodark = hd[i].ps[j].dark->M/hd[i].ps[j].V;
-		if (gi.starcontained) rhostar = hd[i].ps[j].star->M/hd[i].ps[j].V;
-		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j].ro > gi.fexcludermin*hd[i].ps[0].ro)) {
-		    if (rhotot < rhototmin) rhototmin = rhotot;
-		    if (gi.gascontained && rhogas < rhogasmin) rhogasmin = rhogas;
-		    if (gi.darkcontained && rhodark < rhodarkmin) rhodarkmin = rhodark;
-		    if (gi.starcontained && rhostar < rhostarmin) rhostarmin = rhostar;
-		    hd[i].rtrunc = hd[i].ps[j].ro;
-		    hd[i].Mrtrunc = hd[i].ps[j].tot->Menc;
-		    hd[i].rhobgtot = 0.5*(rhotot+rhototmin);
-		    if (gi.gascontained) hd[i].rhobggas = 0.5*(rhogas+rhogasmin);
-		    if (gi.darkcontained) hd[i].rhobgdark = 0.5*(rhodark+rhodarkmin);
-		    if (gi.starcontained) hd[i].rhobgstar = 0.5*(rhostar+rhostarmin);
+		rhogas = hd[i].ps[j].gas->M/hd[i].ps[j].V;
+		rhodark = hd[i].ps[j].dark->M/hd[i].ps[j].V;
+		rhostar = hd[i].ps[j].star->M/hd[i].ps[j].V;
+		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j].rm >= rmin)) {
+		    if ((rhotot < rhototmin) && (rhotot > 0)) rhototmin = rhotot;
+		    if ((rhogas < rhogasmin) && (rhogas > 0) && gi.gascontained) rhogasmin = rhogas;
+		    if ((rhodark < rhodarkmin) && (rhodark > 0) && gi.darkcontained) rhodarkmin = rhodark;
+		    if ((rhostar < rhostarmin) && (rhostar > 0) && gi.starcontained) rhostarmin = rhostar;
+		    hd[i].rtrunc = hd[i].ps[j].rm;
+		    assert(hd[i].rtrunc > 0);
+		    radius[0] = hd[i].ps[j-1].ro;
+		    radius[1] = hd[i].ps[j].ro;
+		    Menc[0] = hd[i].ps[j-1].tot->Menc;
+		    Menc[1] = hd[i].ps[j].tot->Menc;
+		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		    d = log(hd[i].rtrunc)-log(radius[0]);
+		    hd[i].Mrtrunc = exp(log(Menc[0])+m*d);
+		    assert(hd[i].Mrtrunc > 0);
+		    hd[i].rhobgtot  = 0.5*(rhotot+rhototmin);
+		    if (gi.gascontained) {
+			if ((rhogas != 0) && (rhogasmin != 1e100)) hd[i].rhobggas  = 0.5*(rhogas+rhogasmin);
+			else if ((rhogas == 0) && (rhogasmin != 1e100)) hd[i].rhobggas  = rhogasmin;
+			}
+		    if (gi.darkcontained) {
+			if ((rhodark != 0) && (rhodarkmin != 1e100)) hd[i].rhobgdark  = 0.5*(rhodark+rhodarkmin);
+			else if ((rhodark == 0) && (rhodarkmin != 1e100)) hd[i].rhobgdark  = rhodarkmin;
+			}
+		    if (gi.starcontained) {
+			if ((rhostar != 0) && (rhostarmin != 1e100)) hd[i].rhobgstar  = 0.5*(rhostar+rhostarmin);
+			else if ((rhostar == 0) && (rhostarmin != 1e100)) hd[i].rhobgstar  = rhostarmin;
+			}
 		    }
 		}
 	    }
 	/*
-	** Check if halo is truncated
-	** We only care about rstatic here, one can always find a rbg or rcrit:
-	** just choose outer bin radius large enough
-	*/
-	if ((hd[i].rtrunc > 0) && ((hd[i].rstatic > hd[i].rtrunc) || (hd[i].rstatic == 0))) hd[i].truncated = 1;
-	else hd[i].truncated = 0;
-	/*
 	** Remove background (Option for later: unbinding)
 	** Attention: Numbers and velocities not correct any more!
 	*/
-	if (hd[i].truncated == 1) {
-	    hd[i].Mrtrunc -= hd[i].rhobgtot*4*M_PI*pow(hd[i].rtrunc,3)/3.0;
+	hd[i].Mrtrunc -= hd[i].rhobgtot*4*M_PI*pow(hd[i].rtrunc,3)/3.0;
+	if (hd[i].Mrtrunc > 0) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		hd[i].ps[j].tot->Mencremove  -= hd[i].rhobgtot*hd[i].ps[j].Venc;
 		hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*hd[i].ps[j].Venc;
 		}
 	    }
+	else {
+	    hd[i].rtrunc = 0;
+	    hd[i].Mrtrunc = 0;
+	    }
 	/*
-	** Calculate rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark by going from inside out
+	** Calculate rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark 
+	** as well as rvcmaxtottrunc, Mrvcmaxtottrunc, rvcmaxdarktrunc, Mrvcmaxdarktrunc
+	** by going from inside out
 	*/
 	rmax = 0;
-	rmax = (hd[i].rstatic > rmax)?hd[i].rstatic:rmax;
-	rmax = (hd[i].rtrunc > rmax)?hd[i].rtrunc:rmax;
 	rmax = (hd[i].rbg > rmax)?hd[i].rbg:rmax;
 	rmax = (hd[i].rcrit > rmax)?hd[i].rcrit:rmax;
+	rmax = (hd[i].rstatic > rmax)?hd[i].rstatic:rmax;
+	rmax = (hd[i].rtrunc > rmax)?hd[i].rtrunc:rmax;
 	for (j = 2; (hd[i].ps[j].ro <= rmax) && (j < hd[i].NBin+1); j++) {
 	    /*
 	    ** Total mass
 	    */
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
+	    logslope[0] = (log(hd[i].ps[j-1].tot->Menc)-log(hd[i].ps[j-2].tot->Menc))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
+	    logslope[1] = (log(hd[i].ps[j].tot->Menc)-log(hd[i].ps[j-1].tot->Menc))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
+	    slope = 1;
+	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxtot == 0)) {
+		/*
+		** Calculate rcheck & Mrcheck
+		*/
+		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
+		d = slope-logslope[0];
+		rcheck = exp(log(radius[0])+m*d);
+		if (rcheck <= hd[i].ps[j-1].ro) {
+		    radius[0] = hd[i].ps[j-2].ro;
+		    radius[1] = hd[i].ps[j-1].ro;
+		    Menc[0] = hd[i].ps[j-2].tot->Menc;
+		    Menc[1] = hd[i].ps[j-1].tot->Menc;
+		    }
+		else {
+		    radius[0] = hd[i].ps[j-1].ro;
+		    radius[1] = hd[i].ps[j].ro;
+		    Menc[0] = hd[i].ps[j-1].tot->Menc;
+		    Menc[1] = hd[i].ps[j].tot->Menc;
+		    }
+		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		d = log(rcheck)-log(radius[0]);
+		Mrcheck = exp(log(Menc[0])+m*d);
+		/*
+		** Check criteria
+		*/
+		Qcheck = Mrcheck/rcheck;
+		Ncheck = 0;
+		Scheck = 0;
+		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
+		    Ncheck++;
+		    Qcomp = hd[i].ps[k].tot->Menc/hd[i].ps[k].ro;
+		    if (Qcheck >= Qcomp) Scheck++;
+		    }
+		if ((Scheck == Ncheck) && (rcheck <= rmax)) {
+		    hd[i].rvcmaxtot = rcheck;
+		    hd[i].Mrvcmaxtot = Mrcheck;
+		    }
+		}
+	    /*
+	    ** Total mass with removed background
+	    */
+	    radius[0] = hd[i].ps[j-1].rm;
+	    radius[1] = hd[i].ps[j].rm;
 	    logslope[0] = (log(hd[i].ps[j-1].tot->Mencremove)-log(hd[i].ps[j-2].tot->Mencremove))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
 	    logslope[1] = (log(hd[i].ps[j].tot->Mencremove)-log(hd[i].ps[j-1].tot->Mencremove))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
 	    slope = 1;
-	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxtot == 0)) {
+	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxtottrunc == 0)) {
 		/*
 		** Calculate rcheck & Mrcheck
 		*/
@@ -2718,20 +2835,66 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
 		if ((Scheck == Ncheck) && (rcheck <= rmax)) {
-		    hd[i].rvcmaxtot = rcheck;
-		    hd[i].Mrvcmaxtot = Mrcheck;
+		    hd[i].rvcmaxtottrunc = rcheck;
+		    hd[i].Mrvcmaxtottrunc = Mrcheck;
 		    }
 		}
-	    /*
-	    ** Dark matter only
-	    */
 	    if (gi.darkcontained) {
+		/*
+		** Dark matter only
+		*/
+		radius[0] = hd[i].ps[j-1].rm;
+		radius[1] = hd[i].ps[j].rm;
+		logslope[0] = (log(hd[i].ps[j-1].dark->Menc)-log(hd[i].ps[j-2].dark->Menc))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
+		logslope[1] = (log(hd[i].ps[j].dark->Menc)-log(hd[i].ps[j-1].dark->Menc))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
+		slope = 1;
+		if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxdark == 0)) {
+		    /*
+		    ** Calculate rcheck & Mrcheck
+		    */
+		    m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
+		    d = slope-logslope[0];
+		    rcheck = exp(log(radius[0])+m*d);
+		    if (rcheck <= hd[i].ps[j-1].ro) {
+			radius[0] = hd[i].ps[j-2].ro;
+			radius[1] = hd[i].ps[j-1].ro;
+			Menc[0] = hd[i].ps[j-2].dark->Menc;
+			Menc[1] = hd[i].ps[j-1].dark->Menc;
+			}
+		    else {
+			radius[0] = hd[i].ps[j-1].ro;
+			radius[1] = hd[i].ps[j].ro;
+			Menc[0] = hd[i].ps[j-1].dark->Menc;
+			Menc[1] = hd[i].ps[j].dark->Menc;
+			}
+		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		    d = log(rcheck)-log(radius[0]);
+		    Mrcheck = exp(log(Menc[0])+m*d);
+		    /*
+		    ** Check criteria
+		    */
+		    Qcheck = Mrcheck/rcheck;
+		    Ncheck = 0;
+		    Scheck = 0;
+		    for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
+			Ncheck++;
+			Qcomp = hd[i].ps[k].dark->Menc/hd[i].ps[k].ro;
+			if (Qcheck >= Qcomp) Scheck++;
+			}
+		    if ((Scheck == Ncheck) && (rcheck <= rmax)) {
+			hd[i].rvcmaxdark = rcheck;
+			hd[i].Mrvcmaxdark = Mrcheck;
+			}
+		    }
+		/*
+		** Dark matter only with removed background
+		*/
 		radius[0] = hd[i].ps[j-1].rm;
 		radius[1] = hd[i].ps[j].rm;
 		logslope[0] = (log(hd[i].ps[j-1].dark->Mencremove)-log(hd[i].ps[j-2].dark->Mencremove))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
 		logslope[1] = (log(hd[i].ps[j].dark->Mencremove)-log(hd[i].ps[j-1].dark->Mencremove))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
 		slope = 1;
-		if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxdark == 0)) {
+		if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxdarktrunc == 0)) {
 		    /*
 		    ** Calculate rcheck & Mrcheck
 		    */
@@ -2765,12 +2928,12 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 			if (Qcheck >= Qcomp) Scheck++;
 			}
 		    if ((Scheck == Ncheck) && (rcheck <= rmax)) {
-			hd[i].rvcmaxdark = rcheck;
-			hd[i].Mrvcmaxdark = Mrcheck;
+			hd[i].rvcmaxdarktrunc = rcheck;
+			hd[i].Mrvcmaxdarktrunc = Mrcheck;
 			}
 		    }
-		if ((hd[i].rvcmaxtot != 0) && (hd[i].rvcmaxdark != 0)) break;
 		}
+	    if ((hd[i].rvcmaxtot != 0) && (hd[i].rvcmaxtottrunc != 0) && (hd[i].rvcmaxdark != 0) && (hd[i].rvcmaxdarktrunc !=0)) break;
 	    }
 	free(vradsmooth);
 	}
@@ -2788,19 +2951,20 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#GID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mrbg/9 rcrit/10 Mrcrit/11 rstatic/12 Mrstatic/13 rvcmaxtot/14 Mrvcmaxtot/15 rvcmaxdark/16 Mrvcmaxdark/17 rtrunc/18 Mrtrunc/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 vradmean/24 vraddisp/25 rvradrangelower/26 rvradrangeupper/27 rminMenc/28 truncated/29\n");
+    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mrbg/9 rcrit/10 Mrcrit/11 rstatic/12 Mrstatic/13 rvcmaxtot/14 Mrvcmaxtot/15 rvcmaxdark/16 Mrvcmaxdark/17 rtrunc/18 Mrtrunc/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 rvcmaxtottrunc/24 Mrvcmaxtottrunc/25 rvcmaxdarktrunc/26 Mrvcmaxdarktrunc/27 vradmean/28 vraddisp/29 rvradrangelower/30 rvradrangeupper/31 rminMenc/32\n");
     for (i = 0; i < gi.NHalo; i++) {
 	fprintf(outputfile,"%d",hd[i].ID);
 	fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
 	fprintf(outputfile," %.6e %.6e %.6e",hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
-	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rbg,hd[i].Mrbg,hd[i].rcrit,hd[i].Mrcrit);
+	fprintf(outputfile," %.6e %.6e",hd[i].rbg,hd[i].Mrbg);
+	fprintf(outputfile," %.6e %.6e",hd[i].rcrit,hd[i].Mrcrit);
 	fprintf(outputfile," %.6e %.6e",hd[i].rstatic,hd[i].Mrstatic);
 	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark);
 	fprintf(outputfile," %.6e %.6e",hd[i].rtrunc,hd[i].Mrtrunc);
 	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtottrunc,hd[i].Mrvcmaxtottrunc,hd[i].rvcmaxdarktrunc,hd[i].Mrvcmaxdarktrunc);
 	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper);
 	fprintf(outputfile," %.6e",hd[i].rminMenc);
-	fprintf(outputfile," %d",hd[i].truncated);
 	fprintf(outputfile,"\n");
 	}
     fclose(outputfile);
@@ -2810,7 +2974,7 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.profiles.tot",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_tot/7 Menc_tot/8 N_tot/9 Nenc_tot/10 v_tot_1/11 v_tot_2/12 v_tot_3/13 vdt_tot_11/14 vdt_tot_22/15 vdt_tot_33/16 vdt_tot_12/17 vdt_tot_13/18 vdt_tot_23/19 L_tot_x/20 L_tot_y/21 L_tot_z/22 v_tot_radsmooth/23\n");
+    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_tot/7 Menc_tot/8 N_tot/9 Nenc_tot/10 v_tot_1/11 v_tot_2/12 v_tot_3/13 vdt_tot_11/14 vdt_tot_22/15 vdt_tot_33/16 vdt_tot_12/17 vdt_tot_13/18 vdt_tot_23/19 L_tot_x/20 L_tot_y/21 L_tot_z/22 v_tot_radsmooth/23\n");
     for (i = 0; i < gi.NHalo; i++) {
 	for (j = 0; j < (hd[i].NBin+1); j++) {
 	    fprintf(outputfile,"%d",hd[i].ID);
@@ -2832,7 +2996,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.gas",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_gas/7 Menc_gas/8 N_gas/9 Nenc_gas/10 v_gas_1/11 v_gas_2/12 v_gas_3/13 vdt_gas_11/14 vdt_gas_22/15 vdt_gas_33/16 vdt_gas_12/17 vdt_gas_13/18 vdt_gas_23/19 L_gas_x/20 L_gas_y/21 L_gas_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_HI/26 M_HII/27 M_HeI/28 M_HeII/29 M_HeIII/30 M_H2/31 M_metals/32\n");
+	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_gas/7 Menc_gas/8 N_gas/9 Nenc_gas/10 v_gas_1/11 v_gas_2/12 v_gas_3/13 vdt_gas_11/14 vdt_gas_22/15 vdt_gas_33/16 vdt_gas_12/17 vdt_gas_13/18 vdt_gas_23/19 L_gas_x/20 L_gas_y/21 L_gas_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_HI/26 Menc_HI/27 M_HII/28 Menc_HII/29 M_HeI/30 Menc_HeI/31 M_HeII/32 Menc_HeII/33 M_HeIII/34 Menc_HeIII/35 M_H2/36 Menc_H2/37 M_metals/38 Menc_metals/39\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
@@ -2843,10 +3007,10 @@ void write_output(GI gi, HALO_DATA *hd) {
 		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->vdt[k]);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->L[k]);
 		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->metallicity,hd[i].ps[j].gas->metallicity_SNII,hd[i].ps[j].gas->metallicity_SNIa);
-		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M_HI,hd[i].ps[j].gas->M_HII);
-		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->M_HeI,hd[i].ps[j].gas->M_HeII,hd[i].ps[j].gas->M_HeIII);
-		fprintf(outputfile," %.6e",hd[i].ps[j].gas->M_H2);
-		fprintf(outputfile," %.6e",hd[i].ps[j].gas->M_metals);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].gas->M_HI,hd[i].ps[j].gas->Menc_HI,hd[i].ps[j].gas->M_HII,hd[i].ps[j].gas->Menc_HII);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].gas->M_HeI,hd[i].ps[j].gas->Menc_HeI,hd[i].ps[j].gas->M_HeII,hd[i].ps[j].gas->Menc_HeII,hd[i].ps[j].gas->M_HeIII,hd[i].ps[j].gas->Menc_HeIII);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M_H2,hd[i].ps[j].gas->Menc_H2);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M_metals,hd[i].ps[j].gas->Menc_metals);
 		fprintf(outputfile,"\n");
 		}
 	    }
@@ -2859,7 +3023,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.dark",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_dark/7 Menc_dark/8 N_dark/9 Nenc_dark/10 v_dark_1/11 v_dark_2/12 v_dark_3/13 vdt_dark_11/14 vdt_dark_22/15 vdt_dark_33/16 vdt_dark_12/17 vdt_dark_13/18 vdt_dark_23/19 L_dark_x/20 L_dark_y/21 L_dark_z/22\n");
+	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_dark/7 Menc_dark/8 N_dark/9 Nenc_dark/10 v_dark_1/11 v_dark_2/12 v_dark_3/13 vdt_dark_11/14 vdt_dark_22/15 vdt_dark_33/16 vdt_dark_12/17 vdt_dark_13/18 vdt_dark_23/19 L_dark_x/20 L_dark_y/21 L_dark_z/22\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
@@ -2881,7 +3045,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 	sprintf(outputfilename,"%s.profiles.star",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#GID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_star/7 Menc_star/8 N_star/9 Nenc_star/10 v_star_1/11 v_star_2/12 v_star_3/13 vdt_star_11/14 vdt_star_22/15 vdt_star_33/16 vdt_star_12/17 vdt_star_13/18 vdt_star_23/19 L_star_x/20 L_star_y/21 L_star_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_metals/26 t_form/27\n");
+	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_star/7 Menc_star/8 N_star/9 Nenc_star/10 v_star_1/11 v_star_2/12 v_star_3/13 vdt_star_11/14 vdt_star_22/15 vdt_star_33/16 vdt_star_12/17 vdt_star_13/18 vdt_star_23/19 L_star_x/20 L_star_y/21 L_star_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_metals/26 Menc_metals/27 t_form/28\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
@@ -2892,7 +3056,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->vdt[k]);
 		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->L[k]);
 		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].star->metallicity,hd[i].ps[j].star->metallicity_SNII,hd[i].ps[j].star->metallicity_SNIa);
-		fprintf(outputfile," %.6e",hd[i].ps[j].star->M_metals);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].star->M_metals,hd[i].ps[j].star->Menc_metals);
 		fprintf(outputfile," %.6e",hd[i].ps[j].star->t_form);
 		fprintf(outputfile,"\n");
 		}
