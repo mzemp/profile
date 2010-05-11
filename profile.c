@@ -209,6 +209,7 @@ int main(int argc, char **argv) {
     int Icurrentblockgas, Icurrentblockdark, Icurrentblockstar;
     int positionprecision, verboselevel;
     int dataformat, halocatalogueformat;
+    int lengthtype;
     int Lmaxgasanalysis;
     int timestart, timeend, timestartsub, timeendsub, timestartloop, timeendloop, timediff;
     long int i, j, k;
@@ -252,6 +253,7 @@ int main(int argc, char **argv) {
     positionprecision = 0;
     dataformat = 0;
     halocatalogueformat = 0;
+    lengthtype = 1;
     Nparticleread = 0;
     Lmaxgasanalysis = -1;
 
@@ -283,6 +285,14 @@ int main(int argc, char **argv) {
             i++;
             if (i >= argc) usage();
 	    halocatalogueformat = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-ltcomoving") == 0) {
+            lengthtype = 0;
+            i++;
+            }
+        else if (strcmp(argv[i],"-ltphysical") == 0) {
+            lengthtype = 1;
             i++;
             }
 	else if (strcmp(argv[i],"-rmin") == 0) {
@@ -654,8 +664,10 @@ int main(int argc, char **argv) {
 	exit(1);
 	}
 
-    gi.rmin /= gi.ascale;
-    gi.rmax /= gi.ascale;
+    if (lengthtype == 1) {
+	gi.rmin /= gi.ascale;
+	gi.rmax /= gi.ascale;
+	}
 
     if(gi.cosmous.LBox == 0) gi.cosmous.LBox = LBox;
     if(gi.cosmous.Hubble0 == 0) gi.cosmous.Hubble0 = 100*gi.cp.h0_100*ConversionFactors.km_per_s_2_kpc_per_Gyr/1e3;
@@ -1316,9 +1328,11 @@ void usage(void) {
     fprintf(stderr,"-dpp                                 : set this flag if input files have double precision positions\n");
     fprintf(stderr,"-dataformat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
     fprintf(stderr,"-halocatalogueformat <value>         : 0 = generic / 1 = 6DFOF (default: 0)\n");
-    fprintf(stderr,"-rmin <value>                        : minimum grid radius (physical) [LU] (default: not set)\n");
-    fprintf(stderr,"-rmax <value>                        : maximum grid radius (physical) [LU] (default: not set)\n");
-    fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax (default: not set)\n");
+    fprintf(stderr,"-ltphysical                          : rmin and rmax values are interpreted as physical lengths (default)\n");
+    fprintf(stderr,"-ltcomoving                          : rmin and rmax values are interpreted as comoving lengths\n");
+    fprintf(stderr,"-rmin <value>                        : minimum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
+    fprintf(stderr,"-rmax <value>                        : maximum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
+    fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-ctcom                               : set this flag for centre-of-mass centres from 6DFOF file\n");
     fprintf(stderr,"-ctpotorden                          : set this flag for potmin or denmax centres from 6DFOF file\n");
     fprintf(stderr,"-vpaxes                              : set this flag for velocity projection along coordinate axes (default)\n");
