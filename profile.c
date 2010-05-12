@@ -168,7 +168,7 @@ typedef struct general_info {
     int velocityprojection;
     int rmaxfromhalocatalogue;
     int gascontained, darkcontained, starcontained;
-    int NBin, NHalo, NCell;
+    int NBin, NBinPerDecade, NHalo, NCell;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
@@ -311,6 +311,12 @@ int main(int argc, char **argv) {
 	    i++;
             if (i >= argc) usage();
 	    gi.NBin = (int) atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-NBinPerDecade") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.NBinPerDecade = (int) atof(argv[i]);
 	    i++;
 	    }
         else if (strcmp(argv[i],"-ctcom") == 0) {
@@ -1300,6 +1306,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"rmax                  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		gi.rmax,gi.rmax/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax/cosmo2internal_ct.L_usf);
         fprintf(stderr,"NBin                  : %d\n",gi.NBin);
+        fprintf(stderr,"NBinPerDecade         : %d\n",gi.NBinPerDecade);
         fprintf(stderr,"NHalo                 : %d\n",gi.NHalo);
         fprintf(stderr,"Nparticleperblockgas  : %d\n",gi.Nparticleperblockgas);
         fprintf(stderr,"Nparticleperblockdark : %d\n",gi.Nparticleperblockdark);
@@ -1342,6 +1349,7 @@ void usage(void) {
     fprintf(stderr,"-rmin <value>                        : minimum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-rmax <value>                        : maximum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax - overwrites values form halocatalogue (default: not set)\n");
+    fprintf(stderr,"-NBinPerDecade <value>               : number of bins per decade between rmin and rmax - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-ctcom                               : set this flag for centre-of-mass centres from 6DFOF file\n");
     fprintf(stderr,"-ctpotorden                          : set this flag for potmin or denmax centres from 6DFOF file\n");
     fprintf(stderr,"-vpaxes                              : set this flag for velocity projection along coordinate axes (default)\n");
@@ -1411,6 +1419,7 @@ void set_default_values_general_info(GI *gi) {
     gi->darkcontained = 0;
     gi->starcontained = 0;
     gi->NBin = 0;
+    gi->NBinPerDecade = 0;
     gi->NHalo = 0;
 
     gi->Nparticleperblockgas = 10000000;
@@ -1514,6 +1523,12 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	hd[i].rmin = (gi->rmin != 0)?gi->rmin:rmin;
 	hd[i].rmax = (gi->rmax != 0)?gi->rmax:rmax;
 	hd[i].NBin = (gi->NBin != 0)?gi->NBin:NBin;
+	if (gi->NBinPerDecade > 0) {
+	    assert(hd[i].rmin > 0);
+	    assert(hd[i].rmax > 0);
+	    assert(hd[i].rmax > hd[i].rmin);
+	    hd[i].NBin = (int) ((log10(hd[i].rmax)-log10(hd[i].rmin))*gi->NBinPerDecade);
+	    }
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
 	for (j = 0; j < hd[i].NBin+1; j++) {
@@ -1608,6 +1623,12 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	    hd[i].rmax = gi->rmax;
 	    }
 	hd[i].NBin = gi->NBin;
+	if (gi->NBinPerDecade > 0) {
+	    assert(hd[i].rmin > 0);
+	    assert(hd[i].rmax > 0);
+	    assert(hd[i].rmax > hd[i].rmin);
+	    hd[i].NBin = (int) ((log10(hd[i].rmax)-log10(hd[i].rmin))*gi->NBinPerDecade);
+	    }
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
 	for (j = 0; j < hd[i].NBin+1; j++) {
@@ -3024,11 +3045,13 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rbg/8 Mrbg/9 rcrit/10 Mrcrit/11 rstatic/12 Mrstatic/13 rvcmaxtot/14 Mrvcmaxtot/15 rvcmaxdark/16 Mrvcmaxdark/17 rtrunc/18 Mrtrunc/19 rhobgtot/20 rhobggas/21 rhobgdark/22 rhobgstar/23 rvcmaxtottrunc/24 Mrvcmaxtottrunc/25 rvcmaxdarktrunc/26 Mrvcmaxdarktrunc/27 vradmean/28 vraddisp/29 rvradrangelower/30 rvradrangeupper/31 rminMenc/32\n");
+    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rminMenc/35\n");
     for (i = 0; i < gi.NHalo; i++) {
 	fprintf(outputfile,"%d",hd[i].ID);
 	fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
 	fprintf(outputfile," %.6e %.6e %.6e",hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
+	fprintf(outputfile," %.6e %.6e",hd[i].rmin,hd[i].rmax);
+	fprintf(outputfile," %d",hd[i].NBin+1);
 	fprintf(outputfile," %.6e %.6e",hd[i].rbg,hd[i].Mrbg);
 	fprintf(outputfile," %.6e %.6e",hd[i].rcrit,hd[i].Mrcrit);
 	fprintf(outputfile," %.6e %.6e",hd[i].rstatic,hd[i].Mrstatic);
