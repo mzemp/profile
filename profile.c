@@ -2470,7 +2470,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    /*
 	    ** rbg & Mrbg
 	    */
-	    if ((rhoenc[0] >= gi.rhoencbg) && (rhoenc[1] < gi.rhoencbg) && (hd[i].ps[j].tot->M != 0) && (hd[i].rbg == 0)) {
+	    if ((rhoenc[0] >= gi.rhoencbg) && (rhoenc[1] < gi.rhoencbg) && (hd[i].rbg == 0)) {
 		m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
 		d = log(gi.rhoencbg)-log(rhoenc[0]);
 		hd[i].rbg = exp(log(radius[0])+m*d);
@@ -2483,7 +2483,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    /*
 	    ** rcrit & Mrcrit
 	    */
-	    if ((rhoenc[0] >= gi.rhoenccrit) && (rhoenc[1] < gi.rhoenccrit) && (hd[i].ps[j].tot->M != 0) && (hd[i].rcrit == 0)) {
+	    if ((rhoenc[0] >= gi.rhoenccrit) && (rhoenc[1] < gi.rhoenccrit) && (hd[i].rcrit == 0)) {
  		m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
 		d = log(gi.rhoenccrit)-log(rhoenc[0]);
 		hd[i].rcrit = exp(log(radius[0])+m*d);
