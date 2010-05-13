@@ -182,6 +182,7 @@ typedef struct general_info {
     double binfactor;
     double frecentrermin, frecentredist, frhobg;
     double fcheckrvcmax, fcheckrstatic, fchecktruncated;
+    double fexcluderminMenc, sloperminMenc;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     COSMOLOGICAL_PARAMETERS cp;
     UNIT_SYSTEM us, cosmous;
@@ -391,6 +392,18 @@ int main(int argc, char **argv) {
 	    i++;
             if (i >= argc) usage();
 	    gi.fchecktruncated = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-fexcluderminMenc") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.fexcluderminMenc = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-sloperminMenc") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.sloperminMenc = atof(argv[i]);
 	    i++;
 	    }
 	else if (strcmp(argv[i],"-vraddispmin") == 0) {
@@ -1321,6 +1334,8 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fcheckrvcmax          : %.6e\n",gi.fcheckrvcmax);
 	fprintf(stderr,"fcheckrstatic         : %.6e\n",gi.fcheckrstatic);
 	fprintf(stderr,"fchecktruncated       : %.6e\n",gi.fchecktruncated);
+	fprintf(stderr,"fexcluderminMenc      : %.6e\n",gi.fexcluderminMenc);
+	fprintf(stderr,"sloperminMenc         : %.6e\n",gi.sloperminMenc);
 	fprintf(stderr,"vraddispmin           : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
         fprintf(stderr,"Nsigmavrad            : %.6e\n",gi.Nsigmavrad);
 	fprintf(stderr,"Nsigmaextreme         : %.6e\n",gi.Nsigmaextreme);
@@ -1450,6 +1465,8 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrvcmax = 5;
     gi->fcheckrstatic = 3;
     gi->fchecktruncated = 1.2;
+    gi->fexcluderminMenc = 2;
+    gi->sloperminMenc = -0.2;
     gi->vraddispmin = 2;
     gi->Nsigmavrad = 1.5;
     gi->Nsigmaextreme = 5;
@@ -2716,13 +2733,13 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** i.e. bump is significant enough to cause a minimum or saddle in enclosed density
 	*/
 	StartIndex = -1;
-	rminok = 5*hd[i].rvradrangelower;
+	rminok = gi.fexcluderminMenc*hd[i].rvradrangelower;
 	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
 	    logslope[0] = (log(hd[i].ps[j-1].tot->Menc)-log(hd[i].ps[j-2].tot->Menc))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
 	    logslope[1] = (log(hd[i].ps[j].tot->Menc)-log(hd[i].ps[j-1].tot->Menc))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
-	    slope = 3;
+	    slope = 3 + gi.sloperminMenc;
 	    if ((logslope[0] <= slope) && (logslope[1] > slope) && (hd[i].rminMenc == 0)) {
 		/*
 		** Calculate rcheck, Mrcheck
