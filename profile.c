@@ -168,7 +168,7 @@ typedef struct general_info {
     int velocityprojection;
     int rmaxfromhalocatalogue;
     int gascontained, darkcontained, starcontained;
-    int NBin, NBinPerDecade, NHalo, NCell;
+    int NBin, NBinPerDex, NHalo, NCell;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
@@ -313,10 +313,10 @@ int main(int argc, char **argv) {
 	    gi.NBin = (int) atof(argv[i]);
 	    i++;
 	    }
-	else if (strcmp(argv[i],"-NBinPerDecade") == 0) {
+	else if (strcmp(argv[i],"-NBinPerDex") == 0) {
 	    i++;
             if (i >= argc) usage();
-	    gi.NBinPerDecade = (int) atof(argv[i]);
+	    gi.NBinPerDex = (int) atof(argv[i]);
 	    i++;
 	    }
         else if (strcmp(argv[i],"-ctcom") == 0) {
@@ -1306,7 +1306,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"rmax                  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		gi.rmax,gi.rmax/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax/cosmo2internal_ct.L_usf);
         fprintf(stderr,"NBin                  : %d\n",gi.NBin);
-        fprintf(stderr,"NBinPerDecade         : %d\n",gi.NBinPerDecade);
+        fprintf(stderr,"NBinPerDex            : %d\n",gi.NBinPerDex);
         fprintf(stderr,"NHalo                 : %d\n",gi.NHalo);
         fprintf(stderr,"Nparticleperblockgas  : %d\n",gi.Nparticleperblockgas);
         fprintf(stderr,"Nparticleperblockdark : %d\n",gi.Nparticleperblockdark);
@@ -1349,7 +1349,7 @@ void usage(void) {
     fprintf(stderr,"-rmin <value>                        : minimum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-rmax <value>                        : maximum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax - overwrites values form halocatalogue (default: not set)\n");
-    fprintf(stderr,"-NBinPerDecade <value>               : number of bins per decade between rmin and rmax - overwrites values form halocatalogue (default: not set)\n");
+    fprintf(stderr,"-NBinPerDex <value>                  : number of bins per decade between rmin and rmax - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-ctcom                               : set this flag for centre-of-mass centres from 6DFOF file\n");
     fprintf(stderr,"-ctpotorden                          : set this flag for potmin or denmax centres from 6DFOF file\n");
     fprintf(stderr,"-vpaxes                              : set this flag for velocity projection along coordinate axes (default)\n");
@@ -1419,7 +1419,7 @@ void set_default_values_general_info(GI *gi) {
     gi->darkcontained = 0;
     gi->starcontained = 0;
     gi->NBin = 0;
-    gi->NBinPerDecade = 0;
+    gi->NBinPerDex = 0;
     gi->NHalo = 0;
 
     gi->Nparticleperblockgas = 10000000;
@@ -1523,11 +1523,11 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	hd[i].rmin = (gi->rmin != 0)?gi->rmin:rmin;
 	hd[i].rmax = (gi->rmax != 0)?gi->rmax:rmax;
 	hd[i].NBin = (gi->NBin != 0)?gi->NBin:NBin;
-	if (gi->NBinPerDecade > 0) {
+	if (gi->NBinPerDex > 0) {
 	    assert(hd[i].rmin > 0);
 	    assert(hd[i].rmax > 0);
 	    assert(hd[i].rmax > hd[i].rmin);
-	    hd[i].NBin = (int) ((log10(hd[i].rmax)-log10(hd[i].rmin))*gi->NBinPerDecade);
+	    hd[i].NBin = (int) ((log10(hd[i].rmax)-log10(hd[i].rmin))*gi->NBinPerDex);
 	    }
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
@@ -1623,11 +1623,11 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	    hd[i].rmax = gi->rmax;
 	    }
 	hd[i].NBin = gi->NBin;
-	if (gi->NBinPerDecade > 0) {
+	if (gi->NBinPerDex > 0) {
 	    assert(hd[i].rmin > 0);
 	    assert(hd[i].rmax > 0);
 	    assert(hd[i].rmax > hd[i].rmin);
-	    hd[i].NBin = (int) ((log10(hd[i].rmax)-log10(hd[i].rmin))*gi->NBinPerDecade);
+	    hd[i].NBin = (int) ((log10(hd[i].rmax)-log10(hd[i].rmin))*gi->NBinPerDex);
 	    }
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
