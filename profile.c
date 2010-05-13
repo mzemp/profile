@@ -2332,12 +2332,12 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
     int Ncheck, Scheck, NBin, StartIndex, variant;
     double radius[2], rhoenc[2], Menc[2], logslope[2], vsigma[2];
     double m, d, slope;
-    double rcheck, Mrcheck, Qcheck, Qcomp, rmin, rmax;
+    double rcheck, Mrcheck, Qcheck, Qcomp, rminok, rmaxok;
     double rhotot, rhogas, rhodark, rhostar, rhototmin, rhogasmin, rhodarkmin, rhostarmin;
     double vradmean, vraddisp, barrier, minvrad;
     double *vradsmooth = NULL;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,StartIndex,variant,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rmin,rmax,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,minvrad,vradsmooth) shared(hd,gi)
+#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,StartIndex,variant,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rminok,rmaxok,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,minvrad,vradsmooth) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
@@ -2532,11 +2532,11 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	**
 	** First, find bin that contains fiducial radius
 	*/
-	rmax = 0;
-	rmax = (hd[i].rbg > rmax)?hd[i].rbg:rmax;
-	rmax = (hd[i].rcrit > rmax)?hd[i].rcrit:rmax;
-	rmax = (5*hd[i].ps[0].ro > rmax)?hd[i].ps[0].ro:rmax;
-	for (j = 1; (hd[i].ps[j].rm < rmax) && (j < hd[i].NBin); j++) {
+	rmaxok = 0;
+	rmaxok = (hd[i].rbg > rmaxok)?hd[i].rbg:rmaxok;
+	rmaxok = (hd[i].rcrit > rmaxok)?hd[i].rcrit:rmaxok;
+	rmaxok = (5*hd[i].ps[0].ro > rmaxok)?hd[i].ps[0].ro:rmaxok;
+	for (j = 1; (hd[i].ps[j].rm < rmaxok) && (j < hd[i].NBin); j++) {
 	    if ((fabs(hd[i].ps[j].tot->vradsmooth) < minvrad) && ((hd[i].ps[j].dark->M != 0) || (hd[i].ps[j].star->M != 0))) {
 		minvrad = fabs(hd[i].ps[j].tot->vradsmooth);
 		StartIndex = j;
@@ -2665,10 +2665,10 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	*/
 	StartIndex = -1;
 	barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
-	rmin = hd[i].rvradrangelower;
+	rminok = hd[i].rvradrangelower;
 	for (j = hd[i].NBin; j > 0; j--) {
 	    Qcomp = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
-	    if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd[i].ps[j].rm >= rmin)) StartIndex = j;
+	    if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd[i].ps[j].rm >= rminok)) StartIndex = j;
 	    }
 	/*
 	** Get location where barrier is pierced
@@ -2712,11 +2712,11 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    }
 	/*
 	** Search for truncation of halo
-	** Indicator: local minimum in enclosed density at scales larger than rmin
+	** Indicator: local minimum in enclosed density at scales larger than rminok
 	** i.e. bump is significant enough to cause a minimum or saddle in enclosed density
 	*/
 	StartIndex = -1;
-	rmin = 5*hd[i].rvradrangelower;
+	rminok = 5*hd[i].rvradrangelower;
 	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
@@ -2756,7 +2756,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = hd[i].ps[k].tot->Menc/pow(hd[i].ps[k].ro,3);
 		    if (Qcheck <= Qcomp) Scheck++;
 		    }
-		if ((Scheck == Ncheck) && (rcheck >= rmin) && (hd[i].ps[j-1].tot->M != 0)) {
+		if ((Scheck == Ncheck) && (rcheck >= rminok) && (hd[i].ps[j-1].tot->M != 0)) {
 		    StartIndex = j;
 		    hd[i].rminMenc = rcheck;
 		    assert(hd[i].rminMenc > 0);
@@ -2769,7 +2769,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** We define the location of the absolute minimum (within specified range of frhobg)
 	** of the density within rminMenc as rtrunc
 	*/
-	rmin = hd[i].rvradrangelower;
+	rminok = hd[i].rvradrangelower;
 	if (StartIndex > 0) {
 	    rhotot = 0;
 	    rhogas = 0;
@@ -2784,7 +2784,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		rhogas = hd[i].ps[j].gas->M/hd[i].ps[j].V;
 		rhodark = hd[i].ps[j].dark->M/hd[i].ps[j].V;
 		rhostar = hd[i].ps[j].star->M/hd[i].ps[j].V;
-		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j].rm >= rmin)) {
+		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j].rm >= rminok)) {
 		    if ((rhotot < rhototmin) && (rhotot > 0)) rhototmin = rhotot;
 		    if ((rhogas < rhogasmin) && (rhogas > 0) && gi.gascontained) rhogasmin = rhogas;
 		    if ((rhodark < rhodarkmin) && (rhodark > 0) && gi.darkcontained) rhodarkmin = rhodark;
@@ -2835,12 +2835,12 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** as well as rvcmaxtottrunc, Mrvcmaxtottrunc, rvcmaxdarktrunc, Mrvcmaxdarktrunc
 	** by going from inside out
 	*/
-	rmax = 0;
-	rmax = (hd[i].rbg > rmax)?hd[i].rbg:rmax;
-	rmax = (hd[i].rcrit > rmax)?hd[i].rcrit:rmax;
-	rmax = (hd[i].rstatic > rmax)?hd[i].rstatic:rmax;
-	rmax = (hd[i].rtrunc > rmax)?hd[i].rtrunc:rmax;
-	for (j = 2; (hd[i].ps[j].ro <= rmax) && (j < hd[i].NBin+1); j++) {
+	rmaxok = 0;
+	rmaxok = (hd[i].rbg > rmaxok)?hd[i].rbg:rmaxok;
+	rmaxok = (hd[i].rcrit > rmaxok)?hd[i].rcrit:rmaxok;
+	rmaxok = (hd[i].rstatic > rmaxok)?hd[i].rstatic:rmaxok;
+	rmaxok = (hd[i].rtrunc > rmaxok)?hd[i].rtrunc:rmaxok;
+	for (j = 2; (hd[i].ps[j].ro <= rmaxok) && (j < hd[i].NBin+1); j++) {
 	    /*
 	    ** Total mass
 	    */
@@ -2882,7 +2882,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = hd[i].ps[k].tot->Menc/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
-		if ((Scheck == Ncheck) && (rcheck <= rmax)) {
+		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
 		    hd[i].rvcmaxtot = rcheck;
 		    hd[i].Mrvcmaxtot = Mrcheck;
 		    }
@@ -2928,7 +2928,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = hd[i].ps[k].tot->Mencremove/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
-		if ((Scheck == Ncheck) && (rcheck <= rmax)) {
+		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
 		    hd[i].rvcmaxtottrunc = rcheck;
 		    hd[i].Mrvcmaxtottrunc = Mrcheck;
 		    }
@@ -2975,7 +2975,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 			Qcomp = hd[i].ps[k].dark->Menc/hd[i].ps[k].ro;
 			if (Qcheck >= Qcomp) Scheck++;
 			}
-		    if ((Scheck == Ncheck) && (rcheck <= rmax)) {
+		    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
 			hd[i].rvcmaxdark = rcheck;
 			hd[i].Mrvcmaxdark = Mrcheck;
 			}
@@ -3021,7 +3021,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 			Qcomp = hd[i].ps[k].dark->Mencremove/hd[i].ps[k].ro;
 			if (Qcheck >= Qcomp) Scheck++;
 			}
-		    if ((Scheck == Ncheck) && (rcheck <= rmax)) {
+		    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
 			hd[i].rvcmaxdarktrunc = rcheck;
 			hd[i].Mrvcmaxdarktrunc = Mrcheck;
 			}
