@@ -105,6 +105,7 @@ typedef struct profile_structure {
 typedef struct halo_data {
 
     int ID;
+    int HostHaloID;
     int NBin;
     double rcentre[3];
     double vcentre[3];
@@ -201,6 +202,7 @@ void put_psp_in_bins(GI, HALO_DATA *, PROFILE_STAR_PARTICLE *);
 void calculate_recentred_halo_coordinates(GI, HALO_DATA *);
 void calculate_total_matter_distribution(GI, HALO_DATA *);
 void calculate_halo_properties(GI, HALO_DATA *);
+void determine_halo_hierarchy(GI, HALO_DATA *);
 void write_output(GI, HALO_DATA *);
 
 int main(int argc, char **argv) {
@@ -1187,6 +1189,19 @@ int main(int argc, char **argv) {
     fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 
     /*
+    ** Determine hierarchy of haloes
+    */
+
+    gettimeofday(&time,NULL);
+    timestartsub = time.tv_sec;
+    fprintf(stderr,"Determining hierarchy of haloes ... ");
+    determine_halo_hierarchy(gi,hd);
+    gettimeofday(&time,NULL);
+    timeendsub = time.tv_sec;
+    timediff = timeendsub-timestartsub;
+    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+
+    /*
     ** Write output
     */
 
@@ -1690,6 +1705,7 @@ void initialise_halo_profile (HALO_DATA *hd){
     assert(hd->rmax > 0);
     assert(hd->rmax > hd->rmin);
 
+    hd->HostHaloID = 0;
     hd->rbg = 0;
     hd->Mrbg = 0;
     hd->rcrit = 0;
@@ -3050,6 +3066,46 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	}
     }
 
+void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
+
+    int i, j, k;
+    double r[3], d[3];
+    double size, distance, Qcheck, *Qcomp;
+
+    Qcomp = malloc(gi.NHalo*sizeof(double));
+    for (i = 0; i < gi.NHalo; i++) {
+	Qcomp[i] = 1e100;
+	}
+
+    for (i = 0; i < gi.NHalo; i++) {
+	size = hd[i].rbg;
+	Qcheck = hd[i].Mrbg;
+	if ((hd[i].rtrunc < size) && (hd[i].rtrunc > 0)) {
+	    size = hd[i].rtrunc;
+	    Qcheck = hd[i].Mrtrunc;
+	    }
+#pragma omp parallel for default(none) private(j,k,r,d,distance) shared(hd,gi,i,size,Qcheck,Qcomp)
+	for (j = 0; j < gi.NHalo; j++) {
+	    if (j == i) continue;
+	    for (k = 0; k < 3; k++) {
+		r[k] = correct_position(hd[i].rcentre[k],hd[j].rcentre[k],gi.us.LBox);
+		d[k] = r[k] - hd[i].rcentre[k];
+		}
+	    distance = sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
+	    if (distance <= size) {
+		/*
+		** contained
+		*/
+		if (Qcheck < Qcomp[j]) {
+		    Qcomp[j] = Qcheck;
+		    hd[j].HostHaloID = hd[i].ID;
+		    }
+		}
+	    }
+	}
+    free(Qcomp);
+    }
+
 void write_output(GI gi, HALO_DATA *hd) {
 
     int i, j, k;
@@ -3062,7 +3118,7 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rminMenc/35\n");
+    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rminMenc/35 HostHaloID/36\n");
     for (i = 0; i < gi.NHalo; i++) {
 	fprintf(outputfile,"%d",hd[i].ID);
 	fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
@@ -3078,6 +3134,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtottrunc,hd[i].Mrvcmaxtottrunc,hd[i].rvcmaxdarktrunc,hd[i].Mrvcmaxdarktrunc);
 	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper);
 	fprintf(outputfile," %.6e",hd[i].rminMenc);
+	fprintf(outputfile," %d",hd[i].HostHaloID);
 	fprintf(outputfile,"\n");
 	}
     fclose(outputfile);
