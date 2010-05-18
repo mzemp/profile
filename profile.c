@@ -170,7 +170,7 @@ typedef struct general_info {
     int velocityprojection;
     int rmaxfromhalocatalogue;
     int gascontained, darkcontained, starcontained;
-    int NBin, NBinPerDex, NHalo, NCell;
+    int NBin, NHalo, NCell;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
@@ -180,6 +180,7 @@ typedef struct general_info {
     double Deltabg, Deltacrit;
     double ascale;
     double rmin, rmax;
+    double NBinPerDex;
     double bc[6];
     double binfactor;
     double frecentrermin, frecentredist, frhobg;
@@ -320,7 +321,7 @@ int main(int argc, char **argv) {
 	else if (strcmp(argv[i],"-NBinPerDex") == 0) {
 	    i++;
             if (i >= argc) usage();
-	    gi.NBinPerDex = (int) atof(argv[i]);
+	    gi.NBinPerDex = atof(argv[i]);
 	    i++;
 	    }
         else if (strcmp(argv[i],"-ctcom") == 0) {
@@ -1335,7 +1336,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"rmax                  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		gi.rmax,gi.rmax/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax/cosmo2internal_ct.L_usf);
         fprintf(stderr,"NBin                  : %d\n",gi.NBin);
-        fprintf(stderr,"NBinPerDex            : %d\n",gi.NBinPerDex);
+        fprintf(stderr,"NBinPerDex            : %g\n",gi.NBinPerDex);
         fprintf(stderr,"NHalo                 : %d\n",gi.NHalo);
         fprintf(stderr,"Nparticleperblockgas  : %d\n",gi.Nparticleperblockgas);
         fprintf(stderr,"Nparticleperblockdark : %d\n",gi.Nparticleperblockdark);
@@ -1515,7 +1516,7 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
     int SizeHaloData = HALO_DATA_SIZE;
     int i, j, idummy, ID, NBin, NHaloRead;
     double ddummy;
-    double rx, ry, rz, vx, vy, vz, rmin, rmax;
+    double rx, ry, rz, vx, vy, vz, rmin, rmax, radius, dr;
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL;
 
@@ -1560,7 +1561,16 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	    assert(hd[i].rmin > 0);
 	    assert(hd[i].rmax > 0);
 	    assert(hd[i].rmax > hd[i].rmin);
-	    hd[i].NBin = (int) ((log10(hd[i].rmax)-log10(hd[i].rmin))*gi->NBinPerDex);
+	    dr = 1/gi->NBinPerDex;
+	    assert(dr > 0);
+	    radius = log10(hd[i].rmin) + dr;
+	    hd[i].NBin = 0;
+	    while (radius < log10(hd[i].rmax)) {
+		hd[i].NBin++;
+		radius += dr;
+		}
+	    hd[i].rmax = pow(10,radius);
+	    hd[i].NBin++;
 	    }
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
@@ -1601,7 +1611,7 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
     int SizeHaloData = HALO_DATA_SIZE;
     int i, j, ID, N, idummy, NHaloRead;
     double ddummy;
-    double mass, radius;
+    double mass, radius, dr;
     double rcom[3], rpotorden[3], v[3];
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL;
@@ -1660,7 +1670,16 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	    assert(hd[i].rmin > 0);
 	    assert(hd[i].rmax > 0);
 	    assert(hd[i].rmax > hd[i].rmin);
-	    hd[i].NBin = (int) ((log10(hd[i].rmax)-log10(hd[i].rmin))*gi->NBinPerDex);
+	    dr = 1/gi->NBinPerDex;
+	    assert(dr > 0);
+	    radius = log10(hd[i].rmin) + dr;
+	    hd[i].NBin = 0;
+	    while (radius < log10(hd[i].rmax)) {
+		hd[i].NBin++;
+		radius += dr;
+		}
+	    hd[i].rmax = pow(10,radius);
+	    hd[i].NBin++;
 	    }
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
