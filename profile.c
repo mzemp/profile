@@ -1482,7 +1482,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrvcmax = 5;
     gi->fcheckrstatic = 3;
     gi->fchecktruncated = 1.2;
-    gi->fexclude = 2;
+    gi->fexclude = 5;
     gi->slopertruncindicator = -0.2;
     gi->vraddispmin = 2;
     gi->Nsigmavrad = 1.5;
@@ -2535,7 +2535,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	/*
 	** Calculate rbg, Mrbg, rcrit & Mrcrit
 	*/
-	rminok = gi.fexclude*hd[i].rvradrangelower;
+	rminok = gi.fexclude*hd[i].ps[0].ro;
 	for (j = 1; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].ro;
 	    radius[1] = hd[i].ps[j].ro;
@@ -2779,7 +2779,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** i.e. bump is significant enough to cause a minimum or saddle in enclosed density
 	*/
 	StartIndex = -1;
-	rminok = gi.fexclude*hd[i].rvradrangelower;
+	rminok = gi.fexclude*hd[i].ps[0].ro;
 	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
@@ -2832,7 +2832,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** We define the location of the absolute minimum (within specified range of frhobg)
 	** of the density within rtruncindicator as rtrunc
 	*/
-	rminok = hd[i].rvradrangelower;
+	rminok = gi.fexclude*hd[i].ps[0].ro;
 	if (StartIndex > 0) {
 	    rhotot = 0;
 	    rhogas = 0;
