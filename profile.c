@@ -2847,7 +2847,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		rhogas = hd[i].ps[j].gas->M/hd[i].ps[j].V;
 		rhodark = hd[i].ps[j].dark->M/hd[i].ps[j].V;
 		rhostar = hd[i].ps[j].star->M/hd[i].ps[j].V;
-		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j].rm >= rminok)) {
+		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j-1].tot->Menc > 0) && (hd[i].ps[j].rm >= rminok)) {
 		    if ((rhotot < rhototmin) && (rhotot > 0)) rhototmin = rhotot;
 		    if ((rhogas < rhogasmin) && (rhogas > 0) && gi.gascontained) rhogasmin = rhogas;
 		    if ((rhodark < rhodarkmin) && (rhodark > 0) && gi.darkcontained) rhodarkmin = rhodark;
