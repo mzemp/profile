@@ -2814,7 +2814,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Menc[0] = hd[i].ps[j-1].tot->Menc;
 		    Menc[1] = hd[i].ps[j].tot->Menc;
 		    }
-		if (Menc[0] != 0) {
+		if (Menc[0] > 0) {
 		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		    d = log(hd[i].rstatic)-log(radius[0]);
 		    hd[i].Mrstatic = exp(log(Menc[0])+m*d);
