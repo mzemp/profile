@@ -184,7 +184,7 @@ typedef struct general_info {
     double bc[6];
     double binfactor;
     double frecentrermin, frecentredist, frhobg;
-    double fcheckrvcmax, fcheckrstatic, fchecktruncated;
+    double fcheckrbgcrit, fcheckrvcmax, fcheckrstatic, fcheckrtruncindicator;
     double fexclude, slopertruncindicator;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     COSMOLOGICAL_PARAMETERS cp;
@@ -380,6 +380,12 @@ int main(int argc, char **argv) {
 	    gi.frhobg = atof(argv[i]);
 	    i++;
 	    }
+	else if (strcmp(argv[i],"-fcheckrbgcrit") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.fcheckrbgcrit = atof(argv[i]);
+	    i++;
+	    }
 	else if (strcmp(argv[i],"-fcheckrvcmax") == 0) {
 	    i++;
             if (i >= argc) usage();
@@ -392,10 +398,10 @@ int main(int argc, char **argv) {
 	    gi.fcheckrstatic = atof(argv[i]);
 	    i++;
 	    }
-	else if (strcmp(argv[i],"-fchecktruncated") == 0) {
+	else if (strcmp(argv[i],"-fcheckrtruncindicator") == 0) {
 	    i++;
             if (i >= argc) usage();
-	    gi.fchecktruncated = atof(argv[i]);
+	    gi.fcheckrtruncindicator = atof(argv[i]);
 	    i++;
 	    }
 	else if (strcmp(argv[i],"-fexclude") == 0) {
@@ -1348,9 +1354,10 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"frecentrermin         : %.6e\n",gi.frecentrermin);
 	fprintf(stderr,"frecentredist         : %.6e\n",gi.frecentredist);
 	fprintf(stderr,"frhobg                : %.6e\n",gi.frhobg);
+	fprintf(stderr,"fcheckrbgcrit         : %.6e\n",gi.fcheckrbgcrit);
 	fprintf(stderr,"fcheckrvcmax          : %.6e\n",gi.fcheckrvcmax);
 	fprintf(stderr,"fcheckrstatic         : %.6e\n",gi.fcheckrstatic);
-	fprintf(stderr,"fchecktruncated       : %.6e\n",gi.fchecktruncated);
+	fprintf(stderr,"fcheckrtruncindicator : %.6e\n",gi.fcheckrtruncindicator);
 	fprintf(stderr,"fexclude              : %.6e\n",gi.fexclude);
 	fprintf(stderr,"slopertruncindicator  : %.6e\n",gi.slopertruncindicator);
 	fprintf(stderr,"vraddispmin           : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
@@ -1479,10 +1486,11 @@ void set_default_values_general_info(GI *gi) {
     gi->frecentrermin = 5;
     gi->frecentredist = 2;
     gi->frhobg = 1.2;
+    gi->fcheckrbgcrit = 3;
     gi->fcheckrvcmax = 5;
     gi->fcheckrstatic = 3;
-    gi->fchecktruncated = 1.2;
-    gi->fexclude = 5;
+    gi->fcheckrtruncindicator = 1.2;
+    gi->fexclude = 3;
     gi->slopertruncindicator = -0.2;
     gi->vraddispmin = 2;
     gi->Nsigmavrad = 1.5;
@@ -2559,6 +2567,26 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    assert(hd[i].rbg > 0);
 		    assert(hd[i].Mrbg > 0);
 		    }
+		else {
+		    /*
+		    ** Check criteria
+		    */
+		    Qcheck = 0;
+		    Ncheck = 0;
+		    Scheck = 0;
+		    for (k = j; (hd[i].ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd[i].NBin+1); k++) {
+			Ncheck++;
+			Qcomp = log(hd[i].ps[k].tot->Menc/hd[i].ps[k].Venc)-log(hd[i].ps[k-1].tot->Menc/hd[i].ps[k-1].Venc);
+			Qcomp /= log(hd[i].ps[k].ro)-log(hd[i].ps[k-1].ro);
+			if (Qcheck > Qcomp) Scheck++;
+			}
+		    if (Scheck == Ncheck) {
+			hd[i].rbg = rcheck;
+			hd[i].Mrbg = Mrcheck;
+			assert(hd[i].rbg > 0);
+			assert(hd[i].Mrbg > 0);
+			}
+		    }
 		}
 	    /*
 	    ** rcrit & Mrcrit
@@ -2570,11 +2598,32 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		d = log(rcheck)-log(radius[0]);
 		Mrcheck = exp(log(Menc[0])+m*d);
+		Mrcheck = exp(log(Menc[0])+m*d);
 		if (rcheck >= rminok) {
 		    hd[i].rcrit = rcheck;
 		    hd[i].Mrcrit = Mrcheck;
 		    assert(hd[i].rcrit > 0);
 		    assert(hd[i].Mrcrit > 0);
+		    }
+		else {
+		    /*
+		    ** Check criteria
+		    */
+		    Qcheck = 0;
+		    Ncheck = 0;
+		    Scheck = 0;
+		    for (k = j; (hd[i].ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd[i].NBin+1); k++) {
+			Ncheck++;
+			Qcomp = log(hd[i].ps[k].tot->Menc/hd[i].ps[k].Venc)-log(hd[i].ps[k-1].tot->Menc/hd[i].ps[k-1].Venc);
+			Qcomp /= log(hd[i].ps[k].ro)-log(hd[i].ps[k-1].ro);
+			if (Qcheck > Qcomp) Scheck++;
+			}
+		    if (Scheck == Ncheck) {
+			hd[i].rcrit = rcheck;
+			hd[i].Mrcrit = Mrcheck;
+			assert(hd[i].rcrit > 0);
+			assert(hd[i].Mrcrit > 0);
+			}
 		    }
 		}
 	    if ((hd[i].rbg != 0) && (hd[i].rcrit != 0)) break;
@@ -2811,12 +2860,13 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		/*
 		** Check criteria
 		*/
-		Qcheck = Mrcheck/pow(rcheck,3);
+		Qcheck = gi.slopertruncindicator;
 		Ncheck = 0;
 		Scheck = 0;
-		for (k = j; (hd[i].ps[k].ro <= gi.fchecktruncated*rcheck) && (k < hd[i].NBin+1); k++) {
+		for (k = j+1; (hd[i].ps[k].rm <= gi.fcheckrtruncindicator*rcheck) && (k < hd[i].NBin+1); k++) {
 		    Ncheck++;
-		    Qcomp = hd[i].ps[k].tot->Menc/pow(hd[i].ps[k].ro,3);
+		    Qcomp = log(hd[i].ps[k].tot->Menc/hd[i].ps[k].Venc)-log(hd[i].ps[k-1].tot->Menc/hd[i].ps[k-1].Venc);
+		    Qcomp /= log(hd[i].ps[k].ro)-log(hd[i].ps[k-1].ro);
 		    if (Qcheck <= Qcomp) Scheck++;
 		    }
 		if ((Scheck == Ncheck) && (rcheck >= rminok) && (hd[i].ps[j-1].tot->M != 0)) {
