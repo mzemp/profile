@@ -3099,16 +3099,55 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 
     int i, j, k;
-    double r[3], d[3];
-    double size, distance, Qcheck, *Qcomp;
+    int index[3];
+    int index0, index1, index2;
+    int ***HeadIndex, *NextIndex;
+    double r[3], shift[3];
+    double size, d, Qcheck, *Qcomp;
 
-    Qcomp = malloc(gi.NHalo*sizeof(double));
+    /*
+    ** Initialise linked list stuff
+    */
+    HeadIndex = malloc(gi.NCell*sizeof(int **));
+    assert(HeadIndex != NULL);
+    for (i = 0; i < gi.NCell; i ++) {
+	HeadIndex[i] = malloc(gi.NCell*sizeof(int *));
+	assert(HeadIndex[i] != NULL);
+	for (j = 0; j < gi.NCell; j++) {
+	    HeadIndex[i][j] = malloc(gi.NCell*sizeof(int));
+	    assert(HeadIndex[i][j] != NULL);
+	    }
+	}
+    NextIndex = malloc(gi.NHalo*sizeof(int));
+    assert(NextIndex != NULL);
+    for (i = 0; i < gi.NCell; i++) {
+	for (j = 0; j < gi.NCell; j++) {
+	    for (k = 0; k < gi.NCell; k++) {
+		HeadIndex[i][j][k] = 0;
+		}
+	    }
+	}
+    for (i = 0; i < gi.NHalo; i++) NextIndex[i] = 0;
+    for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
+    /*
+    ** Generate linked list
+    */
     for (i = 0; i < gi.NHalo; i++) {
-	Qcomp[i] = 0;
+	for (j = 0; j < 3; j++) {
+	    index[j] = (int)(gi.NCell*(hd[i].rcentre[j]+shift[j])/gi.us.LBox);
+	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where haloes are exactly on the boundary */
+	    assert(index[j] >= 0 && index[j] < gi.NCell);
+	    }
+	    NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
+	    HeadIndex[index[0]][index[1]][index[2]] = i;
 	}
     /*
     ** Find top level haloes
     */
+    Qcomp = malloc(gi.NHalo*sizeof(double));
+    for (i = 0; i < gi.NHalo; i++) {
+	Qcomp[i] = 0;
+	}
     for (i = 0; i < gi.NHalo; i++) {
 	size = hd[i].rcrit;
 	Qcheck = hd[i].Mrcrit;
@@ -3116,21 +3155,38 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 	    size = hd[i].rtrunc;
 	    Qcheck = hd[i].Mrtrunc;
 	    }
-#pragma omp parallel for default(none) private(j,k,r,d,distance) shared(hd,gi,i,size,Qcheck,Qcomp)
-	for (j = 0; j < gi.NHalo; j++) {
-	    if (j == i) continue;
-	    for (k = 0; k < 3; k++) {
-		r[k] = correct_position(hd[i].rcentre[k],hd[j].rcentre[k],gi.us.LBox);
-		d[k] = r[k] - hd[i].rcentre[k];
-		}
-	    distance = sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
-	    if (distance <= size) {
-		/*
-		** contained
-		*/
-		if (Qcheck > Qcomp[j]) {
-		    Qcomp[j] = Qcheck;
-		    hd[j].HostHaloID = hd[i].ID;
+	/*
+	** Go through linked list
+	*/
+#pragma omp parallel for default(none) private(index,index0,index1,index2,j,k,r,d) shared(gi,hd,i,size,shift,Qcomp,Qcheck,HeadIndex,NextIndex)
+	for (index0 = 0; index0 < gi.NCell; index0++) {
+	    for (index1 = 0; index1 < gi.NCell; index1++) {
+		for (index2 = 0; index2 < gi.NCell; index2++) {
+		    index[0] = index0;
+		    index[1] = index1;
+		    index[2] = index2;
+		    if (intersect(gi,hd[i],index,shift,size)) {
+			j = HeadIndex[index[0]][index[1]][index[2]];
+			while (j != 0) {
+			    if (j != i) {
+				for (k = 0; k < 3; k++) {
+				    r[k] = correct_position(hd[i].rcentre[k],hd[j].rcentre[k],gi.us.LBox);
+				    r[k] = r[k] - hd[i].rcentre[k];
+				    }
+				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+				if (d <= size) {
+				    /*
+				    ** contained
+				    */
+				    if (Qcheck > Qcomp[j]) {
+					Qcomp[j] = Qcheck;
+					hd[j].HostHaloID = hd[i].ID;
+					}
+				    }
+				}
+			    j = NextIndex[j];
+			    }
+			}
 		    }
 		}
 	    }
@@ -3139,8 +3195,9 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     /*
     ** Sort out duplicates
     */
+#pragma omp parallel for default(none) private(i,j,k) shared(gi,hd)
     for (i = 0; i < gi.NHalo; i++) {
-	for (j = 0; j < gi.NHalo; j++) {
+	for (j = i+1; j < gi.NHalo; j++) {
 	    if ((hd[i].HostHaloID == hd[j].ID) && (hd[j].HostHaloID == hd[i].ID)) {
 		/*
 		** Found a pair
@@ -3149,18 +3206,14 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		    hd[j].DuplicateHaloID = hd[i].ID;
 		    hd[i].HostHaloID = 0;
 		    for (k = 0; k < gi.NHalo; k++) {
-			if (hd[k].HostHaloID == hd[j].ID) {
-			    hd[k].HostHaloID = hd[i].ID;
-			    }
+			if (hd[k].HostHaloID == hd[j].ID) hd[k].HostHaloID = hd[i].ID;
 			}
 		    }
 		else {
 		    hd[i].DuplicateHaloID = hd[j].ID;
 		    hd[j].HostHaloID = 0;
 		    for (k = 0; k < gi.NHalo; k++) {
-			if (hd[k].HostHaloID == hd[i].ID) {
-			    hd[k].HostHaloID = hd[j].ID;
-			    }
+			if (hd[k].HostHaloID == hd[i].ID) hd[k].HostHaloID = hd[j].ID;
 			}
 		    }
 		}
