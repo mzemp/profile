@@ -300,6 +300,12 @@ int main(int argc, char **argv) {
             lengthtype = 1;
             i++;
             }
+        else if (strcmp(argv[i],"-ascale") == 0) {
+            i++;
+            if (i >= argc) usage();
+	    gi.ascale = atof(argv[i]);
+            i++;
+            }
 	else if (strcmp(argv[i],"-rmin") == 0) {
 	    i++;
             if (i >= argc) usage();
@@ -645,10 +651,10 @@ int main(int argc, char **argv) {
     if (dataformat == 0) {
 	xdrstdio_create(&xdrs,stdin,XDR_DECODE);
 	read_tipsy_xdr_header(&xdrs,&th);
-	gi.ascale = th.time;
-	if(gi.us.LBox == 0) gi.us.LBox = 1;
-	if(gi.us.Hubble0 == 0) gi.us.Hubble0 = sqrt(8.0*M_PI/3.0);
-	if(gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1;
+	if (gi.ascale == 0) gi.ascale = th.time;
+	if (gi.us.LBox == 0) gi.us.LBox = 1;
+	if (gi.us.Hubble0 == 0) gi.us.Hubble0 = sqrt(8.0*M_PI/3.0);
+	if (gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1;
 	gi.bc[0] = -0.5*gi.us.LBox;
 	gi.bc[1] = -0.5*gi.us.LBox;
 	gi.bc[2] = -0.5*gi.us.LBox;
@@ -661,16 +667,16 @@ int main(int argc, char **argv) {
 	}
     else if (dataformat == 1) {
 	prepare_art_data(&ad);
-	gi.ascale = ad.ah.abox;
+	if (gi.ascale == 0) gi.ascale = ad.ah.abox;
 	gi.cp.OmegaM0 = ad.ah.OmM0;
 	gi.cp.OmegaB0 = ad.ah.OmB0;
 	gi.cp.OmegaDM0 = gi.cp.OmegaM0 - gi.cp.OmegaB0;
 	gi.cp.OmegaL0 = ad.ah.OmL0;
 	gi.cp.OmegaK0 = ad.ah.OmK0;
 	gi.cp.h0_100 = ad.ah.h100;
-	if(gi.us.LBox == 0) gi.us.LBox = ad.ah.Ngrid;
-	if(gi.us.Hubble0 == 0) gi.us.Hubble0 = 2.0/sqrt(gi.cp.OmegaM0);
-	if(gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1.0/gi.cp.OmegaM0;
+	if (gi.us.LBox == 0) gi.us.LBox = ad.ah.Ngrid;
+	if (gi.us.Hubble0 == 0) gi.us.Hubble0 = 2.0/sqrt(gi.cp.OmegaM0);
+	if (gi.us.rhocrit0 == 0) gi.us.rhocrit0 = 1.0/gi.cp.OmegaM0;
 	gi.bc[0] = 0;
 	gi.bc[1] = 0;
 	gi.bc[2] = 0;
@@ -1318,6 +1324,9 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"\n");
         fprintf(stderr,"Used values:\n\n");
         fprintf(stderr,"Data format:          : %s\n",(dataformat == 0)?"Tipsy":"ART");
+	fprintf(stderr,"Contains gas          : %s\n",(gi.gascontained == 0)?"no":"yes");
+	fprintf(stderr,"Contains dark matter  : %s\n",(gi.darkcontained == 0)?"no":"yes");
+	fprintf(stderr,"Contains stars        : %s\n",(gi.starcontained == 0)?"no":"yes");
         fprintf(stderr,"Halocatalogue format  : %s\n",(halocatalogueformat == 0)?"generic":"6DFOF");
         fprintf(stderr,"Velocity projection   : %s\n",(gi.velocityprojection == 0)?"coordinate axes":"spherical");
         fprintf(stderr,"Delta_bg              : %.6e\n",gi.Deltabg);
@@ -1475,6 +1484,7 @@ void set_default_values_general_info(GI *gi) {
     gi->NLoopRecentre = 0;
     gi->NLoopProcessData = 1;
 
+    gi->ascale = 0;
     gi->rhobg = 0;
     gi->rhocrit = 0;
     gi->Deltabg = 200;
@@ -2515,22 +2525,24 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    hd[i].ps[j].star->vdt[5] = 0;
 		    }
 		}
-	    if ((hd[i].ps[j].dark->M != 0) || (hd[i].ps[j].star->M != 0)) {
-		hd[i].ps[j].tot->vradsmooth /= hd[i].ps[j].dark->M+hd[i].ps[j].star->M;
-		}
-	    if (hd[i].ps[j].gas->M != 0) {
+	    Mrcheck = 0;
+	    if (gi.darkcontained) Mrcheck += hd[i].ps[j].dark->M;
+	    if (gi.starcontained) Mrcheck += hd[i].ps[j].star->M;
+	    if (Mrcheck != 0) hd[i].ps[j].tot->vradsmooth /= Mrcheck;
+	    if (gi.gascontained && hd[i].ps[j].gas->M != 0) {
 		hd[i].ps[j].gas->metallicity      /= hd[i].ps[j].gas->M;
 		hd[i].ps[j].gas->metallicity_SNII /= hd[i].ps[j].gas->M;
 		hd[i].ps[j].gas->metallicity_SNIa /= hd[i].ps[j].gas->M;
 		}
-	    if (hd[i].ps[j].star->M != 0) {
+	    if (gi.starcontained && hd[i].ps[j].star->M != 0) {
 		hd[i].ps[j].star->metallicity      /= hd[i].ps[j].star->M;
 		hd[i].ps[j].star->metallicity_SNII /= hd[i].ps[j].star->M;
 		hd[i].ps[j].star->metallicity_SNIa /= hd[i].ps[j].star->M;
 		}
-	    if (hd[i].ps[j].star->N != 0) {
+	    if (gi.starcontained && hd[i].ps[j].star->N != 0) {
 		hd[i].ps[j].star->t_form /= hd[i].ps[j].star->N;
 		}
+
 	    }
 	vradsmooth[0] = 0;
 	for (j = 1; j < hd[i].NBin; j++) {
@@ -2598,7 +2610,6 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
 		d = log(rcheck)-log(radius[0]);
 		Mrcheck = exp(log(Menc[0])+m*d);
-		Mrcheck = exp(log(Menc[0])+m*d);
 		if (rcheck >= rminok) {
 		    hd[i].rcrit = rcheck;
 		    hd[i].Mrcrit = Mrcheck;
@@ -2649,7 +2660,10 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	rmaxok = (hd[i].rcrit > rmaxok)?hd[i].rcrit:rmaxok;
 	rmaxok = (5*hd[i].ps[0].ro > rmaxok)?hd[i].ps[0].ro:rmaxok;
 	for (j = 1; (hd[i].ps[j].rm < rmaxok) && (j < hd[i].NBin); j++) {
-	    if ((fabs(hd[i].ps[j].tot->vradsmooth) < minvrad) && ((hd[i].ps[j].dark->M != 0) || (hd[i].ps[j].star->M != 0))) {
+	    Mrcheck = 0;
+	    if (gi.darkcontained) Mrcheck += hd[i].ps[j].dark->M;
+	    if (gi.starcontained) Mrcheck += hd[i].ps[j].star->M;
+	    if ((fabs(hd[i].ps[j].tot->vradsmooth) < minvrad) && (Mrcheck != 0)) {
 		minvrad = fabs(hd[i].ps[j].tot->vradsmooth);
 		StartIndex = j;
 		}
@@ -2671,7 +2685,10 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    /*
 	    ** Calculate vradmean & vraddisp
 	    */
-	    if ((hd[i].ps[j].dark->M != 0) || (hd[i].ps[j].star->M != 0)) {
+	    Mrcheck = 0;
+	    if (gi.darkcontained) Mrcheck += hd[i].ps[j].dark->M;
+	    if (gi.starcontained) Mrcheck += hd[i].ps[j].star->M;
+	    if (Mrcheck != 0) {
 		/*
 		** Not empty bin
 		*/
@@ -2894,9 +2911,9 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    rhostarmin = 1e100;
 	    for (j = StartIndex; j > 0; j--) {
 		rhotot = hd[i].ps[j].tot->M/hd[i].ps[j].V;
-		rhogas = hd[i].ps[j].gas->M/hd[i].ps[j].V;
-		rhodark = hd[i].ps[j].dark->M/hd[i].ps[j].V;
-		rhostar = hd[i].ps[j].star->M/hd[i].ps[j].V;
+		rhogas = (gi.gascontained)?hd[i].ps[j].gas->M/hd[i].ps[j].V:0;
+		rhodark = (gi.darkcontained)?hd[i].ps[j].dark->M/hd[i].ps[j].V:0;
+		rhostar = (gi.starcontained)?hd[i].ps[j].star->M/hd[i].ps[j].V:0;
 		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j-1].tot->Menc > 0) && (hd[i].ps[j].rm >= rminok)) {
 		    if ((rhotot < rhototmin) && (rhotot > 0)) rhototmin = rhotot;
 		    if ((rhogas < rhogasmin) && (rhogas > 0) && gi.gascontained) rhogasmin = rhogas;
@@ -2936,7 +2953,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	if (hd[i].Mrtrunc > 0) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		hd[i].ps[j].tot->Mencremove  -= hd[i].rhobgtot*hd[i].ps[j].Venc;
-		hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*hd[i].ps[j].Venc;
+		if(gi.darkcontained) hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*hd[i].ps[j].Venc;
 		}
 	    }
 	else {
