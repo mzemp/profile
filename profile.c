@@ -2344,12 +2344,13 @@ void calculate_recentred_halo_coordinates(GI gi, HALO_DATA *hd) {
     int i, j;
 
     for (i = 0; i < gi.NHalo; i++) {
-	assert(hd[i].Mrstatic > 0);
-	for (j = 0; j < 3; j++) {
-	    hd[i].rcentre[j] = hd[i].rcentrenew[j]/hd[i].Mrstatic;
-	    hd[i].vcentre[j] = hd[i].vcentrenew[j]/hd[i].Mrstatic;
-	    hd[i].rcentrenew[j] = 0;
-	    hd[i].vcentrenew[j] = 0;
+	if (hd[i].Mrstatic > 0) {
+	    for (j = 0; j < 3; j++) {
+		hd[i].rcentre[j] = hd[i].rcentrenew[j]/hd[i].Mrstatic;
+		hd[i].vcentre[j] = hd[i].vcentrenew[j]/hd[i].Mrstatic;
+		hd[i].rcentrenew[j] = 0;
+		hd[i].vcentrenew[j] = 0;
+		}
 	    }
 	hd[i].Mrstatic = 0;
 	}
