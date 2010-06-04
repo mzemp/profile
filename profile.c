@@ -1937,11 +1937,11 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     for (i = 0; i < gi.NCell; i++) {
 	for (j = 0; j < gi.NCell; j++) {
 	    for (k = 0; k < gi.NCell; k++) {
-		HeadIndex[i][j][k] = 0;
+		HeadIndex[i][j][k] = -1;
 		}
 	    }
 	}
-    for (i = 0; i < gi.Nparticleinblockgas; i++) NextIndex[i] = 0;
+    for (i = 0; i < gi.Nparticleinblockgas; i++) NextIndex[i] = -1;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
@@ -1969,7 +1969,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 		    size = hd[j].ps[hd[j].NBin].ro;
 		    if (intersect(gi,hd[j],index,shift,size)) {
 			i = HeadIndex[index[0]][index[1]][index[2]];
-			while (i != 0) {
+			while (i >= 0) {
 			    for (k = 0; k < 3; k++) {
 				r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi.us.LBox);
 				r[k] = r[k]-hd[j].rcentre[k];
@@ -2066,11 +2066,11 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     for (i = 0; i < gi.NCell; i++) {
 	for (j = 0; j < gi.NCell; j++) {
 	    for (k = 0; k < gi.NCell; k++) {
-		HeadIndex[i][j][k] = 0;
+		HeadIndex[i][j][k] = -1;
 		}
 	    }
 	}
-    for (i = 0; i < gi.Nparticleinblockdark; i++) NextIndex[i] = 0;
+    for (i = 0; i < gi.Nparticleinblockdark; i++) NextIndex[i] = -1;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
@@ -2101,7 +2101,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 			assert(size > 0);
 			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
-			    while (i != 0) {
+			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
 				    r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
 				    r[k] = r[k]-hd[j].rcentre[k];
@@ -2125,7 +2125,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 			size = hd[j].ps[hd[j].NBin].ro;
 			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
-			    while (i != 0) {
+			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
 				    r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi.us.LBox);
 				    r[k] = r[k]-hd[j].rcentre[k];
@@ -2214,11 +2214,11 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     for (i = 0; i < gi.NCell; i++) {
 	for (j = 0; j < gi.NCell; j++) {
 	    for (k = 0; k < gi.NCell; k++) {
-		HeadIndex[i][j][k] = 0;
+		HeadIndex[i][j][k] = -1;
 		}
 	    }
 	}
-    for (i = 0; i < gi.Nparticleinblockstar; i++) NextIndex[i] = 0;
+    for (i = 0; i < gi.Nparticleinblockstar; i++) NextIndex[i] = -1;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
@@ -2249,7 +2249,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 			assert(size > 0);
 			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
-			    while (i != 0) {
+			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
 				    r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
 				    r[k] = r[k]-hd[j].rcentre[k];
@@ -2273,7 +2273,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 			size = hd[j].ps[hd[j].NBin].ro;
 			if (intersect(gi,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
-			    while (i != 0) {
+			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
 				    r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi.us.LBox);
 				    r[k] = r[k]-hd[j].rcentre[k];
@@ -3191,11 +3191,11 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     for (i = 0; i < gi.NCell; i++) {
 	for (j = 0; j < gi.NCell; j++) {
 	    for (k = 0; k < gi.NCell; k++) {
-		HeadIndex[i][j][k] = 0;
+		HeadIndex[i][j][k] = -1;
 		}
 	    }
 	}
-    for (i = 0; i < gi.NHalo; i++) NextIndex[i] = 0;
+    for (i = 0; i < gi.NHalo; i++) NextIndex[i] = -1;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
@@ -3206,8 +3206,8 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where haloes are exactly on the boundary */
 	    assert(index[j] >= 0 && index[j] < gi.NCell);
 	    }
-	    NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
-	    HeadIndex[index[0]][index[1]][index[2]] = i;
+	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
+	HeadIndex[index[0]][index[1]][index[2]] = i;
 	}
     /*
     ** Find top level haloes
@@ -3235,7 +3235,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		    index[2] = index2;
 		    if (intersect(gi,hd[i],index,shift,size)) {
 			j = HeadIndex[index[0]][index[1]][index[2]];
-			while (j != 0) {
+			while (j >= 0) {
 			    if (j != i) {
 				for (k = 0; k < 3; k++) {
 				    r[k] = correct_position(hd[i].rcentre[k],hd[j].rcentre[k],gi.us.LBox);
@@ -3259,7 +3259,6 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		}
 	    }
 	}
-    free(Qcomp);
     /*
     ** Sort out duplicates
     */
@@ -3287,6 +3286,15 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		}
 	    }
 	}
+    free(Qcomp);
+    for (i = 0; i < gi.NCell; i ++) {
+	for (j = 0; j < gi.NCell; j++) {
+	    free(HeadIndex[i][j]);
+	    }
+	free(HeadIndex[i]);
+	}
+    free(HeadIndex);
+    free(NextIndex);
     }
 
 void write_output(GI gi, HALO_DATA *hd) {
