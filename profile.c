@@ -1497,7 +1497,7 @@ void set_default_values_general_info(GI *gi) {
     gi->frecentredist = 2;
     gi->frhobg = 1.2;
     gi->fcheckrbgcrit = 3;
-    gi->fcheckrvcmax = 5;
+    gi->fcheckrvcmax = 3;
     gi->fcheckrstatic = 3;
     gi->fcheckrtruncindicator = 1.2;
     gi->fexclude = 3;
@@ -2966,12 +2966,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** as well as rvcmaxtottrunc, Mrvcmaxtottrunc, rvcmaxdarktrunc, Mrvcmaxdarktrunc
 	** by going from inside out
 	*/
-	rmaxok = 0;
-	rmaxok = (hd[i].rbg > rmaxok)?hd[i].rbg:rmaxok;
-	rmaxok = (hd[i].rcrit > rmaxok)?hd[i].rcrit:rmaxok;
-	rmaxok = (hd[i].rstatic > rmaxok)?hd[i].rstatic:rmaxok;
-	rmaxok = (hd[i].rtrunc > rmaxok)?hd[i].rtrunc:rmaxok;
-	for (j = 2; (hd[i].ps[j].ro <= rmaxok) && (j < hd[i].NBin+1); j++) {
+	for (j = 2; j < hd[i].NBin+1; j++) {
 	    /*
 	    ** Total mass
 	    */
@@ -3013,7 +3008,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = hd[i].ps[k].tot->Menc/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
-		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
+		if (Scheck == Ncheck) {
 		    hd[i].rvcmaxtot = rcheck;
 		    hd[i].Mrvcmaxtot = Mrcheck;
 		    }
@@ -3059,7 +3054,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = hd[i].ps[k].tot->Mencremove/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
-		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
+		if (Scheck == Ncheck) {
 		    hd[i].rvcmaxtottrunc = rcheck;
 		    hd[i].Mrvcmaxtottrunc = Mrcheck;
 		    }
@@ -3106,7 +3101,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 			Qcomp = hd[i].ps[k].dark->Menc/hd[i].ps[k].ro;
 			if (Qcheck >= Qcomp) Scheck++;
 			}
-		    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
+		    if (Scheck == Ncheck) {
 			hd[i].rvcmaxdark = rcheck;
 			hd[i].Mrvcmaxdark = Mrcheck;
 			}
@@ -3152,13 +3147,12 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 			Qcomp = hd[i].ps[k].dark->Mencremove/hd[i].ps[k].ro;
 			if (Qcheck >= Qcomp) Scheck++;
 			}
-		    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
+		    if (Scheck == Ncheck) {
 			hd[i].rvcmaxdarktrunc = rcheck;
 			hd[i].Mrvcmaxdarktrunc = Mrcheck;
 			}
 		    }
 		}
-	    if ((hd[i].rvcmaxtot != 0) && (hd[i].rvcmaxtottrunc != 0) && (hd[i].rvcmaxdark != 0) && (hd[i].rvcmaxdarktrunc !=0)) break;
 	    }
 	free(vradsmooth);
 	}
