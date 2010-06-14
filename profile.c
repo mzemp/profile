@@ -112,6 +112,7 @@ typedef struct halo_data {
     double vcentre[3];
     double rcentrenew[3];
     double vcentrenew[3];
+    double rmaxscale, Mrmaxscale;
     double rbg, Mrbg;
     double rcrit, Mrcrit;
     double rstatic, Mrstatic;
@@ -176,7 +177,7 @@ typedef struct general_info {
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
     int NLoopRead, NLoopRecentre, NLoopProcessData, ILoopRead;
     double rhobg, rhocrit;
-    double rhoencbg, rhoenccrit;
+    double rhoencbg, rhoenccrit, rhoencmaxscale;
     double Deltabg, Deltacrit;
     double ascale;
     double rmin, rmax;
@@ -186,6 +187,7 @@ typedef struct general_info {
     double frecentrermin, frecentredist, frhobg;
     double fcheckrbgcrit, fcheckrvcmax, fcheckrstatic, fcheckrtruncindicator;
     double fexclude, slopertruncindicator;
+    double Deltabgmaxscale;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     COSMOLOGICAL_PARAMETERS cp;
     UNIT_SYSTEM us, cosmous;
@@ -420,6 +422,12 @@ int main(int argc, char **argv) {
 	    i++;
             if (i >= argc) usage();
 	    gi.slopertruncindicator = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-Delta_bg_maxscale") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.Deltabgmaxscale = atof(argv[i]);
 	    i++;
 	    }
 	else if (strcmp(argv[i],"-vraddispmin") == 0) {
@@ -1369,6 +1377,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fcheckrtruncindicator : %.6e\n",gi.fcheckrtruncindicator);
 	fprintf(stderr,"fexclude              : %.6e\n",gi.fexclude);
 	fprintf(stderr,"slopertruncindicator  : %.6e\n",gi.slopertruncindicator);
+	fprintf(stderr,"Delta_bg_maxscale     : %.6e\n",gi.Deltabgmaxscale);
 	fprintf(stderr,"vraddispmin           : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
         fprintf(stderr,"Nsigmavrad            : %.6e\n",gi.Nsigmavrad);
 	fprintf(stderr,"Nsigmaextreme         : %.6e\n",gi.Nsigmaextreme);
@@ -1502,6 +1511,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrtruncindicator = 1.2;
     gi->fexclude = 3;
     gi->slopertruncindicator = -0.2;
+    gi->Deltabgmaxscale = 50;
     gi->vraddispmin = 2;
     gi->Nsigmavrad = 1.5;
     gi->Nsigmaextreme = 5;
@@ -1524,9 +1534,13 @@ void calculate_densities(GI *gi) {
 	}
     assert(gi->Deltabg > 0);
     assert(gi->Deltacrit > 0);
-    gi->rhobg = gi->rhocrit*OmegaM;               /* comoving density */
-    gi->rhoencbg   = gi->Deltabg   * gi->rhobg;   /* comoving density */
-    gi->rhoenccrit = gi->Deltacrit * gi->rhocrit; /* comoving density */
+    /* 
+    ** The following densities are all comoving density 
+    */
+    gi->rhobg = gi->rhocrit*OmegaM;
+    gi->rhoencbg = gi->Deltabg * gi->rhobg;
+    gi->rhoenccrit = gi->Deltacrit * gi->rhocrit;
+    gi->rhoencmaxscale = gi->Deltabgmaxscale * gi->rhobg;
     }
 
 void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
@@ -2538,7 +2552,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    hd[i].ps[j].tot->vradsmooth = vradsmooth[j];
 	    }
 	/*
-	** Calculate rbg, Mrbg, rcrit & Mrcrit
+	** Calculate rmaxscale, Mrmaxscale, rbg, Mrbg, rcrit & Mrcrit
 	*/
 	rminok = gi.fexclude*hd[i].ps[0].ro;
 	for (j = 1; j < (hd[i].NBin+1); j++) {
@@ -2548,6 +2562,43 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	    rhoenc[1] = hd[i].ps[j].tot->Menc/hd[i].ps[j].Venc;
 	    Menc[0] = hd[i].ps[j-1].tot->Menc;
 	    Menc[1] = hd[i].ps[j].tot->Menc;
+	    /*
+	    ** rmaxscale & Mrmaxscale
+	    */
+	    if ((rhoenc[0] >= gi.rhoencmaxscale) && (rhoenc[1] < gi.rhoencmaxscale) && (hd[i].rmaxscale == 0)) {
+		m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
+		d = log(gi.rhoencbg)-log(rhoenc[0]);
+		rcheck = exp(log(radius[0])+m*d);
+		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		d = log(rcheck)-log(radius[0]);
+		Mrcheck = exp(log(Menc[0])+m*d);
+		if (rcheck >= rminok) {
+		    hd[i].rmaxscale = rcheck;
+		    hd[i].Mrmaxscale = Mrcheck;
+		    assert(hd[i].rmaxscale > 0);
+		    assert(hd[i].Mrmaxscale > 0);
+		    }
+		else {
+		    /*
+		    ** Check criteria
+		    */
+		    Qcheck = 0;
+		    Ncheck = 0;
+		    Scheck = 0;
+		    for (k = j; (hd[i].ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd[i].NBin+1); k++) {
+			Ncheck++;
+			Qcomp = log(hd[i].ps[k].tot->Menc/hd[i].ps[k].Venc)-log(hd[i].ps[k-1].tot->Menc/hd[i].ps[k-1].Venc);
+			Qcomp /= log(hd[i].ps[k].ro)-log(hd[i].ps[k-1].ro);
+			if (Qcheck > Qcomp) Scheck++;
+			}
+		    if (Scheck == Ncheck) {
+			hd[i].rmaxscale = rcheck;
+			hd[i].Mrmaxscale = Mrcheck;
+			assert(hd[i].rmaxscale > 0);
+			assert(hd[i].Mrmaxscale > 0);
+			}
+		    }
+		}
 	    /*
 	    ** rbg & Mrbg
 	    */
@@ -2957,7 +3008,13 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** as well as rvcmaxtottrunc, Mrvcmaxtottrunc, rvcmaxdarktrunc, Mrvcmaxdarktrunc
 	** by going from inside out
 	*/
-	for (j = 2; j < hd[i].NBin+1; j++) {
+	rmaxok = 0;
+	rmaxok = (hd[i].rbg > rmaxok)?hd[i].rbg:rmaxok;
+	rmaxok = (hd[i].rcrit > rmaxok)?hd[i].rcrit:rmaxok;
+	rmaxok = (hd[i].rtrunc > rmaxok)?hd[i].rtrunc:rmaxok;
+	rmaxok = (hd[i].rstatic > rmaxok)?hd[i].rstatic:rmaxok;
+	rmaxok = (hd[i].rmaxscale > rmaxok)?hd[i].rmaxscale:rmaxok;
+	for (j = 2; (hd[i].ps[j].ri <= rmaxok) && (j < hd[i].NBin+1); j++) {
 	    /*
 	    ** Total mass
 	    */
@@ -3005,7 +3062,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = hd[i].ps[k].tot->Menc/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
-		if (Scheck == Ncheck) {
+		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
 		    hd[i].rvcmaxtot = rcheck;
 		    hd[i].Mrvcmaxtot = Mrcheck;
 		    assert(hd[i].rvcmaxtot > 0);
@@ -3059,7 +3116,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    Qcomp = hd[i].ps[k].tot->Mencremove/hd[i].ps[k].ro;
 		    if (Qcheck >= Qcomp) Scheck++;
 		    }
-		if (Scheck == Ncheck) {
+		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
 		    hd[i].rvcmaxtottrunc = rcheck;
 		    hd[i].Mrvcmaxtottrunc = Mrcheck;
 		    assert(hd[i].rvcmaxtottrunc > 0);
@@ -3114,7 +3171,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 			Qcomp = hd[i].ps[k].dark->Menc/hd[i].ps[k].ro;
 			if (Qcheck >= Qcomp) Scheck++;
 			}
-		    if (Scheck == Ncheck) {
+		    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
 			hd[i].rvcmaxdark = rcheck;
 			hd[i].Mrvcmaxdark = Mrcheck;
 			assert(hd[i].rvcmaxdark > 0);
@@ -3168,7 +3225,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 			Qcomp = hd[i].ps[k].dark->Mencremove/hd[i].ps[k].ro;
 			if (Qcheck >= Qcomp) Scheck++;
 			}
-		    if (Scheck == Ncheck) {
+		    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
 			hd[i].rvcmaxdarktrunc = rcheck;
 			hd[i].Mrvcmaxdarktrunc = Mrcheck;
 			assert(hd[i].rvcmaxdarktrunc > 0);
