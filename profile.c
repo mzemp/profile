@@ -3287,6 +3287,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     ** Find top level haloes
     */
     Qcomp = malloc(gi.NHalo*sizeof(double));
+    assert(Qcomp != NULL);
     for (i = 0; i < gi.NHalo; i++) {
 	Qcomp[i] = 0;
 	}
