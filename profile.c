@@ -1428,7 +1428,7 @@ void usage(void) {
     fprintf(stderr,"-Nparticleperblockgas <value>        : number of gas particles per block (default: 1e7)\n");
     fprintf(stderr,"-Nparticleperblockdark <value>       : number of dark matter particles per block (default: 1e7)\n");
     fprintf(stderr,"-Nparticleperblockstar <value>       : number of star particles per block (default: 1e7)\n");
-    fprintf(stderr,"-NCell <value>                       : number of cells per dimension for linked list (default: 25)\n");
+    fprintf(stderr,"-NCell <value>                       : number of cells per dimension for linked cell method (default: 25)\n");
     fprintf(stderr,"-NLoopRecentre <value>               : number of loops for recentering (default: 0)\n");
     fprintf(stderr,"-NLoopProcessData <value>            : number of loops for processing data (default: 1)\n");
     fprintf(stderr,"-GRAVITY <value>                     : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
@@ -1503,13 +1503,13 @@ void set_default_values_general_info(GI *gi) {
     gi->binfactor = 5;
 
     gi->frecentrermin = 5;
-    gi->frecentredist = 2;
+    gi->frecentredist = 1.5;
     gi->frhobg = 1.2;
-    gi->fcheckrbgcrit = 3;
-    gi->fcheckrvcmax = 3;
+    gi->fcheckrbgcrit = 2;
+    gi->fcheckrvcmax = 1.5;
     gi->fcheckrstatic = 3;
     gi->fcheckrtruncindicator = 1.2;
-    gi->fexclude = 3;
+    gi->fexclude = 2;
     gi->slopertruncindicator = -0.2;
     gi->Deltabgmaxscale = 50;
     gi->vraddispmin = 2;
