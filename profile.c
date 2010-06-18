@@ -171,7 +171,7 @@ typedef struct general_info {
     int velocityprojection;
     int rmaxfromhalocatalogue;
     int gascontained, darkcontained, starcontained;
-    int NBin, NHalo, NCell;
+    int NBin, NHalo, NCellData, NCellHalo;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
@@ -520,10 +520,16 @@ int main(int argc, char **argv) {
             gi.Nparticleperblockstar = (int) atof(argv[i]);
             i++;
             }
-        else if (strcmp(argv[i],"-NCell") == 0) {
+        else if (strcmp(argv[i],"-NCellData") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.NCell = (int) atof(argv[i]);
+            gi.NCellData = (int) atof(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-NCellHalo") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.NCellHalo = (int) atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-NLoopRecentre") == 0) {
@@ -650,7 +656,8 @@ int main(int argc, char **argv) {
     assert(gi.Nparticleperblockgas > 0);
     assert(gi.Nparticleperblockdark > 0);
     assert(gi.Nparticleperblockstar > 0);
-    assert(gi.NCell > 0);
+    assert(gi.NCellData > 0);
+    assert(gi.NCellHalo > 0);
 
     /*
     ** Read header files
@@ -1364,7 +1371,8 @@ int main(int argc, char **argv) {
         fprintf(stderr,"Nparticleperblockgas  : %d\n",gi.Nparticleperblockgas);
         fprintf(stderr,"Nparticleperblockdark : %d\n",gi.Nparticleperblockdark);
         fprintf(stderr,"Nparticleperblockstar : %d\n",gi.Nparticleperblockstar);
-        fprintf(stderr,"NCell                 : %d\n",gi.NCell);
+        fprintf(stderr,"NCellData             : %d\n",gi.NCellData);
+        fprintf(stderr,"NCellHalo             : %d\n",gi.NCellHalo);
         fprintf(stderr,"NLoopRecentre         : %d\n",gi.NLoopRecentre);
         fprintf(stderr,"NLoopProcessData      : %d\n",gi.NLoopProcessData);
         fprintf(stderr,"NLoopRead             : %d\n",gi.NLoopRead);
@@ -1428,7 +1436,8 @@ void usage(void) {
     fprintf(stderr,"-Nparticleperblockgas <value>        : number of gas particles per block (default: 1e7)\n");
     fprintf(stderr,"-Nparticleperblockdark <value>       : number of dark matter particles per block (default: 1e7)\n");
     fprintf(stderr,"-Nparticleperblockstar <value>       : number of star particles per block (default: 1e7)\n");
-    fprintf(stderr,"-NCell <value>                       : number of cells per dimension for linked cell method (default: 25)\n");
+    fprintf(stderr,"-NCellData <value>                   : number of cells per dimension in linked cell method for data loops (default: 20)\n");
+    fprintf(stderr,"-NCellHalo <value>                   : number of cells per dimension in linked cell method for halo loops (default: 10)\n");
     fprintf(stderr,"-NLoopRecentre <value>               : number of loops for recentering (default: 0)\n");
     fprintf(stderr,"-NLoopProcessData <value>            : number of loops for processing data (default: 1)\n");
     fprintf(stderr,"-GRAVITY <value>                     : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
@@ -1489,7 +1498,8 @@ void set_default_values_general_info(GI *gi) {
     gi->Nparticleinblockstar = 0;
     gi->Nblockstar = 0;
 
-    gi->NCell = 25;
+    gi->NCellData = 20;
+    gi->NCellHalo = 10;
     gi->NLoopRecentre = 0;
     gi->NLoopProcessData = 1;
 
@@ -1875,13 +1885,13 @@ void initialise_halo_profile (HALO_DATA *hd){
 	}
     }
 
-int intersect(GI gi, HALO_DATA hd, int index[3], double shift[3], double size) {
+int intersect(GI gi, HALO_DATA hd, int NCell, int index[3], double shift[3], double size) {
 
     int i;
     double celllength, distance, dcheck;
     double rhalo[3], rcell[3], d[3];
     
-    celllength = gi.us.LBox/gi.NCell;
+    celllength = gi.us.LBox/NCell;
     for (i = 0; i < 3; i++) {
 	rhalo[i] = hd.rcentre[i];
 	rcell[i] = index[i]*celllength - shift[i];
@@ -1921,21 +1931,21 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     /*
     ** Initialise linked list stuff
     */
-    HeadIndex = malloc(gi.NCell*sizeof(int **));
+    HeadIndex = malloc(gi.NCellData*sizeof(int **));
     assert(HeadIndex != NULL);
-    for (i = 0; i < gi.NCell; i ++) {
-	HeadIndex[i] = malloc(gi.NCell*sizeof(int *));
+    for (i = 0; i < gi.NCellData; i ++) {
+	HeadIndex[i] = malloc(gi.NCellData*sizeof(int *));
 	assert(HeadIndex[i] != NULL);
-	for (j = 0; j < gi.NCell; j++) {
-	    HeadIndex[i][j] = malloc(gi.NCell*sizeof(int));
+	for (j = 0; j < gi.NCellData; j++) {
+	    HeadIndex[i][j] = malloc(gi.NCellData*sizeof(int));
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
     NextIndex = malloc(gi.Nparticleinblockgas*sizeof(int));
     assert(NextIndex != NULL);
-    for (i = 0; i < gi.NCell; i++) {
-	for (j = 0; j < gi.NCell; j++) {
-	    for (k = 0; k < gi.NCell; k++) {
+    for (i = 0; i < gi.NCellData; i++) {
+	for (j = 0; j < gi.NCellData; j++) {
+	    for (k = 0; k < gi.NCellData; k++) {
 		HeadIndex[i][j][k] = -1;
 		}
 	    }
@@ -1947,9 +1957,9 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     */
     for (i = 0; i < gi.Nparticleinblockgas; i++) {
 	for (j = 0; j < 3; j++) {
-	    index[j] = (int)(gi.NCell*(pgp[i].r[j]+shift[j])/gi.us.LBox);
-	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where particles are exactly on the boundary */
-	    assert(index[j] >= 0 && index[j] < gi.NCell);
+	    index[j] = (int)(gi.NCellData*(pgp[i].r[j]+shift[j])/gi.us.LBox);
+	    if (index[j] == gi.NCellData) index[j] = gi.NCellData-1; /* Case where particles are exactly on the boundary */
+	    assert(index[j] >= 0 && index[j] < gi.NCellData);
 	    }
 	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
 	HeadIndex[index[0]][index[1]][index[2]] = i;
@@ -1957,16 +1967,16 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     /*
     ** Go through linked list
     */
-    for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
-	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
-	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
+    for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
+	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
+	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
 #pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d,size) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    /*
 		    ** Process data
 		    */
 		    size = hd[j].ps[hd[j].NBin].ro;
-		    if (intersect(gi,hd[j],index,shift,size)) {
+		    if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
 			i = HeadIndex[index[0]][index[1]][index[2]];
 			while (i >= 0) {
 			    for (k = 0; k < 3; k++) {
@@ -2027,8 +2037,8 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 		}
 	    }
 	}
-    for (i = 0; i < gi.NCell; i ++) {
-	for (j = 0; j < gi.NCell; j++) {
+    for (i = 0; i < gi.NCellData; i ++) {
+	for (j = 0; j < gi.NCellData; j++) {
 	    free(HeadIndex[i][j]);
 	    }
 	free(HeadIndex[i]);
@@ -2050,21 +2060,21 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     /*
     ** Initialise linked list stuff
     */
-    HeadIndex = malloc(gi.NCell*sizeof(int **));
+    HeadIndex = malloc(gi.NCellData*sizeof(int **));
     assert(HeadIndex != NULL);
-    for (i = 0; i < gi.NCell; i ++) {
-	HeadIndex[i] = malloc(gi.NCell*sizeof(int *));
+    for (i = 0; i < gi.NCellData; i ++) {
+	HeadIndex[i] = malloc(gi.NCellData*sizeof(int *));
 	assert(HeadIndex[i] != NULL);
-	for (j = 0; j < gi.NCell; j++) {
-	    HeadIndex[i][j] = malloc(gi.NCell*sizeof(int));
+	for (j = 0; j < gi.NCellData; j++) {
+	    HeadIndex[i][j] = malloc(gi.NCellData*sizeof(int));
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
     NextIndex = malloc(gi.Nparticleinblockdark*sizeof(int));
     assert(NextIndex != NULL);
-    for (i = 0; i < gi.NCell; i++) {
-	for (j = 0; j < gi.NCell; j++) {
-	    for (k = 0; k < gi.NCell; k++) {
+    for (i = 0; i < gi.NCellData; i++) {
+	for (j = 0; j < gi.NCellData; j++) {
+	    for (k = 0; k < gi.NCellData; k++) {
 		HeadIndex[i][j][k] = -1;
 		}
 	    }
@@ -2076,9 +2086,9 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     */
     for (i = 0; i < gi.Nparticleinblockdark; i++) {
 	for (j = 0; j < 3; j++) {
-	    index[j] = (int)(gi.NCell*(pdp[i].r[j]+shift[j])/gi.us.LBox);
-	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where particles are exactly on the boundary */
-	    assert(index[j] >= 0 && index[j] < gi.NCell);
+	    index[j] = (int)(gi.NCellData*(pdp[i].r[j]+shift[j])/gi.us.LBox);
+	    if (index[j] == gi.NCellData) index[j] = gi.NCellData-1; /* Case where particles are exactly on the boundary */
+	    assert(index[j] >= 0 && index[j] < gi.NCellData);
 	    }
 	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
 	HeadIndex[index[0]][index[1]][index[2]] = i;
@@ -2086,9 +2096,9 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     /*
     ** Go through linked list
     */
-    for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
-	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
-	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
+    for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
+	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
+	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
 #pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d,size) shared(hd,pdp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
@@ -2098,7 +2108,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 			size = gi.frecentrermin*hd[j].ps[0].ro;
 			size *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
 			assert(size > 0);
-			if (intersect(gi,hd[j],index,shift,size)) {
+			if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
@@ -2122,7 +2132,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 			** Process data
 			*/
 			size = hd[j].ps[hd[j].NBin].ro;
-			if (intersect(gi,hd[j],index,shift,size)) {
+			if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
@@ -2175,8 +2185,8 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 		}
 	    }
 	}
-    for (i = 0; i < gi.NCell; i ++) {
-	for (j = 0; j < gi.NCell; j++) {
+    for (i = 0; i < gi.NCellData; i ++) {
+	for (j = 0; j < gi.NCellData; j++) {
 	    free(HeadIndex[i][j]);
 	    }
 	free(HeadIndex[i]);
@@ -2198,21 +2208,21 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     /*
     ** Initialise linked list stuff
     */
-    HeadIndex = malloc(gi.NCell*sizeof(int **));
+    HeadIndex = malloc(gi.NCellData*sizeof(int **));
     assert(HeadIndex != NULL);
-    for (i = 0; i < gi.NCell; i ++) {
-	HeadIndex[i] = malloc(gi.NCell*sizeof(int *));
+    for (i = 0; i < gi.NCellData; i ++) {
+	HeadIndex[i] = malloc(gi.NCellData*sizeof(int *));
 	assert(HeadIndex[i] != NULL);
-	for (j = 0; j < gi.NCell; j++) {
-	    HeadIndex[i][j] = malloc(gi.NCell*sizeof(int));
+	for (j = 0; j < gi.NCellData; j++) {
+	    HeadIndex[i][j] = malloc(gi.NCellData*sizeof(int));
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
     NextIndex = malloc(gi.Nparticleinblockstar*sizeof(int));
     assert(NextIndex != NULL);
-    for (i = 0; i < gi.NCell; i++) {
-	for (j = 0; j < gi.NCell; j++) {
-	    for (k = 0; k < gi.NCell; k++) {
+    for (i = 0; i < gi.NCellData; i++) {
+	for (j = 0; j < gi.NCellData; j++) {
+	    for (k = 0; k < gi.NCellData; k++) {
 		HeadIndex[i][j][k] = -1;
 		}
 	    }
@@ -2224,9 +2234,9 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     */
     for (i = 0; i < gi.Nparticleinblockstar; i++) {
 	for (j = 0; j < 3; j++) {
-	    index[j] = (int)(gi.NCell*(psp[i].r[j]+shift[j])/gi.us.LBox);
-	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where particles are exactly on the boundary */
-	    assert(index[j] >= 0 && index[j] < gi.NCell);
+	    index[j] = (int)(gi.NCellData*(psp[i].r[j]+shift[j])/gi.us.LBox);
+	    if (index[j] == gi.NCellData) index[j] = gi.NCellData-1; /* Case where particles are exactly on the boundary */
+	    assert(index[j] >= 0 && index[j] < gi.NCellData);
 	    }
 	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
 	HeadIndex[index[0]][index[1]][index[2]] = i;
@@ -2234,9 +2244,9 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     /*
     ** Go through linked list
     */
-    for (index[0] = 0; index[0] < gi.NCell; index[0]++) {
-	for (index[1] = 0; index[1] < gi.NCell; index[1]++) {
-	    for (index[2] = 0; index[2] < gi.NCell; index[2]++) {
+    for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
+	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
+	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
 #pragma omp parallel for default(none) private(i,j,k,l,r,v,vproj,erad,ephi,etheta,d,size) shared(hd,psp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
@@ -2246,7 +2256,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 			size = gi.frecentrermin*hd[j].ps[0].ro;
 			size *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
 			assert(size > 0);
-			if (intersect(gi,hd[j],index,shift,size)) {
+			if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
@@ -2270,7 +2280,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 			** Process data
 			*/
 			size = hd[j].ps[hd[j].NBin].ro;
-			if (intersect(gi,hd[j],index,shift,size)) {
+			if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
@@ -2328,8 +2338,8 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 		}
 	    }
 	}
-    for (i = 0; i < gi.NCell; i ++) {
-	for (j = 0; j < gi.NCell; j++) {
+    for (i = 0; i < gi.NCellData; i ++) {
+	for (j = 0; j < gi.NCellData; j++) {
 	    free(HeadIndex[i][j]);
 	    }
 	free(HeadIndex[i]);
@@ -3250,21 +3260,21 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     /*
     ** Initialise linked list stuff
     */
-    HeadIndex = malloc(gi.NCell*sizeof(int **));
+    HeadIndex = malloc(gi.NCellHalo*sizeof(int **));
     assert(HeadIndex != NULL);
-    for (i = 0; i < gi.NCell; i ++) {
-	HeadIndex[i] = malloc(gi.NCell*sizeof(int *));
+    for (i = 0; i < gi.NCellHalo; i ++) {
+	HeadIndex[i] = malloc(gi.NCellHalo*sizeof(int *));
 	assert(HeadIndex[i] != NULL);
-	for (j = 0; j < gi.NCell; j++) {
-	    HeadIndex[i][j] = malloc(gi.NCell*sizeof(int));
+	for (j = 0; j < gi.NCellHalo; j++) {
+	    HeadIndex[i][j] = malloc(gi.NCellHalo*sizeof(int));
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
     NextIndex = malloc(gi.NHalo*sizeof(int));
     assert(NextIndex != NULL);
-    for (i = 0; i < gi.NCell; i++) {
-	for (j = 0; j < gi.NCell; j++) {
-	    for (k = 0; k < gi.NCell; k++) {
+    for (i = 0; i < gi.NCellHalo; i++) {
+	for (j = 0; j < gi.NCellHalo; j++) {
+	    for (k = 0; k < gi.NCellHalo; k++) {
 		HeadIndex[i][j][k] = -1;
 		}
 	    }
@@ -3276,9 +3286,9 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     */
     for (i = 0; i < gi.NHalo; i++) {
 	for (j = 0; j < 3; j++) {
-	    index[j] = (int)(gi.NCell*(hd[i].rcentre[j]+shift[j])/gi.us.LBox);
-	    if (index[j] == gi.NCell) index[j] = gi.NCell-1; /* Case where haloes are exactly on the boundary */
-	    assert(index[j] >= 0 && index[j] < gi.NCell);
+	    index[j] = (int)(gi.NCellHalo*(hd[i].rcentre[j]+shift[j])/gi.us.LBox);
+	    if (index[j] == gi.NCellHalo) index[j] = gi.NCellHalo-1; /* Case where haloes are exactly on the boundary */
+	    assert(index[j] >= 0 && index[j] < gi.NCellHalo);
 	    }
 	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
 	HeadIndex[index[0]][index[1]][index[2]] = i;
@@ -3302,13 +3312,13 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 	** Go through linked list
 	*/
 #pragma omp parallel for default(none) private(index,index0,index1,index2,j,k,r,d) shared(gi,hd,i,size,shift,Qcomp,Qcheck,HeadIndex,NextIndex)
-	for (index0 = 0; index0 < gi.NCell; index0++) {
-	    for (index1 = 0; index1 < gi.NCell; index1++) {
-		for (index2 = 0; index2 < gi.NCell; index2++) {
+	for (index0 = 0; index0 < gi.NCellHalo; index0++) {
+	    for (index1 = 0; index1 < gi.NCellHalo; index1++) {
+		for (index2 = 0; index2 < gi.NCellHalo; index2++) {
 		    index[0] = index0;
 		    index[1] = index1;
 		    index[2] = index2;
-		    if (intersect(gi,hd[i],index,shift,size)) {
+		    if (intersect(gi,hd[i],gi.NCellHalo,index,shift,size)) {
 			j = HeadIndex[index[0]][index[1]][index[2]];
 			while (j >= 0) {
 			    if (j != i) {
@@ -3362,8 +3372,8 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 	    }
 	}
     free(Qcomp);
-    for (i = 0; i < gi.NCell; i ++) {
-	for (j = 0; j < gi.NCell; j++) {
+    for (i = 0; i < gi.NCellHalo; i ++) {
+	for (j = 0; j < gi.NCellHalo; j++) {
 	    free(HeadIndex[i][j]);
 	    }
 	free(HeadIndex[i]);
