@@ -106,7 +106,7 @@ typedef struct halo_data {
 
     int ID;
     int HostHaloID;
-    int DuplicateHaloID;
+    int ExtraHaloID;
     int NBin;
     double rcentre[3];
     double vcentre[3];
@@ -186,7 +186,7 @@ typedef struct general_info {
     double binfactor;
     double frecentrermin, frecentredist, frhobg;
     double fcheckrbgcrit, fcheckrvcmax, fcheckrstatic, fcheckrtruncindicator;
-    double fexclude, slopertruncindicator;
+    double fexclude, fduplicate, slopertruncindicator;
     double Deltabgmaxscale;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     COSMOLOGICAL_PARAMETERS cp;
@@ -416,6 +416,12 @@ int main(int argc, char **argv) {
 	    i++;
             if (i >= argc) usage();
 	    gi.fexclude = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-fduplicate") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.fduplicate = atof(argv[i]);
 	    i++;
 	    }
 	else if (strcmp(argv[i],"-slopertruncindicator") == 0) {
@@ -1384,6 +1390,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fcheckrstatic         : %.6e\n",gi.fcheckrstatic);
 	fprintf(stderr,"fcheckrtruncindicator : %.6e\n",gi.fcheckrtruncindicator);
 	fprintf(stderr,"fexclude              : %.6e\n",gi.fexclude);
+	fprintf(stderr,"fduplicate            : %.6e\n",gi.fduplicate);
 	fprintf(stderr,"slopertruncindicator  : %.6e\n",gi.slopertruncindicator);
 	fprintf(stderr,"Delta_bg_maxscale     : %.6e\n",gi.Deltabgmaxscale);
 	fprintf(stderr,"vraddispmin           : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
@@ -1520,6 +1527,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrstatic = 3;
     gi->fcheckrtruncindicator = 1.2;
     gi->fexclude = 2;
+    gi->fduplicate = 0;
     gi->slopertruncindicator = -0.2;
     gi->Deltabgmaxscale = 50;
     gi->vraddispmin = 2;
@@ -1753,7 +1761,7 @@ void initialise_halo_profile (HALO_DATA *hd){
     assert(hd->rmax > hd->rmin);
 
     hd->HostHaloID = 0;
-    hd->DuplicateHaloID = 0;
+    hd->ExtraHaloID = 0;
     hd->rbg = 0;
     hd->Mrbg = 0;
     hd->rcrit = 0;
@@ -1885,13 +1893,13 @@ void initialise_halo_profile (HALO_DATA *hd){
 	}
     }
 
-int intersect(GI gi, HALO_DATA hd, int NCell, int index[3], double shift[3], double size) {
+int intersect(double LBox, int NCell, HALO_DATA hd, int index[3], double shift[3], double size) {
 
     int i;
     double celllength, distance, dcheck;
     double rhalo[3], rcell[3], d[3];
     
-    celllength = gi.us.LBox/NCell;
+    celllength = LBox/NCell;
     for (i = 0; i < 3; i++) {
 	rhalo[i] = hd.rcentre[i];
 	rcell[i] = index[i]*celllength - shift[i];
@@ -1908,7 +1916,7 @@ int intersect(GI gi, HALO_DATA hd, int NCell, int index[3], double shift[3], dou
 	/*
 	** Check if a periodic copy of the cell is closer
 	*/
-	dcheck = gi.us.LBox - celllength - fabs(d[i]);
+	dcheck = LBox - celllength - fabs(d[i]);
 	if (dcheck < fabs(d[i])) {
 	    d[i] = dcheck;
 	    }
@@ -1976,7 +1984,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 		    ** Process data
 		    */
 		    size = hd[j].ps[hd[j].NBin].ro;
-		    if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
+		    if (intersect(gi.us.LBox,gi.NCellData,hd[j],index,shift,size)) {
 			i = HeadIndex[index[0]][index[1]][index[2]];
 			while (i >= 0) {
 			    for (k = 0; k < 3; k++) {
@@ -2108,7 +2116,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 			size = gi.frecentrermin*hd[j].ps[0].ro;
 			size *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
 			assert(size > 0);
-			if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
+			if (intersect(gi.us.LBox,gi.NCellData,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
@@ -2132,7 +2140,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 			** Process data
 			*/
 			size = hd[j].ps[hd[j].NBin].ro;
-			if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
+			if (intersect(gi.us.LBox,gi.NCellData,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
@@ -2256,7 +2264,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 			size = gi.frecentrermin*hd[j].ps[0].ro;
 			size *= pow(gi.frecentredist,gi.NLoopRecentre-1-gi.ILoopRead);
 			assert(size > 0);
-			if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
+			if (intersect(gi.us.LBox,gi.NCellData,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
@@ -2280,7 +2288,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 			** Process data
 			*/
 			size = hd[j].ps[hd[j].NBin].ro;
-			if (intersect(gi,hd[j],gi.NCellData,index,shift,size)) {
+			if (intersect(gi.us.LBox,gi.NCellData,hd[j],index,shift,size)) {
 			    i = HeadIndex[index[0]][index[1]][index[2]];
 			    while (i >= 0) {
 				for (k = 0; k < 3; k++) {
@@ -3318,7 +3326,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		    index[0] = index0;
 		    index[1] = index1;
 		    index[2] = index2;
-		    if (intersect(gi,hd[i],gi.NCellHalo,index,shift,size)) {
+		    if (intersect(gi.us.LBox,gi.NCellHalo,hd[i],index,shift,size)) {
 			j = HeadIndex[index[0]][index[1]][index[2]];
 			while (j >= 0) {
 			    if (j != i) {
@@ -3347,26 +3355,53 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     /*
     ** Sort out duplicates
     */
-#pragma omp parallel for default(none) private(i,j,k) shared(gi,hd)
+#pragma omp parallel for default(none) private(i,j,k,r,d,size,Qcheck) shared(gi,hd)
     for (i = 0; i < gi.NHalo; i++) {
 	for (j = i+1; j < gi.NHalo; j++) {
 	    if ((hd[i].HostHaloID == hd[j].ID) && (hd[j].HostHaloID == hd[i].ID)) {
 		/*
 		** Found a pair
 		*/
-		if (hd[i].Mrcrit >= hd[j].Mrcrit) {
-		    hd[j].DuplicateHaloID = hd[i].ID;
-		    hd[i].HostHaloID = 0;
-		    for (k = 0; k < gi.NHalo; k++) {
-			if (hd[k].HostHaloID == hd[j].ID) hd[k].HostHaloID = hd[i].ID;
+		for (k = 0; k < 3; k++) {
+		    r[k] = correct_position(hd[i].rcentre[k],hd[j].rcentre[k],gi.us.LBox);
+		    r[k] = r[k] - hd[i].rcentre[k];
+		    }
+		d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+		size = hd[i].rcrit;
+		if ((hd[i].rtrunc < size) && (hd[i].rtrunc > 0)) size = hd[i].rtrunc;
+		Qcheck = hd[j].rcrit;
+		if ((hd[j].rtrunc < Qcheck) && (hd[j].rtrunc > 0)) Qcheck = hd[j].rtrunc;
+		size = 0.5*(size+Qcheck);
+		/*
+		** Check if the pair is close enough
+		*/
+		if (d <= gi.fduplicate*size) {
+		    /*
+		    ** Found a duplicate
+		    */
+		    if (hd[i].Mrcrit >= hd[j].Mrcrit) {
+			hd[j].ExtraHaloID = hd[i].ID;
+			hd[i].HostHaloID = 0;
+			for (k = 0; k < gi.NHalo; k++) {
+			    if (hd[k].HostHaloID == hd[j].ID) hd[k].HostHaloID = hd[i].ID;
+			    }
+			}
+		    else {
+			hd[i].ExtraHaloID = hd[j].ID;
+			hd[j].HostHaloID = 0;
+			for (k = 0; k < gi.NHalo; k++) {
+			    if (hd[k].HostHaloID == hd[i].ID) hd[k].HostHaloID = hd[j].ID;
+			    }
 			}
 		    }
 		else {
-		    hd[i].DuplicateHaloID = hd[j].ID;
+		    /*
+		    ** Probably a merger
+		    */
+		    hd[i].HostHaloID = 0;
 		    hd[j].HostHaloID = 0;
-		    for (k = 0; k < gi.NHalo; k++) {
-			if (hd[k].HostHaloID == hd[i].ID) hd[k].HostHaloID = hd[j].ID;
-			}
+		    hd[i].ExtraHaloID = hd[j].ID;
+		    hd[j].ExtraHaloID = hd[i].ID;
 		    }
 		}
 	    }
@@ -3394,7 +3429,7 @@ void write_output(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rtruncindicator/35 HostHaloID/36 DuplicateHaloID/37\n");
+    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rtruncindicator/35 HostHaloID/36 ExtraHaloID/37\n");
     for (i = 0; i < gi.NHalo; i++) {
 	fprintf(outputfile,"%d",hd[i].ID);
 	fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
@@ -3410,7 +3445,7 @@ void write_output(GI gi, HALO_DATA *hd) {
 	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtottrunc,hd[i].Mrvcmaxtottrunc,hd[i].rvcmaxdarktrunc,hd[i].Mrvcmaxdarktrunc);
 	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper);
 	fprintf(outputfile," %.6e",hd[i].rtruncindicator);
-	fprintf(outputfile," %d %d",hd[i].HostHaloID,hd[i].DuplicateHaloID);
+	fprintf(outputfile," %d %d",hd[i].HostHaloID,hd[i].ExtraHaloID);
 	fprintf(outputfile,"\n");
 	}
     fclose(outputfile);
