@@ -2992,16 +2992,16 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		    assert(hd[i].Mrtrunc > 0);
 		    hd[i].rhobgtot  = 0.5*(rhotot+rhototmin);
 		    if (gi.gascontained) {
-			if ((rhogas > 0) && (rhogasmin != 1e100)) hd[i].rhobggas  = 0.5*(rhogas+rhogasmin);
-			else if ((rhogas == 0) && (rhogasmin != 1e100)) hd[i].rhobggas  = rhogasmin;
+			if ((rhogas > 0) && (rhogasmin != 1e100)) hd[i].rhobggas = 0.5*(rhogas+rhogasmin);
+			else if ((rhogas == 0) && (rhogasmin != 1e100)) hd[i].rhobggas = rhogasmin;
 			}
 		    if (gi.darkcontained) {
-			if ((rhodark > 0) && (rhodarkmin != 1e100)) hd[i].rhobgdark  = 0.5*(rhodark+rhodarkmin);
-			else if ((rhodark == 0) && (rhodarkmin != 1e100)) hd[i].rhobgdark  = rhodarkmin;
+			if ((rhodark > 0) && (rhodarkmin != 1e100)) hd[i].rhobgdark = 0.5*(rhodark+rhodarkmin);
+			else if ((rhodark == 0) && (rhodarkmin != 1e100)) hd[i].rhobgdark = rhodarkmin;
 			}
 		    if (gi.starcontained) {
-			if ((rhostar > 0) && (rhostarmin != 1e100)) hd[i].rhobgstar  = 0.5*(rhostar+rhostarmin);
-			else if ((rhostar == 0) && (rhostarmin != 1e100)) hd[i].rhobgstar  = rhostarmin;
+			if ((rhostar > 0) && (rhostarmin != 1e100)) hd[i].rhobgstar = 0.5*(rhostar+rhostarmin);
+			else if ((rhostar == 0) && (rhostarmin != 1e100)) hd[i].rhobgstar = rhostarmin;
 			}
 		    }
 		}
@@ -3020,6 +3020,10 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	else {
 	    hd[i].rtrunc = 0;
 	    hd[i].Mrtrunc = 0;
+	    hd[i].rhobgtot = 0;
+	    if (gi.gascontained) hd[i].rhobggas = 0;
+	    if (gi.darkcontained) hd[i].rhobgdark = 0;
+	    if (gi.starcontained) hd[i].rhobgstar = 0;
 	    }
 	/*
 	** Calculate rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark 
