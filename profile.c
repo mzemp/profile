@@ -1526,7 +1526,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrvcmax = 1.5;
     gi->fcheckrstatic = 3;
     gi->fcheckrtruncindicator = 1.2;
-    gi->fexclude = 2;
+    gi->fexclude = 3;
     gi->fduplicate = 0;
     gi->slopertruncindicator = -0.2;
     gi->Deltabgmaxscale = 50;
@@ -2899,8 +2899,9 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** i.e. bump is significant enough to cause a minimum or saddle in enclosed density
 	** => in practise use the location where the value of slopertruncindicator is reached
 	*/
-	StartIndex = -1;
 	rminok = gi.fexclude*hd[i].ps[0].ro;
+    dortruncagain:
+	StartIndex = -1;
 	for (j = 2; j < (hd[i].NBin+1); j++) {
 	    radius[0] = hd[i].ps[j-1].rm;
 	    radius[1] = hd[i].ps[j].rm;
@@ -2960,7 +2961,6 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** We define the location of the absolute minimum (within specified range of frhobg)
 	** of the density within rtruncindicator as rtrunc
 	*/
-	rminok = gi.fexclude*hd[i].ps[0].ro;
 	if (StartIndex > 0) {
 	    rhotot = 0;
 	    rhogas = 0;
@@ -3018,12 +3018,18 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 		}
 	    }
 	else {
+	    /*
+	    ** Probably got a too small rtrunc (noisy profile) try again
+	    */
+	    hd[i].rtruncindicator = 0;
 	    hd[i].rtrunc = 0;
 	    hd[i].Mrtrunc = 0;
 	    hd[i].rhobgtot = 0;
 	    if (gi.gascontained) hd[i].rhobggas = 0;
 	    if (gi.darkcontained) hd[i].rhobgdark = 0;
 	    if (gi.starcontained) hd[i].rhobgstar = 0;
+	    rminok *= gi.fexclude;
+	    goto dortruncagain;
 	    }
 	/*
 	** Calculate rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark 
