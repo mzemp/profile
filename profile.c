@@ -203,9 +203,15 @@ void initialise_halo_profile (HALO_DATA *);
 void put_pgp_in_bins(GI, HALO_DATA *, PROFILE_GAS_PARTICLE *);
 void put_pdp_in_bins(GI, HALO_DATA *, PROFILE_DARK_PARTICLE *);
 void put_psp_in_bins(GI, HALO_DATA *, PROFILE_STAR_PARTICLE *);
+int intersect(double, int, HALO_DATA, int *, double *, double);
 void calculate_recentred_halo_coordinates(GI, HALO_DATA *);
 void calculate_total_matter_distribution(GI, HALO_DATA *);
 void calculate_halo_properties(GI, HALO_DATA *);
+void calculate_derived_properties(GI, HALO_DATA *);
+void calculate_overdensity_characteristics(GI, HALO_DATA *);
+void calculate_static_characteristics(GI, HALO_DATA *);
+void calculate_truncation_characteristics(GI, HALO_DATA *, double);
+void calculate_velocity_characteristics(GI, HALO_DATA *);
 void determine_halo_hierarchy(GI, HALO_DATA *);
 void write_output(GI, HALO_DATA *);
 
@@ -1893,39 +1899,6 @@ void initialise_halo_profile (HALO_DATA *hd){
 	}
     }
 
-int intersect(double LBox, int NCell, HALO_DATA hd, int index[3], double shift[3], double size) {
-
-    int i;
-    double celllength, distance, dcheck;
-    double rhalo[3], rcell[3], d[3];
-    
-    celllength = LBox/NCell;
-    for (i = 0; i < 3; i++) {
-	rhalo[i] = hd.rcentre[i];
-	rcell[i] = index[i]*celllength - shift[i];
-	d[i] = rhalo[i] - rcell[i];
-	/* 
-	** Check if the other edge is closer
-	*/
-	if (d[i] > 0) {
-	    d[i] -= celllength;
-	    if (d[i] < 0) {
-		d[i] = 0; /* contained */
-		}
-	    }
-	/*
-	** Check if a periodic copy of the cell is closer
-	*/
-	dcheck = LBox - celllength - fabs(d[i]);
-	if (dcheck < fabs(d[i])) {
-	    d[i] = dcheck;
-	    }
-	}
-    distance = sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
-    if (distance <= size) return 1;
-    else return 0;
-    }
-
 void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 
     int i, j, k, l;
@@ -2356,6 +2329,39 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     free(NextIndex);
     }
 
+int intersect(double LBox, int NCell, HALO_DATA hd, int index[3], double shift[3], double size) {
+
+    int i;
+    double celllength, distance, dcheck;
+    double rhalo[3], rcell[3], d[3];
+    
+    celllength = LBox/NCell;
+    for (i = 0; i < 3; i++) {
+	rhalo[i] = hd.rcentre[i];
+	rcell[i] = index[i]*celllength - shift[i];
+	d[i] = rhalo[i] - rcell[i];
+	/* 
+	** Check if the other edge is closer
+	*/
+	if (d[i] > 0) {
+	    d[i] -= celllength;
+	    if (d[i] < 0) {
+		d[i] = 0; /* contained */
+		}
+	    }
+	/*
+	** Check if a periodic copy of the cell is closer
+	*/
+	dcheck = LBox - celllength - fabs(d[i]);
+	if (dcheck < fabs(d[i])) {
+	    d[i] = dcheck;
+	    }
+	}
+    distance = sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
+    if (distance <= size) return 1;
+    else return 0;
+    }
+
 void calculate_recentred_halo_coordinates(GI gi, HALO_DATA *hd) {
 
     int i, j;
@@ -2418,851 +2424,900 @@ void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
 
 void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 
-    int i, j, k;
-    int Ncheck, Scheck, NBin, StartIndex, variant;
-    double radius[2], rhoenc[2], Menc[2], logslope[2], vsigma[2];
-    double m, d, slope;
-    double rcheck, Mrcheck, Qcheck, Qcomp, rminok, rmaxok;
-    double rhotot, rhogas, rhodark, rhostar, rhototmin, rhogasmin, rhodarkmin, rhostarmin;
-    double vradmean, vraddisp, barrier, minvrad;
-    double *vradsmooth = NULL;
+    int i, j;
 
-#pragma omp parallel for default(none) private(i,j,k,Ncheck,Scheck,NBin,StartIndex,variant,radius,rhoenc,Menc,logslope,vsigma,m,d,slope,rcheck,Mrcheck,Qcheck,Qcomp,rminok,rmaxok,rhotot,rhogas,rhodark,rhostar,rhototmin,rhogasmin,rhodarkmin,rhostarmin,vradmean,vraddisp,barrier,minvrad,vradsmooth) shared(hd,gi)
+#pragma omp parallel for default(none) private(i,j) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
 	*/
-	vradsmooth = malloc((hd[i].NBin+1)*sizeof(double));
-	assert(vradsmooth != NULL);
-	for (j = 0; j < (hd[i].NBin+1); j++) {
-	    hd[i].ps[j].V = 4*M_PI*(pow(hd[i].ps[j].ro,3) - pow(hd[i].ps[j].ri,3))/3.0;
-	    hd[i].ps[j].Venc = 4*M_PI*pow(hd[i].ps[j].ro,3)/3.0;
-	    if (j == 0) {
-		hd[i].ps[j].rm = exp((3*log(hd[i].ps[j+1].ri)-log(hd[i].ps[j+1].ro))/2.0);
-		}
-	    else {
-		hd[i].ps[j].rm = exp((log(hd[i].ps[j].ri)+log(hd[i].ps[j].ro))/2.0);
-		}
-	    for (k = 0; k <= j; k++) {
-		hd[i].ps[j].tot->Nenc += hd[i].ps[k].tot->N;
-		hd[i].ps[j].tot->Menc += hd[i].ps[k].tot->M;
-		if (gi.gascontained) {
-		    hd[i].ps[j].gas->Nenc += hd[i].ps[k].gas->N;
-		    hd[i].ps[j].gas->Menc += hd[i].ps[k].gas->M;
-		    hd[i].ps[j].gas->Menc_HI     += hd[i].ps[k].gas->M_HI;
-		    hd[i].ps[j].gas->Menc_HII    += hd[i].ps[k].gas->M_HII;
-		    hd[i].ps[j].gas->Menc_HeI    += hd[i].ps[k].gas->M_HeI;
-		    hd[i].ps[j].gas->Menc_HeII   += hd[i].ps[k].gas->M_HeII;
-		    hd[i].ps[j].gas->Menc_HeIII  += hd[i].ps[k].gas->M_HeIII;
-		    hd[i].ps[j].gas->Menc_H2     += hd[i].ps[k].gas->M_H2;
-		    hd[i].ps[j].gas->Menc_metals += hd[i].ps[k].gas->M_metals;
-		    }
-		if (gi.darkcontained) {
-		    hd[i].ps[j].dark->Nenc += hd[i].ps[k].dark->N;
-		    hd[i].ps[j].dark->Menc += hd[i].ps[k].dark->M;
-		    }
-		if (gi.starcontained) {
-		    hd[i].ps[j].star->Nenc += hd[i].ps[k].star->N;
-		    hd[i].ps[j].star->Menc += hd[i].ps[k].star->M;
-		    hd[i].ps[j].star->Menc_metals += hd[i].ps[k].star->M_metals;
-		    }
-		}
-	    hd[i].ps[j].tot->Mencremove = hd[i].ps[j].tot->Menc;
-	    if (gi.darkcontained) hd[i].ps[j].dark->Mencremove = hd[i].ps[j].dark->Menc;
-	    for (k = 0; k < 3; k++) {
-		if (hd[i].ps[j].tot->M > 0) hd[i].ps[j].tot->v[k] /= hd[i].ps[j].tot->M;
-		if (gi.gascontained && hd[i].ps[j].gas->M > 0) hd[i].ps[j].gas->v[k] /= hd[i].ps[j].gas->M;
-		if (gi.darkcontained && hd[i].ps[j].dark->M > 0) hd[i].ps[j].dark->v[k] /= hd[i].ps[j].dark->M;
-		if (gi.starcontained && hd[i].ps[j].star->M > 0) hd[i].ps[j].star->v[k] /= hd[i].ps[j].star->M;
-		}
-	    for (k = 0; k < 6; k++) {
-		if (hd[i].ps[j].tot->M > 0) hd[i].ps[j].tot->vdt[k] /= hd[i].ps[j].tot->M;
-		if (gi.gascontained && hd[i].ps[j].gas->M > 0) hd[i].ps[j].gas->vdt[k] /= hd[i].ps[j].gas->M;
-		if (gi.darkcontained && hd[i].ps[j].dark->M > 0) hd[i].ps[j].dark->vdt[k] /= hd[i].ps[j].dark->M;
-		if (gi.starcontained && hd[i].ps[j].star->M > 0) hd[i].ps[j].star->vdt[k] /= hd[i].ps[j].star->M;
-		}
-	    for (k = 0; k < 3; k++) {
-		if (hd[i].ps[j].tot->N > 1) hd[i].ps[j].tot->vdt[k] -= hd[i].ps[j].tot->v[k]*hd[i].ps[j].tot->v[k];
-		else hd[i].ps[j].tot->vdt[k] = 0;
-		if (gi.gascontained) {
-		    if (hd[i].ps[j].gas->N > 1) hd[i].ps[j].gas->vdt[k] -= hd[i].ps[j].gas->v[k]*hd[i].ps[j].gas->v[k];
-		    else hd[i].ps[j].gas->vdt[k] = 0;
-		    }
-		if (gi.darkcontained) {
-		    if (hd[i].ps[j].dark->N > 1) hd[i].ps[j].dark->vdt[k] -= hd[i].ps[j].dark->v[k]*hd[i].ps[j].dark->v[k];
-		    else hd[i].ps[j].dark->vdt[k] = 0;
-		    }
-		if (gi.starcontained) {
-		    if (hd[i].ps[j].star->N > 1) hd[i].ps[j].star->vdt[k] -= hd[i].ps[j].star->v[k]*hd[i].ps[j].star->v[k];
-		    else hd[i].ps[j].star->vdt[k] = 0;
-		    }
-		}
-	    if (hd[i].ps[j].tot->N > 1) {
-		hd[i].ps[j].tot->vdt[3] -= hd[i].ps[j].tot->v[0]*hd[i].ps[j].tot->v[1];
-		hd[i].ps[j].tot->vdt[4] -= hd[i].ps[j].tot->v[0]*hd[i].ps[j].tot->v[2];
-		hd[i].ps[j].tot->vdt[5] -= hd[i].ps[j].tot->v[1]*hd[i].ps[j].tot->v[2];
-		}
-	    else {
-		hd[i].ps[j].tot->vdt[3] = 0;
-		hd[i].ps[j].tot->vdt[4] = 0;
-		hd[i].ps[j].tot->vdt[5] = 0;
-		}
-	    if (gi.gascontained) {
-		if (hd[i].ps[j].gas->N > 1) {
-		    hd[i].ps[j].gas->vdt[3] -= hd[i].ps[j].gas->v[0]*hd[i].ps[j].gas->v[1];
-		    hd[i].ps[j].gas->vdt[4] -= hd[i].ps[j].gas->v[0]*hd[i].ps[j].gas->v[2];
-		    hd[i].ps[j].gas->vdt[5] -= hd[i].ps[j].gas->v[1]*hd[i].ps[j].gas->v[2];
-		    }
-		else {
-		    hd[i].ps[j].gas->vdt[3] = 0;
-		    hd[i].ps[j].gas->vdt[4] = 0;
-		    hd[i].ps[j].gas->vdt[5] = 0;
-		    }
-		}
-	    if (gi.darkcontained) {
-		if (hd[i].ps[j].dark->N > 1) {
-		    hd[i].ps[j].dark->vdt[3] -= hd[i].ps[j].dark->v[0]*hd[i].ps[j].dark->v[1];
-		    hd[i].ps[j].dark->vdt[4] -= hd[i].ps[j].dark->v[0]*hd[i].ps[j].dark->v[2];
-		    hd[i].ps[j].dark->vdt[5] -= hd[i].ps[j].dark->v[1]*hd[i].ps[j].dark->v[2];
-		    }
-		else {
-		    hd[i].ps[j].dark->vdt[3] = 0;
-		    hd[i].ps[j].dark->vdt[4] = 0;
-		    hd[i].ps[j].dark->vdt[5] = 0;
-		    }
-		}
-	    if (gi.starcontained) {
-		if (hd[i].ps[j].star->N > 1) {
-		    hd[i].ps[j].star->vdt[3] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[1];
-		    hd[i].ps[j].star->vdt[4] -= hd[i].ps[j].star->v[0]*hd[i].ps[j].star->v[2];
-		    hd[i].ps[j].star->vdt[5] -= hd[i].ps[j].star->v[1]*hd[i].ps[j].star->v[2];
-		    }
-		else {
-		    hd[i].ps[j].star->vdt[3] = 0;
-		    hd[i].ps[j].star->vdt[4] = 0;
-		    hd[i].ps[j].star->vdt[5] = 0;
-		    }
-		}
-	    Mrcheck = 0;
-	    if (gi.darkcontained) Mrcheck += hd[i].ps[j].dark->M;
-	    if (gi.starcontained) Mrcheck += hd[i].ps[j].star->M;
-	    if (Mrcheck > 0) hd[i].ps[j].tot->vradsmooth /= Mrcheck;
-	    if (gi.gascontained && hd[i].ps[j].gas->M > 0) {
-		hd[i].ps[j].gas->metallicity      /= hd[i].ps[j].gas->M;
-		hd[i].ps[j].gas->metallicity_SNII /= hd[i].ps[j].gas->M;
-		hd[i].ps[j].gas->metallicity_SNIa /= hd[i].ps[j].gas->M;
-		}
-	    if (gi.starcontained && hd[i].ps[j].star->M > 0) {
-		hd[i].ps[j].star->metallicity      /= hd[i].ps[j].star->M;
-		hd[i].ps[j].star->metallicity_SNII /= hd[i].ps[j].star->M;
-		hd[i].ps[j].star->metallicity_SNIa /= hd[i].ps[j].star->M;
-		}
-	    if (gi.starcontained && hd[i].ps[j].star->N > 0) {
-		hd[i].ps[j].star->t_form /= hd[i].ps[j].star->N;
-		}
-	    }
-	vradsmooth[0] = 0;
-	for (j = 1; j < hd[i].NBin; j++) {
-	    vradsmooth[j] = (hd[i].ps[j-1].tot->vradsmooth+2*hd[i].ps[j].tot->vradsmooth+hd[i].ps[j+1].tot->vradsmooth)/4.0;
-	    }
-	vradsmooth[hd[i].NBin] = 0;
-	for (j = 0; j < (hd[i].NBin+1); j++) {
-	    hd[i].ps[j].tot->vradsmooth = vradsmooth[j];
-	    }
+	calculate_derived_properties(gi,&hd[i]);
 	/*
 	** Calculate rmaxscale, Mrmaxscale, rbg, Mrbg, rcrit & Mrcrit
 	*/
-	rminok = gi.fexclude*hd[i].ps[0].ro;
-	for (j = 1; j < (hd[i].NBin+1); j++) {
-	    radius[0] = hd[i].ps[j-1].ro;
-	    radius[1] = hd[i].ps[j].ro;
-	    rhoenc[0] = hd[i].ps[j-1].tot->Menc/hd[i].ps[j-1].Venc;
-	    rhoenc[1] = hd[i].ps[j].tot->Menc/hd[i].ps[j].Venc;
-	    Menc[0] = hd[i].ps[j-1].tot->Menc;
-	    Menc[1] = hd[i].ps[j].tot->Menc;
-	    /*
-	    ** rmaxscale & Mrmaxscale
-	    */
-	    if ((rhoenc[0] >= gi.rhoencmaxscale) && (rhoenc[1] < gi.rhoencmaxscale) && (hd[i].rmaxscale == 0)) {
-		m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
-		d = log(gi.rhoencbg)-log(rhoenc[0]);
-		rcheck = exp(log(radius[0])+m*d);
-		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		d = log(rcheck)-log(radius[0]);
-		Mrcheck = exp(log(Menc[0])+m*d);
-		if (rcheck >= rminok) {
-		    hd[i].rmaxscale = rcheck;
-		    hd[i].Mrmaxscale = Mrcheck;
-		    assert(hd[i].rmaxscale > 0);
-		    assert(hd[i].Mrmaxscale > 0);
-		    }
-		else {
-		    /*
-		    ** Check criteria
-		    */
-		    Qcheck = 0;
-		    Ncheck = 0;
-		    Scheck = 0;
-		    for (k = j; (hd[i].ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd[i].NBin+1); k++) {
-			Ncheck++;
-			Qcomp = log(hd[i].ps[k].tot->Menc/hd[i].ps[k].Venc)-log(hd[i].ps[k-1].tot->Menc/hd[i].ps[k-1].Venc);
-			Qcomp /= log(hd[i].ps[k].ro)-log(hd[i].ps[k-1].ro);
-			if (Qcheck > Qcomp) Scheck++;
-			}
-		    if (Scheck == Ncheck) {
-			hd[i].rmaxscale = rcheck;
-			hd[i].Mrmaxscale = Mrcheck;
-			assert(hd[i].rmaxscale > 0);
-			assert(hd[i].Mrmaxscale > 0);
-			}
-		    }
-		}
-	    /*
-	    ** rbg & Mrbg
-	    */
-	    if ((rhoenc[0] >= gi.rhoencbg) && (rhoenc[1] < gi.rhoencbg) && (hd[i].rbg == 0)) {
-		m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
-		d = log(gi.rhoencbg)-log(rhoenc[0]);
-		rcheck = exp(log(radius[0])+m*d);
-		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		d = log(rcheck)-log(radius[0]);
-		Mrcheck = exp(log(Menc[0])+m*d);
-		if (rcheck >= rminok) {
-		    hd[i].rbg = rcheck;
-		    hd[i].Mrbg = Mrcheck;
-		    assert(hd[i].rbg > 0);
-		    assert(hd[i].Mrbg > 0);
-		    }
-		else {
-		    /*
-		    ** Check criteria
-		    */
-		    Qcheck = 0;
-		    Ncheck = 0;
-		    Scheck = 0;
-		    for (k = j; (hd[i].ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd[i].NBin+1); k++) {
-			Ncheck++;
-			Qcomp = log(hd[i].ps[k].tot->Menc/hd[i].ps[k].Venc)-log(hd[i].ps[k-1].tot->Menc/hd[i].ps[k-1].Venc);
-			Qcomp /= log(hd[i].ps[k].ro)-log(hd[i].ps[k-1].ro);
-			if (Qcheck > Qcomp) Scheck++;
-			}
-		    if (Scheck == Ncheck) {
-			hd[i].rbg = rcheck;
-			hd[i].Mrbg = Mrcheck;
-			assert(hd[i].rbg > 0);
-			assert(hd[i].Mrbg > 0);
-			}
-		    }
-		}
-	    /*
-	    ** rcrit & Mrcrit
-	    */
-	    if ((rhoenc[0] >= gi.rhoenccrit) && (rhoenc[1] < gi.rhoenccrit) && (hd[i].rcrit == 0)) {
- 		m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
-		d = log(gi.rhoenccrit)-log(rhoenc[0]);
-		rcheck = exp(log(radius[0])+m*d);
-		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		d = log(rcheck)-log(radius[0]);
-		Mrcheck = exp(log(Menc[0])+m*d);
-		if (rcheck >= rminok) {
-		    hd[i].rcrit = rcheck;
-		    hd[i].Mrcrit = Mrcheck;
-		    assert(hd[i].rcrit > 0);
-		    assert(hd[i].Mrcrit > 0);
-		    }
-		else {
-		    /*
-		    ** Check criteria
-		    */
-		    Qcheck = 0;
-		    Ncheck = 0;
-		    Scheck = 0;
-		    for (k = j; (hd[i].ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd[i].NBin+1); k++) {
-			Ncheck++;
-			Qcomp = log(hd[i].ps[k].tot->Menc/hd[i].ps[k].Venc)-log(hd[i].ps[k-1].tot->Menc/hd[i].ps[k-1].Venc);
-			Qcomp /= log(hd[i].ps[k].ro)-log(hd[i].ps[k-1].ro);
-			if (Qcheck > Qcomp) Scheck++;
-			}
-		    if (Scheck == Ncheck) {
-			hd[i].rcrit = rcheck;
-			hd[i].Mrcrit = Mrcheck;
-			assert(hd[i].rcrit > 0);
-			assert(hd[i].Mrcrit > 0);
-			}
-		    }
-		}
-	    if ((hd[i].rbg > 0) && (hd[i].rcrit > 0)) break;
-	    }
+	calculate_overdensity_characteristics(gi,&hd[i]);
 	/*
 	** Calculate rstatic & Mrstatic
 	*/
-	NBin = 0;
-	vradmean = 0;
-	vraddisp = 0;
-	barrier = 0;
-	minvrad = 1e100;
-	StartIndex = -1;
-	variant = -1;
+	calculate_static_characteristics(gi,&hd[i]);
 	/*
-	** Calculate vradmean & vraddisp
-	** Use only limited range 
-	**
-	** First, find bin that contains fiducial radius
+	** Calculate truncation of halo
 	*/
-	rmaxok = 0;
-	rmaxok = (hd[i].rbg > rmaxok)?hd[i].rbg:rmaxok;
-	rmaxok = (hd[i].rcrit > rmaxok)?hd[i].rcrit:rmaxok;
-	rmaxok = (5*hd[i].ps[0].ro > rmaxok)?hd[i].ps[0].ro:rmaxok;
-	for (j = 1; (hd[i].ps[j].rm < rmaxok) && (j < hd[i].NBin); j++) {
-	    Mrcheck = 0;
-	    if (gi.darkcontained) Mrcheck += hd[i].ps[j].dark->M;
-	    if (gi.starcontained) Mrcheck += hd[i].ps[j].star->M;
-	    if ((fabs(hd[i].ps[j].tot->vradsmooth) < minvrad) && (Mrcheck > 0)) {
-		minvrad = fabs(hd[i].ps[j].tot->vradsmooth);
-		StartIndex = j;
-		}
-	    }
-	/* 
-	** In case nothing was found
-	*/
-	if (StartIndex == -1) {
-	    hd[i].rvradrangelower = hd[i].ps[0].ro;
-	    hd[i].rvradrangeupper = hd[i].ps[0].ro;
-	    }
-	j = StartIndex;
-	while (j > 0) {
-	    /*
-	    ** Check for boundaries of profile
-	    */
-	    if (j == 1) hd[i].rvradrangelower = hd[i].ps[j].ri;
-	    if (j == hd[i].NBin-1) hd[i].rvradrangeupper = hd[i].ps[j].ro;
-	    /*
-	    ** Calculate vradmean & vraddisp
-	    */
-	    Mrcheck = 0;
-	    if (gi.darkcontained) Mrcheck += hd[i].ps[j].dark->M;
-	    if (gi.starcontained) Mrcheck += hd[i].ps[j].star->M;
-	    if (Mrcheck > 0) {
-		/*
-		** Not empty bin
-		*/
-		NBin++;
-		vradmean += hd[i].ps[j].tot->vradsmooth;
-		vraddisp += pow(hd[i].ps[j].tot->vradsmooth,2);
-		hd[i].vradmean = vradmean/NBin;
-		hd[i].vraddisp = sqrt(vraddisp/NBin-pow(hd[i].vradmean,2));
-		}
-	    else {
-		/*
-		** Empty bin
-		*/
-		if (j <= StartIndex) {
-		    hd[i].rvradrangelower = hd[i].ps[j].ro;
-		    }
-		else {
-		    hd[i].rvradrangeupper = hd[i].ps[j].ri;
-		    }
-		}
-	    /*
-	    ** Calculate vsigma
-	    */
-	    barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
-	    if (j <= StartIndex) {
-		vsigma[0] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
-		vsigma[1] = (hd[i].ps[j-1].tot->vradsmooth-hd[i].vradmean)/barrier;
-		}
-	    else if (j > StartIndex) {
-		vsigma[0] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
-		vsigma[1] = (hd[i].ps[j+1].tot->vradsmooth-hd[i].vradmean)/barrier;
-		}
-	    /*
-	    ** Make sure vsigma[0] is on the other side of the barrier
-	    */
-	    if (vsigma[1] > 0) Ncheck = (vsigma[0] < gi.Nsigmavrad)?1:0;
-	    else Ncheck = (vsigma[0] > -gi.Nsigmavrad)?1:0;
-	    if ((j <= StartIndex) && (fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd[i].rvradrangelower == 0)) {
-		/*
-		** Lower boundary case
-		*/
-		rcheck = hd[i].ps[j].ri;
-		Qcheck = gi.Nsigmavrad;
-		Ncheck = 0;
-		Scheck = 0;
-		for (k = j-1; (hd[i].ps[k].rm >= rcheck/gi.fcheckrstatic) && (k >= 0); k--) {
-		    Ncheck++;
-		    Qcomp = (hd[i].ps[k].tot->vradsmooth-hd[i].vradmean)/barrier;
-		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
-		    }
-		if ((Scheck == Ncheck) && (NBin > 1)) {
-		    hd[i].rvradrangelower = rcheck;
-		    }
-		}
-	    else if ((j > StartIndex) && (fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd[i].rvradrangeupper == 0)) {
-		/*
-		** Upper boundary case
-		*/
-		rcheck = hd[i].ps[j].ro;
-		Qcheck = gi.Nsigmavrad;
-		Ncheck = 0;
-		Scheck = 0;
-		for (k = j+1; (hd[i].ps[k].rm <= gi.fcheckrstatic*rcheck) && (k < hd[i].NBin+1); k++) {
-		    Ncheck++;
-		    Qcomp = (hd[i].ps[k].tot->vradsmooth-hd[i].vradmean)/barrier;
-		    if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
-		    }
-		if ((Scheck == Ncheck) && (NBin > 1)) {
-		    hd[i].rvradrangeupper = rcheck;
-		    }
-		}
-	    if ((hd[i].rvradrangelower > 0) && (hd[i].rvradrangeupper > 0)) break;
-	    if ((hd[i].rvradrangelower > 0) && (variant == -1)) {
-		/*
-		** Lower boundary was just set
-		** but not yet upper boundary
-		*/
-		variant = 1;
-		j = StartIndex + (StartIndex-j) - 1;
-		}
-	    if ((hd[i].rvradrangeupper > 0) && (variant == -1)) {
-		/*
-		** Upper boundary was just set
-		** but not yet lower boundary
-		*/
-		variant = 0;
-		j = StartIndex - (j-StartIndex);
-		}
-	    k = 0;
-	    if (variant == 0) {
-		j = j-1;
-		}
-	    else if (variant == 1) {
-		j = j+1;
-		}
-	    else {
-		k = (NBin%2)?-1:+1;
-		j = StartIndex + k*(NBin+1)/2;
-		}
-	    }
-	/*
-	** Find innermost extremum
-	*/
-	StartIndex = -1;
-	barrier = (gi.vraddispmin > hd[i].vraddisp)?gi.vraddispmin:hd[i].vraddisp;
-	rminok = hd[i].rvradrangelower;
-	for (j = hd[i].NBin; j > 0; j--) {
-	    Qcomp = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
-	    if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd[i].ps[j].rm >= rminok)) StartIndex = j;
-	    }
-	/*
-	** Get location where barrier is pierced
-	*/
-	for (j = StartIndex; j > 2; j--) {
-	    vsigma[0] = (hd[i].ps[j-1].tot->vradsmooth-hd[i].vradmean)/barrier;
-	    vsigma[1] = (hd[i].ps[j].tot->vradsmooth-hd[i].vradmean)/barrier;
-	    /*
-	    ** Make sure vsigma[0] is on the other side of the barrier
-	    */
-	    if (vsigma[1] > 0) Ncheck = (vsigma[0] < gi.Nsigmavrad)?1:0;
-	    else Ncheck = (vsigma[0] > -gi.Nsigmavrad)?1:0;
-	    if ((fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd[i].rstatic == 0)) {
-		/*
-		** Calculate rstatic & Mrstatic
-		*/
-		m = (log(hd[i].ps[j].rm)-log(hd[i].ps[j-1].rm))/(vsigma[1]-vsigma[0]);
-		if (vsigma[1] > 0) d = gi.Nsigmavrad-vsigma[0];
-		else d = -gi.Nsigmavrad-vsigma[0];
-		hd[i].rstatic = exp(log(hd[i].ps[j-1].rm)+m*d);
-		assert(hd[i].rstatic > 0);
-		if (hd[i].rstatic <= hd[i].ps[j-1].ro) {
-		    radius[0] = hd[i].ps[j-2].ro;
-		    radius[1] = hd[i].ps[j-1].ro;
-		    Menc[0] = hd[i].ps[j-2].tot->Menc;
-		    Menc[1] = hd[i].ps[j-1].tot->Menc;
-		    }
-		else {
-		    radius[0] = hd[i].ps[j-1].ro;
-		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].tot->Menc;
-		    Menc[1] = hd[i].ps[j].tot->Menc;
-		    }
-		if (Menc[0] > 0) {
-		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		    d = log(hd[i].rstatic)-log(radius[0]);
-		    hd[i].Mrstatic = exp(log(Menc[0])+m*d);
-		    assert(hd[i].Mrstatic > 0);
-		    }
-		}
-	    }
-	/*
-	** Search for truncation of halo
-	** Indicator: local minimum in enclosed density at scales larger than rminok
-	** i.e. bump is significant enough to cause a minimum or saddle in enclosed density
-	** => in practise use the location where the value of slopertruncindicator is reached
-	*/
-	rminok = gi.fexclude*hd[i].ps[0].ro;
-    dortruncagain:
-	StartIndex = -1;
-	for (j = 2; j < (hd[i].NBin+1); j++) {
-	    radius[0] = hd[i].ps[j-1].rm;
-	    radius[1] = hd[i].ps[j].rm;
-	    if (hd[i].ps[j-2].tot->Menc > 0) {
-		logslope[0] = (log(hd[i].ps[j-1].tot->Menc)-log(hd[i].ps[j-2].tot->Menc))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
-		logslope[1] = (log(hd[i].ps[j].tot->Menc)-log(hd[i].ps[j-1].tot->Menc))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
-		}
-	    else {
-		logslope[0] = 0;
-		logslope[1] = 0;
-		}
-	    slope = 3 + gi.slopertruncindicator;
-	    if ((logslope[0] <= slope) && (logslope[1] > slope) && (hd[i].rtruncindicator == 0)) {
-		/*
-		** Calculate rcheck, Mrcheck
-		*/
-		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
-		d = slope-logslope[0];
-		rcheck = exp(log(radius[0])+m*d);
-		if (rcheck <= hd[i].ps[j-1].ro) {
-		    radius[0] = hd[i].ps[j-2].ro;
-		    radius[1] = hd[i].ps[j-1].ro;
-		    Menc[0] = hd[i].ps[j-2].tot->Menc;
-		    Menc[1] = hd[i].ps[j-1].tot->Menc;
-		    }
-		else {
-		    radius[0] = hd[i].ps[j-1].ro;
-		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].tot->Menc;
-		    Menc[1] = hd[i].ps[j].tot->Menc;
-		    }
-		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		d = log(rcheck)-log(radius[0]);
-		Mrcheck = exp(log(Menc[0])+m*d);
-		/*
-		** Check criteria
-		*/
-		Qcheck = gi.slopertruncindicator;
-		Ncheck = 0;
-		Scheck = 0;
-		for (k = j+1; (hd[i].ps[k].rm <= gi.fcheckrtruncindicator*rcheck) && (k < hd[i].NBin+1); k++) {
-		    Ncheck++;
-		    Qcomp = log(hd[i].ps[k].tot->Menc/hd[i].ps[k].Venc)-log(hd[i].ps[k-1].tot->Menc/hd[i].ps[k-1].Venc);
-		    Qcomp /= log(hd[i].ps[k].ro)-log(hd[i].ps[k-1].ro);
-		    if (Qcheck <= Qcomp) Scheck++;
-		    }
-		if ((Scheck == Ncheck) && (rcheck >= rminok) && (hd[i].ps[j-1].tot->M > 0)) {
-		    StartIndex = j;
-		    hd[i].rtruncindicator = rcheck;
-		    assert(hd[i].rtruncindicator > 0);
-		    }
-		}
-	    if (hd[i].rtruncindicator > 0) break;
-	    }
-	/*
-	** Now determine rtrunc
-	** We define the location of the absolute minimum (within specified range of frhobg)
-	** of the density within rtruncindicator as rtrunc
-	*/
-	if (StartIndex > 0) {
-	    rhotot = 0;
-	    rhogas = 0;
-	    rhodark = 0;
-	    rhostar = 0;
-	    rhototmin = 1e100;
-	    rhogasmin = 1e100;
-	    rhodarkmin = 1e100;
-	    rhostarmin = 1e100;
-	    for (j = StartIndex; j > 0; j--) {
-		rhotot = hd[i].ps[j].tot->M/hd[i].ps[j].V;
-		rhogas = (gi.gascontained)?hd[i].ps[j].gas->M/hd[i].ps[j].V:0;
-		rhodark = (gi.darkcontained)?hd[i].ps[j].dark->M/hd[i].ps[j].V:0;
-		rhostar = (gi.starcontained)?hd[i].ps[j].star->M/hd[i].ps[j].V:0;
-		if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd[i].ps[j-1].tot->Menc > 0) && (hd[i].ps[j].rm >= rminok)) {
-		    if ((rhotot < rhototmin) && (rhotot > 0)) rhototmin = rhotot;
-		    if ((rhogas < rhogasmin) && (rhogas > 0) && gi.gascontained) rhogasmin = rhogas;
-		    if ((rhodark < rhodarkmin) && (rhodark > 0) && gi.darkcontained) rhodarkmin = rhodark;
-		    if ((rhostar < rhostarmin) && (rhostar > 0) && gi.starcontained) rhostarmin = rhostar;
-		    hd[i].rtrunc = hd[i].ps[j].rm;
-		    assert(hd[i].rtrunc > 0);
-		    radius[0] = hd[i].ps[j-1].ro;
-		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].tot->Menc;
-		    Menc[1] = hd[i].ps[j].tot->Menc;
-		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		    d = log(hd[i].rtrunc)-log(radius[0]);
-		    hd[i].Mrtrunc = exp(log(Menc[0])+m*d);
-		    assert(hd[i].Mrtrunc > 0);
-		    hd[i].rhobgtot  = 0.5*(rhotot+rhototmin);
-		    if (gi.gascontained) {
-			if ((rhogas > 0) && (rhogasmin != 1e100)) hd[i].rhobggas = 0.5*(rhogas+rhogasmin);
-			else if ((rhogas == 0) && (rhogasmin != 1e100)) hd[i].rhobggas = rhogasmin;
-			}
-		    if (gi.darkcontained) {
-			if ((rhodark > 0) && (rhodarkmin != 1e100)) hd[i].rhobgdark = 0.5*(rhodark+rhodarkmin);
-			else if ((rhodark == 0) && (rhodarkmin != 1e100)) hd[i].rhobgdark = rhodarkmin;
-			}
-		    if (gi.starcontained) {
-			if ((rhostar > 0) && (rhostarmin != 1e100)) hd[i].rhobgstar = 0.5*(rhostar+rhostarmin);
-			else if ((rhostar == 0) && (rhostarmin != 1e100)) hd[i].rhobgstar = rhostarmin;
-			}
-		    }
-		}
-	    }
+	calculate_truncation_characteristics(gi,&hd[i],gi.fexclude);
 	/*
 	** Remove background (Option for later: unbinding)
 	** Attention: Numbers and velocities not correct any more!
 	*/
-	hd[i].Mrtrunc -= hd[i].rhobgtot*4*M_PI*pow(hd[i].rtrunc,3)/3.0;
-	if (hd[i].Mrtrunc > 0) {
-	    for (j = 0; j < (hd[i].NBin+1); j++) {
-		hd[i].ps[j].tot->Mencremove  -= hd[i].rhobgtot*hd[i].ps[j].Venc;
-		if(gi.darkcontained) hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*hd[i].ps[j].Venc;
+	if (hd[i].rtrunc > 0) {
+	    hd[i].Mrtrunc -= hd[i].rhobgtot*4*M_PI*pow(hd[i].rtrunc,3)/3.0;
+	    if (hd[i].Mrtrunc > 0) {
+		for (j = 0; j < (hd[i].NBin+1); j++) {
+		    hd[i].ps[j].tot->Mencremove  -= hd[i].rhobgtot*hd[i].ps[j].Venc;
+		    if(gi.darkcontained) hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*hd[i].ps[j].Venc;
+		    }
 		}
-	    }
-	else {
-	    /*
-	    ** Probably got a too small rtrunc (noisy profile) try again
-	    */
-	    hd[i].rtruncindicator = 0;
-	    hd[i].rtrunc = 0;
-	    hd[i].Mrtrunc = 0;
-	    hd[i].rhobgtot = 0;
-	    if (gi.gascontained) hd[i].rhobggas = 0;
-	    if (gi.darkcontained) hd[i].rhobgdark = 0;
-	    if (gi.starcontained) hd[i].rhobgstar = 0;
-	    rminok *= gi.fexclude;
-	    goto dortruncagain;
+	    else {
+		/*
+		** Probably got a too small rtrunc (noisy profile) => reset
+		*/
+		hd[i].rtruncindicator = 0;
+		hd[i].rtrunc = 0;
+		hd[i].Mrtrunc = 0;
+		hd[i].rhobgtot = 0;
+		if (gi.gascontained) hd[i].rhobggas = 0;
+		if (gi.darkcontained) hd[i].rhobgdark = 0;
+		if (gi.starcontained) hd[i].rhobgstar = 0;
+		}
 	    }
 	/*
 	** Calculate rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark 
 	** as well as rvcmaxtottrunc, Mrvcmaxtottrunc, rvcmaxdarktrunc, Mrvcmaxdarktrunc
-	** by going from inside out
 	*/
-	rmaxok = 0;
-	rmaxok = (hd[i].rbg > rmaxok)?hd[i].rbg:rmaxok;
-	rmaxok = (hd[i].rcrit > rmaxok)?hd[i].rcrit:rmaxok;
-	rmaxok = (hd[i].rtrunc > rmaxok)?hd[i].rtrunc:rmaxok;
-	rmaxok = (hd[i].rstatic > rmaxok)?hd[i].rstatic:rmaxok;
-	rmaxok = (hd[i].rmaxscale > rmaxok)?hd[i].rmaxscale:rmaxok;
-	for (j = 2; (hd[i].ps[j].ri <= rmaxok) && (j < hd[i].NBin+1); j++) {
-	    /*
-	    ** Total mass
-	    */
-	    radius[0] = hd[i].ps[j-1].rm;
-	    radius[1] = hd[i].ps[j].rm;
-	    if (hd[i].ps[j-2].tot->Menc > 0) {
-		logslope[0] = (log(hd[i].ps[j-1].tot->Menc)-log(hd[i].ps[j-2].tot->Menc))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
-		logslope[1] = (log(hd[i].ps[j].tot->Menc)-log(hd[i].ps[j-1].tot->Menc))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
-		}
-	    else {
-		logslope[0] = 0;
-		logslope[1] = 0;
-		}
-	    slope = 1;
-	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxtot == 0)) {
-		/*
-		** Calculate rcheck & Mrcheck
-		*/
-		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
-		d = slope-logslope[0];
-		rcheck = exp(log(radius[0])+m*d);
-		if (rcheck <= hd[i].ps[j-1].ro) {
-		    radius[0] = hd[i].ps[j-2].ro;
-		    radius[1] = hd[i].ps[j-1].ro;
-		    Menc[0] = hd[i].ps[j-2].tot->Menc;
-		    Menc[1] = hd[i].ps[j-1].tot->Menc;
-		    }
-		else {
-		    radius[0] = hd[i].ps[j-1].ro;
-		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].tot->Menc;
-		    Menc[1] = hd[i].ps[j].tot->Menc;
-		    }
-		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		d = log(rcheck)-log(radius[0]);
-		Mrcheck = exp(log(Menc[0])+m*d);
-		/*
-		** Check criteria
-		*/
-		Qcheck = Mrcheck/rcheck;
-		Ncheck = 0;
-		Scheck = 0;
-		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
-		    Ncheck++;
-		    Qcomp = hd[i].ps[k].tot->Menc/hd[i].ps[k].ro;
-		    if (Qcheck >= Qcomp) Scheck++;
-		    }
-		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
-		    hd[i].rvcmaxtot = rcheck;
-		    hd[i].Mrvcmaxtot = Mrcheck;
-		    assert(hd[i].rvcmaxtot > 0);
-		    assert(hd[i].Mrvcmaxtot > 0);
-		    }
-		}
-	    /*
-	    ** Total mass with removed background
-	    */
-	    radius[0] = hd[i].ps[j-1].rm;
-	    radius[1] = hd[i].ps[j].rm;
-	    if (hd[i].ps[j-2].tot->Mencremove > 0) {
-		logslope[0] = (log(hd[i].ps[j-1].tot->Mencremove)-log(hd[i].ps[j-2].tot->Mencremove))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
-		logslope[1] = (log(hd[i].ps[j].tot->Mencremove)-log(hd[i].ps[j-1].tot->Mencremove))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
-		}
-	    else {
-		logslope[0] = 0;
-		logslope[1] = 0;
-		}
-	    slope = 1;
-	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxtottrunc == 0)) {
-		/*
-		** Calculate rcheck & Mrcheck
-		*/
-		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
-		d = slope-logslope[0];
-		rcheck = exp(log(radius[0])+m*d);
-		if (rcheck <= hd[i].ps[j-1].ro) {
-		    radius[0] = hd[i].ps[j-2].ro;
-		    radius[1] = hd[i].ps[j-1].ro;
-		    Menc[0] = hd[i].ps[j-2].tot->Mencremove;
-		    Menc[1] = hd[i].ps[j-1].tot->Mencremove;
-		    }
-		else {
-		    radius[0] = hd[i].ps[j-1].ro;
-		    radius[1] = hd[i].ps[j].ro;
-		    Menc[0] = hd[i].ps[j-1].tot->Mencremove;
-		    Menc[1] = hd[i].ps[j].tot->Mencremove;
-		    }
-		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		d = log(rcheck)-log(radius[0]);
-		Mrcheck = exp(log(Menc[0])+m*d);
-		/*
-		** Check criteria
-		*/
-		Qcheck = Mrcheck/rcheck;
-		Ncheck = 0;
-		Scheck = 0;
-		for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
-		    Ncheck++;
-		    Qcomp = hd[i].ps[k].tot->Mencremove/hd[i].ps[k].ro;
-		    if (Qcheck >= Qcomp) Scheck++;
-		    }
-		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
-		    hd[i].rvcmaxtottrunc = rcheck;
-		    hd[i].Mrvcmaxtottrunc = Mrcheck;
-		    assert(hd[i].rvcmaxtottrunc > 0);
-		    assert(hd[i].Mrvcmaxtottrunc > 0);
-		    }
+	calculate_velocity_characteristics(gi,&hd[i]);
+	}
+    }
+
+void calculate_derived_properties(GI gi, HALO_DATA *hd) {
+
+    int j, k;
+    double ddummy;
+    double *vradsmooth = NULL;
+
+    vradsmooth = malloc((hd->NBin+1)*sizeof(double));
+    assert(vradsmooth != NULL);
+    for (j = 0; j < (hd->NBin+1); j++) {
+	hd->ps[j].V = 4*M_PI*(pow(hd->ps[j].ro,3) - pow(hd->ps[j].ri,3))/3.0;
+	hd->ps[j].Venc = 4*M_PI*pow(hd->ps[j].ro,3)/3.0;
+	if (j == 0) {
+	    hd->ps[j].rm = exp((3*log(hd->ps[j+1].ri)-log(hd->ps[j+1].ro))/2.0);
+	    }
+	else {
+	    hd->ps[j].rm = exp((log(hd->ps[j].ri)+log(hd->ps[j].ro))/2.0);
+	    }
+	for (k = 0; k <= j; k++) {
+	    hd->ps[j].tot->Nenc += hd->ps[k].tot->N;
+	    hd->ps[j].tot->Menc += hd->ps[k].tot->M;
+	    if (gi.gascontained) {
+		hd->ps[j].gas->Nenc += hd->ps[k].gas->N;
+		hd->ps[j].gas->Menc += hd->ps[k].gas->M;
+		hd->ps[j].gas->Menc_HI     += hd->ps[k].gas->M_HI;
+		hd->ps[j].gas->Menc_HII    += hd->ps[k].gas->M_HII;
+		hd->ps[j].gas->Menc_HeI    += hd->ps[k].gas->M_HeI;
+		hd->ps[j].gas->Menc_HeII   += hd->ps[k].gas->M_HeII;
+		hd->ps[j].gas->Menc_HeIII  += hd->ps[k].gas->M_HeIII;
+		hd->ps[j].gas->Menc_H2     += hd->ps[k].gas->M_H2;
+		hd->ps[j].gas->Menc_metals += hd->ps[k].gas->M_metals;
 		}
 	    if (gi.darkcontained) {
+		hd->ps[j].dark->Nenc += hd->ps[k].dark->N;
+		hd->ps[j].dark->Menc += hd->ps[k].dark->M;
+		}
+	    if (gi.starcontained) {
+		hd->ps[j].star->Nenc += hd->ps[k].star->N;
+		hd->ps[j].star->Menc += hd->ps[k].star->M;
+		hd->ps[j].star->Menc_metals += hd->ps[k].star->M_metals;
+		}
+	    }
+	hd->ps[j].tot->Mencremove = hd->ps[j].tot->Menc;
+	if (gi.darkcontained) hd->ps[j].dark->Mencremove = hd->ps[j].dark->Menc;
+	for (k = 0; k < 3; k++) {
+	    if (hd->ps[j].tot->M > 0) hd->ps[j].tot->v[k] /= hd->ps[j].tot->M;
+	    if (gi.gascontained && hd->ps[j].gas->M > 0) hd->ps[j].gas->v[k] /= hd->ps[j].gas->M;
+	    if (gi.darkcontained && hd->ps[j].dark->M > 0) hd->ps[j].dark->v[k] /= hd->ps[j].dark->M;
+	    if (gi.starcontained && hd->ps[j].star->M > 0) hd->ps[j].star->v[k] /= hd->ps[j].star->M;
+	    }
+	for (k = 0; k < 6; k++) {
+	    if (hd->ps[j].tot->M > 0) hd->ps[j].tot->vdt[k] /= hd->ps[j].tot->M;
+	    if (gi.gascontained && hd->ps[j].gas->M > 0) hd->ps[j].gas->vdt[k] /= hd->ps[j].gas->M;
+	    if (gi.darkcontained && hd->ps[j].dark->M > 0) hd->ps[j].dark->vdt[k] /= hd->ps[j].dark->M;
+	    if (gi.starcontained && hd->ps[j].star->M > 0) hd->ps[j].star->vdt[k] /= hd->ps[j].star->M;
+	    }
+	for (k = 0; k < 3; k++) {
+	    if (hd->ps[j].tot->N > 1) hd->ps[j].tot->vdt[k] -= hd->ps[j].tot->v[k]*hd->ps[j].tot->v[k];
+	    else hd->ps[j].tot->vdt[k] = 0;
+	    if (gi.gascontained) {
+		if (hd->ps[j].gas->N > 1) hd->ps[j].gas->vdt[k] -= hd->ps[j].gas->v[k]*hd->ps[j].gas->v[k];
+		else hd->ps[j].gas->vdt[k] = 0;
+		}
+	    if (gi.darkcontained) {
+		if (hd->ps[j].dark->N > 1) hd->ps[j].dark->vdt[k] -= hd->ps[j].dark->v[k]*hd->ps[j].dark->v[k];
+		else hd->ps[j].dark->vdt[k] = 0;
+		}
+	    if (gi.starcontained) {
+		if (hd->ps[j].star->N > 1) hd->ps[j].star->vdt[k] -= hd->ps[j].star->v[k]*hd->ps[j].star->v[k];
+		else hd->ps[j].star->vdt[k] = 0;
+		}
+	    }
+	if (hd->ps[j].tot->N > 1) {
+	    hd->ps[j].tot->vdt[3] -= hd->ps[j].tot->v[0]*hd->ps[j].tot->v[1];
+	    hd->ps[j].tot->vdt[4] -= hd->ps[j].tot->v[0]*hd->ps[j].tot->v[2];
+	    hd->ps[j].tot->vdt[5] -= hd->ps[j].tot->v[1]*hd->ps[j].tot->v[2];
+	    }
+	else {
+	    hd->ps[j].tot->vdt[3] = 0;
+	    hd->ps[j].tot->vdt[4] = 0;
+	    hd->ps[j].tot->vdt[5] = 0;
+	    }
+	if (gi.gascontained) {
+	    if (hd->ps[j].gas->N > 1) {
+		hd->ps[j].gas->vdt[3] -= hd->ps[j].gas->v[0]*hd->ps[j].gas->v[1];
+		hd->ps[j].gas->vdt[4] -= hd->ps[j].gas->v[0]*hd->ps[j].gas->v[2];
+		hd->ps[j].gas->vdt[5] -= hd->ps[j].gas->v[1]*hd->ps[j].gas->v[2];
+		}
+	    else {
+		hd->ps[j].gas->vdt[3] = 0;
+		hd->ps[j].gas->vdt[4] = 0;
+		hd->ps[j].gas->vdt[5] = 0;
+		}
+	    }
+	if (gi.darkcontained) {
+	    if (hd->ps[j].dark->N > 1) {
+		hd->ps[j].dark->vdt[3] -= hd->ps[j].dark->v[0]*hd->ps[j].dark->v[1];
+		hd->ps[j].dark->vdt[4] -= hd->ps[j].dark->v[0]*hd->ps[j].dark->v[2];
+		hd->ps[j].dark->vdt[5] -= hd->ps[j].dark->v[1]*hd->ps[j].dark->v[2];
+		}
+	    else {
+		hd->ps[j].dark->vdt[3] = 0;
+		hd->ps[j].dark->vdt[4] = 0;
+		hd->ps[j].dark->vdt[5] = 0;
+		}
+	    }
+	if (gi.starcontained) {
+	    if (hd->ps[j].star->N > 1) {
+		hd->ps[j].star->vdt[3] -= hd->ps[j].star->v[0]*hd->ps[j].star->v[1];
+		hd->ps[j].star->vdt[4] -= hd->ps[j].star->v[0]*hd->ps[j].star->v[2];
+		hd->ps[j].star->vdt[5] -= hd->ps[j].star->v[1]*hd->ps[j].star->v[2];
+		}
+	    else {
+		hd->ps[j].star->vdt[3] = 0;
+		hd->ps[j].star->vdt[4] = 0;
+		hd->ps[j].star->vdt[5] = 0;
+		}
+	    }
+	ddummy = 0;
+	if (gi.darkcontained) ddummy += hd->ps[j].dark->M;
+	if (gi.starcontained) ddummy += hd->ps[j].star->M;
+	if (ddummy > 0) hd->ps[j].tot->vradsmooth /= ddummy;
+	if (gi.gascontained && hd->ps[j].gas->M > 0) {
+	    hd->ps[j].gas->metallicity      /= hd->ps[j].gas->M;
+	    hd->ps[j].gas->metallicity_SNII /= hd->ps[j].gas->M;
+	    hd->ps[j].gas->metallicity_SNIa /= hd->ps[j].gas->M;
+	    }
+	if (gi.starcontained && hd->ps[j].star->M > 0) {
+	    hd->ps[j].star->metallicity      /= hd->ps[j].star->M;
+	    hd->ps[j].star->metallicity_SNII /= hd->ps[j].star->M;
+	    hd->ps[j].star->metallicity_SNIa /= hd->ps[j].star->M;
+	    }
+	if (gi.starcontained && hd->ps[j].star->N > 0) {
+	    hd->ps[j].star->t_form /= hd->ps[j].star->N;
+	    }
+	}
+    vradsmooth[0] = 0;
+    for (j = 1; j < hd->NBin; j++) {
+	vradsmooth[j] = (hd->ps[j-1].tot->vradsmooth+2*hd->ps[j].tot->vradsmooth+hd->ps[j+1].tot->vradsmooth)/4.0;
+	}
+    vradsmooth[hd->NBin] = 0;
+    for (j = 0; j < (hd->NBin+1); j++) {
+	hd->ps[j].tot->vradsmooth = vradsmooth[j];
+	}
+    free(vradsmooth);
+    }
+
+void calculate_overdensity_characteristics(GI gi, HALO_DATA *hd) {
+
+    int j, k;
+    double radius[2], rhoenc[2], Menc[2];
+    double m, d, rcheck, Mrcheck, Qcheck, Ncheck, Scheck, Qcomp;
+    double rminok;
+
+    rminok = gi.fexclude*hd->ps[0].ro;
+    for (j = 1; j < (hd->NBin+1); j++) {
+	radius[0] = hd->ps[j-1].ro;
+	radius[1] = hd->ps[j].ro;
+	rhoenc[0] = hd->ps[j-1].tot->Menc/hd->ps[j-1].Venc;
+	rhoenc[1] = hd->ps[j].tot->Menc/hd->ps[j].Venc;
+	Menc[0] = hd->ps[j-1].tot->Menc;
+	Menc[1] = hd->ps[j].tot->Menc;
+	/*
+	** rmaxscale & Mrmaxscale
+	*/
+	if ((rhoenc[0] >= gi.rhoencmaxscale) && (rhoenc[1] < gi.rhoencmaxscale) && (hd->rmaxscale == 0)) {
+	    m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
+	    d = log(gi.rhoencbg)-log(rhoenc[0]);
+	    rcheck = exp(log(radius[0])+m*d);
+	    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+	    d = log(rcheck)-log(radius[0]);
+	    Mrcheck = exp(log(Menc[0])+m*d);
+	    if (rcheck >= rminok) {
+		hd->rmaxscale = rcheck;
+		hd->Mrmaxscale = Mrcheck;
+		assert(hd->rmaxscale > 0);
+		assert(hd->Mrmaxscale > 0);
+		}
+	    else {
 		/*
-		** Dark matter only
+		** Check criteria
 		*/
-		radius[0] = hd[i].ps[j-1].rm;
-		radius[1] = hd[i].ps[j].rm;
-		if (hd[i].ps[j-2].dark->Menc > 0) {
-		    logslope[0] = (log(hd[i].ps[j-1].dark->Menc)-log(hd[i].ps[j-2].dark->Menc))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
-		    logslope[1] = (log(hd[i].ps[j].dark->Menc)-log(hd[i].ps[j-1].dark->Menc))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
+		Qcheck = 0;
+		Ncheck = 0;
+		Scheck = 0;
+		for (k = j; (hd->ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd->NBin+1); k++) {
+		    Ncheck++;
+		    Qcomp = log(hd->ps[k].tot->Menc/hd->ps[k].Venc)-log(hd->ps[k-1].tot->Menc/hd->ps[k-1].Venc);
+		    Qcomp /= log(hd->ps[k].ro)-log(hd->ps[k-1].ro);
+		    if (Qcheck > Qcomp) Scheck++;
 		    }
-		else {
-		    logslope[0] = 0;
-		    logslope[1] = 0;
-		    }
-		slope = 1;
-		if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxdark == 0)) {
-		    /*
-		    ** Calculate rcheck & Mrcheck
-		    */
-		    m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
-		    d = slope-logslope[0];
-		    rcheck = exp(log(radius[0])+m*d);
-		    if (rcheck <= hd[i].ps[j-1].ro) {
-			radius[0] = hd[i].ps[j-2].ro;
-			radius[1] = hd[i].ps[j-1].ro;
-			Menc[0] = hd[i].ps[j-2].dark->Menc;
-			Menc[1] = hd[i].ps[j-1].dark->Menc;
-			}
-		    else {
-			radius[0] = hd[i].ps[j-1].ro;
-			radius[1] = hd[i].ps[j].ro;
-			Menc[0] = hd[i].ps[j-1].dark->Menc;
-			Menc[1] = hd[i].ps[j].dark->Menc;
-			}
-		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		    d = log(rcheck)-log(radius[0]);
-		    Mrcheck = exp(log(Menc[0])+m*d);
-		    /*
-		    ** Check criteria
-		    */
-		    Qcheck = Mrcheck/rcheck;
-		    Ncheck = 0;
-		    Scheck = 0;
-		    for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
-			Ncheck++;
-			Qcomp = hd[i].ps[k].dark->Menc/hd[i].ps[k].ro;
-			if (Qcheck >= Qcomp) Scheck++;
-			}
-		    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
-			hd[i].rvcmaxdark = rcheck;
-			hd[i].Mrvcmaxdark = Mrcheck;
-			assert(hd[i].rvcmaxdark > 0);
-			assert(hd[i].Mrvcmaxdark > 0);
-			}
-		    }
-		/*
-		** Dark matter only with removed background
-		*/
-		radius[0] = hd[i].ps[j-1].rm;
-		radius[1] = hd[i].ps[j].rm;
-		if (hd[i].ps[j-2].dark->Mencremove > 0) {
-		    logslope[0] = (log(hd[i].ps[j-1].dark->Mencremove)-log(hd[i].ps[j-2].dark->Mencremove))/(log(hd[i].ps[j-1].ro)-log(hd[i].ps[j-2].ro));
-		    logslope[1] = (log(hd[i].ps[j].dark->Mencremove)-log(hd[i].ps[j-1].dark->Mencremove))/(log(hd[i].ps[j].ro)-log(hd[i].ps[j-1].ro));
-		    }
-		else {
-		    logslope[0] = 0;
-		    logslope[1] = 0;
-		    }
-		slope = 1;
-		if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd[i].rvcmaxdarktrunc == 0)) {
-		    /*
-		    ** Calculate rcheck & Mrcheck
-		    */
-		    m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
-		    d = slope-logslope[0];
-		    rcheck = exp(log(radius[0])+m*d);
-		    if (rcheck <= hd[i].ps[j-1].ro) {
-			radius[0] = hd[i].ps[j-2].ro;
-			radius[1] = hd[i].ps[j-1].ro;
-			Menc[0] = hd[i].ps[j-2].dark->Mencremove;
-			Menc[1] = hd[i].ps[j-1].dark->Mencremove;
-			}
-		    else {
-			radius[0] = hd[i].ps[j-1].ro;
-			radius[1] = hd[i].ps[j].ro;
-			Menc[0] = hd[i].ps[j-1].dark->Mencremove;
-			Menc[1] = hd[i].ps[j].dark->Mencremove;
-			}
-		    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
-		    d = log(rcheck)-log(radius[0]);
-		    Mrcheck = exp(log(Menc[0])+m*d);
-		    /*
-		    ** Check criteria
-		    */
-		    Qcheck = Mrcheck/rcheck;
-		    Ncheck = 0;
-		    Scheck = 0;
-		    for (k = j; (hd[i].ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd[i].NBin+1); k++) {
-			Ncheck++;
-			Qcomp = hd[i].ps[k].dark->Mencremove/hd[i].ps[k].ro;
-			if (Qcheck >= Qcomp) Scheck++;
-			}
-		    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
-			hd[i].rvcmaxdarktrunc = rcheck;
-			hd[i].Mrvcmaxdarktrunc = Mrcheck;
-			assert(hd[i].rvcmaxdarktrunc > 0);
-			assert(hd[i].Mrvcmaxdarktrunc > 0);
-			}
+		if (Scheck == Ncheck) {
+		    hd->rmaxscale = rcheck;
+		    hd->Mrmaxscale = Mrcheck;
+		    assert(hd->rmaxscale > 0);
+		    assert(hd->Mrmaxscale > 0);
 		    }
 		}
 	    }
-	free(vradsmooth);
+	/*
+	** rbg & Mrbg
+	*/
+	if ((rhoenc[0] >= gi.rhoencbg) && (rhoenc[1] < gi.rhoencbg) && (hd->rbg == 0)) {
+	    m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
+	    d = log(gi.rhoencbg)-log(rhoenc[0]);
+	    rcheck = exp(log(radius[0])+m*d);
+	    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+	    d = log(rcheck)-log(radius[0]);
+	    Mrcheck = exp(log(Menc[0])+m*d);
+	    if (rcheck >= rminok) {
+		hd->rbg = rcheck;
+		hd->Mrbg = Mrcheck;
+		assert(hd->rbg > 0);
+		assert(hd->Mrbg > 0);
+		}
+	    else {
+		/*
+		** Check criteria
+		*/
+		Qcheck = 0;
+		Ncheck = 0;
+		Scheck = 0;
+		for (k = j; (hd->ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd->NBin+1); k++) {
+		    Ncheck++;
+		    Qcomp = log(hd->ps[k].tot->Menc/hd->ps[k].Venc)-log(hd->ps[k-1].tot->Menc/hd->ps[k-1].Venc);
+		    Qcomp /= log(hd->ps[k].ro)-log(hd->ps[k-1].ro);
+		    if (Qcheck > Qcomp) Scheck++;
+		    }
+		if (Scheck == Ncheck) {
+		    hd->rbg = rcheck;
+		    hd->Mrbg = Mrcheck;
+		    assert(hd->rbg > 0);
+		    assert(hd->Mrbg > 0);
+		    }
+		}
+	    }
+	/*
+	** rcrit & Mrcrit
+	*/
+	if ((rhoenc[0] >= gi.rhoenccrit) && (rhoenc[1] < gi.rhoenccrit) && (hd->rcrit == 0)) {
+	    m = (log(radius[1])-log(radius[0]))/(log(rhoenc[1])-log(rhoenc[0]));
+	    d = log(gi.rhoenccrit)-log(rhoenc[0]);
+	    rcheck = exp(log(radius[0])+m*d);
+	    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+	    d = log(rcheck)-log(radius[0]);
+	    Mrcheck = exp(log(Menc[0])+m*d);
+	    if (rcheck >= rminok) {
+		hd->rcrit = rcheck;
+		hd->Mrcrit = Mrcheck;
+		assert(hd->rcrit > 0);
+		assert(hd->Mrcrit > 0);
+		}
+	    else {
+		/*
+		** Check criteria
+		*/
+		Qcheck = 0;
+		Ncheck = 0;
+		Scheck = 0;
+		for (k = j; (hd->ps[k].rm <= gi.fcheckrbgcrit*rcheck) && (k < hd->NBin+1); k++) {
+		    Ncheck++;
+		    Qcomp = log(hd->ps[k].tot->Menc/hd->ps[k].Venc)-log(hd->ps[k-1].tot->Menc/hd->ps[k-1].Venc);
+		    Qcomp /= log(hd->ps[k].ro)-log(hd->ps[k-1].ro);
+		    if (Qcheck > Qcomp) Scheck++;
+		    }
+		if (Scheck == Ncheck) {
+		    hd->rcrit = rcheck;
+		    hd->Mrcrit = Mrcheck;
+		    assert(hd->rcrit > 0);
+		    assert(hd->Mrcrit > 0);
+		    }
+		}
+	    }
+	if ((hd->rmaxscale > 0) && (hd->rbg > 0) && (hd->rcrit > 0)) break;
+	}
+    }
+
+void calculate_static_characteristics(GI gi, HALO_DATA *hd) {
+
+    int j, k;
+    int NBin, StartIndex, variant;
+    double radius[2], Menc[2];
+    double vsigma[2],vradmean, vraddisp, barrier, minvrad;
+    double m, d, rcheck, Mrcheck, Qcheck, Ncheck, Scheck, Qcomp;
+    double rminok, rmaxok;
+
+    NBin = 0;
+    vradmean = 0;
+    vraddisp = 0;
+    barrier = 0;
+    minvrad = 1e100;
+    StartIndex = -1;
+    variant = -1;
+    /*
+    ** Calculate vradmean & vraddisp
+    ** Use only limited range 
+    **
+    ** First, find bin that contains fiducial radius
+    */
+    rmaxok = 0;
+    rmaxok = (hd->rbg > rmaxok)?hd->rbg:rmaxok;
+    rmaxok = (hd->rcrit > rmaxok)?hd->rcrit:rmaxok;
+    rmaxok = (5*hd->ps[0].ro > rmaxok)?hd->ps[0].ro:rmaxok;
+    for (j = 1; (hd->ps[j].rm < rmaxok) && (j < hd->NBin); j++) {
+	Mrcheck = 0;
+	if (gi.darkcontained) Mrcheck += hd->ps[j].dark->M;
+	if (gi.starcontained) Mrcheck += hd->ps[j].star->M;
+	if ((fabs(hd->ps[j].tot->vradsmooth) < minvrad) && (Mrcheck > 0)) {
+	    minvrad = fabs(hd->ps[j].tot->vradsmooth);
+	    StartIndex = j;
+	    }
+	}
+    /* 
+    ** In case nothing was found
+    */
+    if (StartIndex == -1) {
+	hd->rvradrangelower = hd->ps[0].ro;
+	hd->rvradrangeupper = hd->ps[0].ro;
+	}
+    j = StartIndex;
+    while (j > 0) {
+	/*
+	** Check for boundaries of profile
+	*/
+	if (j == 1) hd->rvradrangelower = hd->ps[j].ri;
+	if (j == hd->NBin-1) hd->rvradrangeupper = hd->ps[j].ro;
+	/*
+	** Calculate vradmean & vraddisp
+	*/
+	Mrcheck = 0;
+	if (gi.darkcontained) Mrcheck += hd->ps[j].dark->M;
+	if (gi.starcontained) Mrcheck += hd->ps[j].star->M;
+	if (Mrcheck > 0) {
+	    /*
+	    ** Not empty bin
+	    */
+	    NBin++;
+	    vradmean += hd->ps[j].tot->vradsmooth;
+	    vraddisp += pow(hd->ps[j].tot->vradsmooth,2);
+	    hd->vradmean = vradmean/NBin;
+	    hd->vraddisp = sqrt(vraddisp/NBin-pow(hd->vradmean,2));
+	    }
+	else {
+	    /*
+	    ** Empty bin
+	    */
+	    if (j <= StartIndex) {
+		hd->rvradrangelower = hd->ps[j].ro;
+		}
+	    else {
+		hd->rvradrangeupper = hd->ps[j].ri;
+		}
+	    }
+	/*
+	** Calculate vsigma
+	*/
+	barrier = (gi.vraddispmin > hd->vraddisp)?gi.vraddispmin:hd->vraddisp;
+	if (j <= StartIndex) {
+	    vsigma[0] = (hd->ps[j].tot->vradsmooth-hd->vradmean)/barrier;
+	    vsigma[1] = (hd->ps[j-1].tot->vradsmooth-hd->vradmean)/barrier;
+	    }
+	else if (j > StartIndex) {
+	    vsigma[0] = (hd->ps[j].tot->vradsmooth-hd->vradmean)/barrier;
+	    vsigma[1] = (hd->ps[j+1].tot->vradsmooth-hd->vradmean)/barrier;
+	    }
+	/*
+	** Make sure vsigma[0] is on the other side of the barrier
+	*/
+	if (vsigma[1] > 0) Ncheck = (vsigma[0] < gi.Nsigmavrad)?1:0;
+	else Ncheck = (vsigma[0] > -gi.Nsigmavrad)?1:0;
+	if ((j <= StartIndex) && (fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd->rvradrangelower == 0)) {
+	    /*
+	    ** Lower boundary case
+	    */
+	    rcheck = hd->ps[j].ri;
+	    Qcheck = gi.Nsigmavrad;
+	    Ncheck = 0;
+	    Scheck = 0;
+	    for (k = j-1; (hd->ps[k].rm >= rcheck/gi.fcheckrstatic) && (k >= 0); k--) {
+		Ncheck++;
+		Qcomp = (hd->ps[k].tot->vradsmooth-hd->vradmean)/barrier;
+		if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
+		}
+	    if ((Scheck == Ncheck) && (NBin > 1)) {
+		hd->rvradrangelower = rcheck;
+		}
+	    }
+	else if ((j > StartIndex) && (fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd->rvradrangeupper == 0)) {
+	    /*
+	    ** Upper boundary case
+	    */
+	    rcheck = hd->ps[j].ro;
+	    Qcheck = gi.Nsigmavrad;
+	    Ncheck = 0;
+	    Scheck = 0;
+	    for (k = j+1; (hd->ps[k].rm <= gi.fcheckrstatic*rcheck) && (k < hd->NBin+1); k++) {
+		Ncheck++;
+		Qcomp = (hd->ps[k].tot->vradsmooth-hd->vradmean)/barrier;
+		if ((fabs(Qcomp) > Qcheck) && (Qcomp*vsigma[1] > 0)) Scheck++;
+		}
+	    if ((Scheck == Ncheck) && (NBin > 1)) {
+		hd->rvradrangeupper = rcheck;
+		}
+	    }
+	if ((hd->rvradrangelower > 0) && (hd->rvradrangeupper > 0)) break;
+	if ((hd->rvradrangelower > 0) && (variant == -1)) {
+	    /*
+	    ** Lower boundary was just set
+	    ** but not yet upper boundary
+	    */
+	    variant = 1;
+	    j = StartIndex + (StartIndex-j) - 1;
+	    }
+	if ((hd->rvradrangeupper > 0) && (variant == -1)) {
+	    /*
+	    ** Upper boundary was just set
+	    ** but not yet lower boundary
+	    */
+	    variant = 0;
+	    j = StartIndex - (j-StartIndex);
+	    }
+	k = 0;
+	if (variant == 0) {
+	    j = j-1;
+	    }
+	else if (variant == 1) {
+	    j = j+1;
+	    }
+	else {
+	    k = (NBin%2)?-1:+1;
+	    j = StartIndex + k*(NBin+1)/2;
+	    }
+	}
+    /*
+    ** Find innermost extremum
+    */
+    StartIndex = -1;
+    barrier = (gi.vraddispmin > hd->vraddisp)?gi.vraddispmin:hd->vraddisp;
+    rminok = hd->rvradrangelower;
+    for (j = hd->NBin; j > 0; j--) {
+	Qcomp = (hd->ps[j].tot->vradsmooth-hd->vradmean)/barrier;
+	if ((fabs(Qcomp) > gi.Nsigmaextreme) && (hd->ps[j].rm >= rminok)) StartIndex = j;
+	}
+    /*
+    ** Get location where barrier is pierced
+    */
+    for (j = StartIndex; j > 2; j--) {
+	vsigma[0] = (hd->ps[j-1].tot->vradsmooth-hd->vradmean)/barrier;
+	vsigma[1] = (hd->ps[j].tot->vradsmooth-hd->vradmean)/barrier;
+	/*
+	** Make sure vsigma[0] is on the other side of the barrier
+	*/
+	if (vsigma[1] > 0) Ncheck = (vsigma[0] < gi.Nsigmavrad)?1:0;
+	else Ncheck = (vsigma[0] > -gi.Nsigmavrad)?1:0;
+	if ((fabs(vsigma[1]) > gi.Nsigmavrad) && Ncheck && (hd->rstatic == 0)) {
+	    /*
+	    ** Calculate rstatic & Mrstatic
+	    */
+	    m = (log(hd->ps[j].rm)-log(hd->ps[j-1].rm))/(vsigma[1]-vsigma[0]);
+	    if (vsigma[1] > 0) d = gi.Nsigmavrad-vsigma[0];
+	    else d = -gi.Nsigmavrad-vsigma[0];
+	    hd->rstatic = exp(log(hd->ps[j-1].rm)+m*d);
+	    assert(hd->rstatic > 0);
+	    if (hd->rstatic <= hd->ps[j-1].ro) {
+		radius[0] = hd->ps[j-2].ro;
+		radius[1] = hd->ps[j-1].ro;
+		Menc[0] = hd->ps[j-2].tot->Menc;
+		Menc[1] = hd->ps[j-1].tot->Menc;
+		}
+	    else {
+		radius[0] = hd->ps[j-1].ro;
+		radius[1] = hd->ps[j].ro;
+		Menc[0] = hd->ps[j-1].tot->Menc;
+		Menc[1] = hd->ps[j].tot->Menc;
+		}
+	    if (Menc[0] > 0) {
+		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		d = log(hd->rstatic)-log(radius[0]);
+		hd->Mrstatic = exp(log(Menc[0])+m*d);
+		assert(hd->Mrstatic > 0);
+		}
+	    }
+	}
+    }
+
+/*
+** Indicator: local minimum in enclosed density at scales larger than rminok
+** i.e. bump is significant enough to cause a minimum or saddle in enclosed density
+** => in practise use the location where the value of slopertruncindicator is reached
+*/
+
+void calculate_truncation_characteristics(GI gi, HALO_DATA *hd, double fexclude) {
+
+    int j, k;
+    int StartIndex;
+    double radius[2], logslope[2], Menc[2];
+    double m, d, rcheck, Mrcheck, Qcheck, Ncheck, Scheck, Qcomp;
+    double rhotot, rhogas, rhodark, rhostar, rhototmin, rhogasmin, rhodarkmin, rhostarmin;
+    double slope;
+    double rminok;
+
+    rminok = fexclude*hd->ps[0].ro;
+    StartIndex = -1;
+    for (j = 2; j < (hd->NBin+1); j++) {
+	radius[0] = hd->ps[j-1].rm;
+	radius[1] = hd->ps[j].rm;
+	if (hd->ps[j-2].tot->Menc > 0) {
+	    logslope[0] = (log(hd->ps[j-1].tot->Menc)-log(hd->ps[j-2].tot->Menc))/(log(hd->ps[j-1].ro)-log(hd->ps[j-2].ro));
+	    logslope[1] = (log(hd->ps[j].tot->Menc)-log(hd->ps[j-1].tot->Menc))/(log(hd->ps[j].ro)-log(hd->ps[j-1].ro));
+	    }
+	else {
+	    logslope[0] = 0;
+	    logslope[1] = 0;
+	    }
+	slope = 3 + gi.slopertruncindicator;
+	if ((logslope[0] <= slope) && (logslope[1] > slope) && (hd->rtruncindicator == 0)) {
+	    /*
+	    ** Calculate rcheck, Mrcheck
+	    */
+	    m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
+	    d = slope-logslope[0];
+	    rcheck = exp(log(radius[0])+m*d);
+	    if (rcheck <= hd->ps[j-1].ro) {
+		radius[0] = hd->ps[j-2].ro;
+		radius[1] = hd->ps[j-1].ro;
+		Menc[0] = hd->ps[j-2].tot->Menc;
+		Menc[1] = hd->ps[j-1].tot->Menc;
+		}
+	    else {
+		radius[0] = hd->ps[j-1].ro;
+		radius[1] = hd->ps[j].ro;
+		Menc[0] = hd->ps[j-1].tot->Menc;
+		Menc[1] = hd->ps[j].tot->Menc;
+		}
+	    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+	    d = log(rcheck)-log(radius[0]);
+	    Mrcheck = exp(log(Menc[0])+m*d);
+	    /*
+	    ** Check criteria
+	    */
+	    Qcheck = gi.slopertruncindicator;
+	    Ncheck = 0;
+	    Scheck = 0;
+	    for (k = j+1; (hd->ps[k].rm <= gi.fcheckrtruncindicator*rcheck) && (k < hd->NBin+1); k++) {
+		Ncheck++;
+		Qcomp = log(hd->ps[k].tot->Menc/hd->ps[k].Venc)-log(hd->ps[k-1].tot->Menc/hd->ps[k-1].Venc);
+		Qcomp /= log(hd->ps[k].ro)-log(hd->ps[k-1].ro);
+		if (Qcheck <= Qcomp) Scheck++;
+		}
+	    if ((Scheck == Ncheck) && (rcheck >= rminok) && (hd->ps[j-1].tot->M > 0)) {
+		StartIndex = j;
+		hd->rtruncindicator = rcheck;
+		assert(hd->rtruncindicator > 0);
+		}
+	    }
+	if (hd->rtruncindicator > 0) break;
+	}
+    /*
+    ** Now determine rtrunc
+    ** We define the location of the absolute minimum (within specified range of frhobg)
+    ** of the density within rtruncindicator as rtrunc
+    */
+    if (StartIndex > 0) {
+	rhotot = 0;
+	rhogas = 0;
+	rhodark = 0;
+	rhostar = 0;
+	rhototmin = 1e100;
+	rhogasmin = 1e100;
+	rhodarkmin = 1e100;
+	rhostarmin = 1e100;
+	for (j = StartIndex; j > 0; j--) {
+	    rhotot = hd->ps[j].tot->M/hd->ps[j].V;
+	    rhogas = (gi.gascontained)?hd->ps[j].gas->M/hd->ps[j].V:0;
+	    rhodark = (gi.darkcontained)?hd->ps[j].dark->M/hd->ps[j].V:0;
+	    rhostar = (gi.starcontained)?hd->ps[j].star->M/hd->ps[j].V:0;
+	    if ((rhotot < gi.frhobg*rhototmin) && (rhotot > 0) && (hd->ps[j-1].tot->Menc > 0) && (hd->ps[j].rm >= rminok)) {
+		if ((rhotot < rhototmin) && (rhotot > 0)) rhototmin = rhotot;
+		if ((rhogas < rhogasmin) && (rhogas > 0) && gi.gascontained) rhogasmin = rhogas;
+		if ((rhodark < rhodarkmin) && (rhodark > 0) && gi.darkcontained) rhodarkmin = rhodark;
+		if ((rhostar < rhostarmin) && (rhostar > 0) && gi.starcontained) rhostarmin = rhostar;
+		hd->rtrunc = hd->ps[j].rm;
+		assert(hd->rtrunc > 0);
+		radius[0] = hd->ps[j-1].ro;
+		radius[1] = hd->ps[j].ro;
+		Menc[0] = hd->ps[j-1].tot->Menc;
+		Menc[1] = hd->ps[j].tot->Menc;
+		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		d = log(hd->rtrunc)-log(radius[0]);
+		hd->Mrtrunc = exp(log(Menc[0])+m*d);
+		assert(hd->Mrtrunc > 0);
+		hd->rhobgtot  = 0.5*(rhotot+rhototmin);
+		if (gi.gascontained) {
+		    if ((rhogas > 0) && (rhogasmin != 1e100)) hd->rhobggas = 0.5*(rhogas+rhogasmin);
+		    else if ((rhogas == 0) && (rhogasmin != 1e100)) hd->rhobggas = rhogasmin;
+		    }
+		if (gi.darkcontained) {
+		    if ((rhodark > 0) && (rhodarkmin != 1e100)) hd->rhobgdark = 0.5*(rhodark+rhodarkmin);
+		    else if ((rhodark == 0) && (rhodarkmin != 1e100)) hd->rhobgdark = rhodarkmin;
+		    }
+		if (gi.starcontained) {
+		    if ((rhostar > 0) && (rhostarmin != 1e100)) hd->rhobgstar = 0.5*(rhostar+rhostarmin);
+		    else if ((rhostar == 0) && (rhostarmin != 1e100)) hd->rhobgstar = rhostarmin;
+		    }
+		}
+	    }
+	}
+    }
+
+void calculate_velocity_characteristics(GI gi, HALO_DATA *hd) {
+
+    int j, k;
+    double radius[2], logslope[2], Menc[2];
+    double m, d, rcheck, Mrcheck, Qcheck, Ncheck, Scheck, Qcomp;
+    double slope;
+    double rmaxok;
+
+    rmaxok = 0;
+    rmaxok = (hd->rbg > rmaxok)?hd->rbg:rmaxok;
+    rmaxok = (hd->rcrit > rmaxok)?hd->rcrit:rmaxok;
+    rmaxok = (hd->rtrunc > rmaxok)?hd->rtrunc:rmaxok;
+    rmaxok = (hd->rstatic > rmaxok)?hd->rstatic:rmaxok;
+    rmaxok = (hd->rmaxscale > rmaxok)?hd->rmaxscale:rmaxok;
+    for (j = 2; (hd->ps[j].ri <= rmaxok) && (j < hd->NBin+1); j++) {
+	/*
+	** Total mass
+	*/
+	radius[0] = hd->ps[j-1].rm;
+	radius[1] = hd->ps[j].rm;
+	if (hd->ps[j-2].tot->Menc > 0) {
+	    logslope[0] = (log(hd->ps[j-1].tot->Menc)-log(hd->ps[j-2].tot->Menc))/(log(hd->ps[j-1].ro)-log(hd->ps[j-2].ro));
+	    logslope[1] = (log(hd->ps[j].tot->Menc)-log(hd->ps[j-1].tot->Menc))/(log(hd->ps[j].ro)-log(hd->ps[j-1].ro));
+	    }
+	else {
+	    logslope[0] = 0;
+	    logslope[1] = 0;
+	    }
+	slope = 1;
+	if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd->rvcmaxtot == 0)) {
+	    /*
+	    ** Calculate rcheck & Mrcheck
+	    */
+	    m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
+	    d = slope-logslope[0];
+	    rcheck = exp(log(radius[0])+m*d);
+	    if (rcheck <= hd->ps[j-1].ro) {
+		radius[0] = hd->ps[j-2].ro;
+		radius[1] = hd->ps[j-1].ro;
+		Menc[0] = hd->ps[j-2].tot->Menc;
+		Menc[1] = hd->ps[j-1].tot->Menc;
+		}
+	    else {
+		radius[0] = hd->ps[j-1].ro;
+		radius[1] = hd->ps[j].ro;
+		Menc[0] = hd->ps[j-1].tot->Menc;
+		Menc[1] = hd->ps[j].tot->Menc;
+		}
+	    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+	    d = log(rcheck)-log(radius[0]);
+	    Mrcheck = exp(log(Menc[0])+m*d);
+	    /*
+	    ** Check criteria
+	    */
+	    Qcheck = Mrcheck/rcheck;
+	    Ncheck = 0;
+	    Scheck = 0;
+	    for (k = j; (hd->ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd->NBin+1); k++) {
+		Ncheck++;
+		Qcomp = hd->ps[k].tot->Menc/hd->ps[k].ro;
+		if (Qcheck >= Qcomp) Scheck++;
+		}
+	    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
+		hd->rvcmaxtot = rcheck;
+		hd->Mrvcmaxtot = Mrcheck;
+		assert(hd->rvcmaxtot > 0);
+		assert(hd->Mrvcmaxtot > 0);
+		}
+	    }
+	/*
+	** Total mass with removed background
+	*/
+	radius[0] = hd->ps[j-1].rm;
+	radius[1] = hd->ps[j].rm;
+	if (hd->ps[j-2].tot->Mencremove > 0) {
+	    logslope[0] = (log(hd->ps[j-1].tot->Mencremove)-log(hd->ps[j-2].tot->Mencremove))/(log(hd->ps[j-1].ro)-log(hd->ps[j-2].ro));
+	    logslope[1] = (log(hd->ps[j].tot->Mencremove)-log(hd->ps[j-1].tot->Mencremove))/(log(hd->ps[j].ro)-log(hd->ps[j-1].ro));
+	    }
+	else {
+	    logslope[0] = 0;
+	    logslope[1] = 0;
+	    }
+	slope = 1;
+	if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd->rvcmaxtottrunc == 0)) {
+	    /*
+	    ** Calculate rcheck & Mrcheck
+	    */
+	    m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
+	    d = slope-logslope[0];
+	    rcheck = exp(log(radius[0])+m*d);
+	    if (rcheck <= hd->ps[j-1].ro) {
+		radius[0] = hd->ps[j-2].ro;
+		radius[1] = hd->ps[j-1].ro;
+		Menc[0] = hd->ps[j-2].tot->Mencremove;
+		Menc[1] = hd->ps[j-1].tot->Mencremove;
+		}
+	    else {
+		radius[0] = hd->ps[j-1].ro;
+		radius[1] = hd->ps[j].ro;
+		Menc[0] = hd->ps[j-1].tot->Mencremove;
+		Menc[1] = hd->ps[j].tot->Mencremove;
+		}
+	    m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+	    d = log(rcheck)-log(radius[0]);
+	    Mrcheck = exp(log(Menc[0])+m*d);
+	    /*
+	    ** Check criteria
+	    */
+	    Qcheck = Mrcheck/rcheck;
+	    Ncheck = 0;
+	    Scheck = 0;
+	    for (k = j; (hd->ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd->NBin+1); k++) {
+		Ncheck++;
+		Qcomp = hd->ps[k].tot->Mencremove/hd->ps[k].ro;
+		if (Qcheck >= Qcomp) Scheck++;
+		}
+	    if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
+		hd->rvcmaxtottrunc = rcheck;
+		hd->Mrvcmaxtottrunc = Mrcheck;
+		assert(hd->rvcmaxtottrunc > 0);
+		assert(hd->Mrvcmaxtottrunc > 0);
+		}
+	    }
+	if (gi.darkcontained) {
+	    /*
+	    ** Dark matter only
+	    */
+	    radius[0] = hd->ps[j-1].rm;
+	    radius[1] = hd->ps[j].rm;
+	    if (hd->ps[j-2].dark->Menc > 0) {
+		logslope[0] = (log(hd->ps[j-1].dark->Menc)-log(hd->ps[j-2].dark->Menc))/(log(hd->ps[j-1].ro)-log(hd->ps[j-2].ro));
+		logslope[1] = (log(hd->ps[j].dark->Menc)-log(hd->ps[j-1].dark->Menc))/(log(hd->ps[j].ro)-log(hd->ps[j-1].ro));
+		}
+	    else {
+		logslope[0] = 0;
+		logslope[1] = 0;
+		}
+	    slope = 1;
+	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd->rvcmaxdark == 0)) {
+		/*
+		** Calculate rcheck & Mrcheck
+		*/
+		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
+		d = slope-logslope[0];
+		rcheck = exp(log(radius[0])+m*d);
+		if (rcheck <= hd->ps[j-1].ro) {
+		    radius[0] = hd->ps[j-2].ro;
+		    radius[1] = hd->ps[j-1].ro;
+		    Menc[0] = hd->ps[j-2].dark->Menc;
+		    Menc[1] = hd->ps[j-1].dark->Menc;
+		    }
+		else {
+		    radius[0] = hd->ps[j-1].ro;
+		    radius[1] = hd->ps[j].ro;
+		    Menc[0] = hd->ps[j-1].dark->Menc;
+		    Menc[1] = hd->ps[j].dark->Menc;
+		    }
+		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		d = log(rcheck)-log(radius[0]);
+		Mrcheck = exp(log(Menc[0])+m*d);
+		/*
+		** Check criteria
+		*/
+		Qcheck = Mrcheck/rcheck;
+		Ncheck = 0;
+		Scheck = 0;
+		for (k = j; (hd->ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd->NBin+1); k++) {
+		    Ncheck++;
+		    Qcomp = hd->ps[k].dark->Menc/hd->ps[k].ro;
+		    if (Qcheck >= Qcomp) Scheck++;
+		    }
+		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
+		    hd->rvcmaxdark = rcheck;
+		    hd->Mrvcmaxdark = Mrcheck;
+		    assert(hd->rvcmaxdark > 0);
+		    assert(hd->Mrvcmaxdark > 0);
+		    }
+		}
+	    /*
+	    ** Dark matter only with removed background
+	    */
+	    radius[0] = hd->ps[j-1].rm;
+	    radius[1] = hd->ps[j].rm;
+	    if (hd->ps[j-2].dark->Mencremove > 0) {
+		logslope[0] = (log(hd->ps[j-1].dark->Mencremove)-log(hd->ps[j-2].dark->Mencremove))/(log(hd->ps[j-1].ro)-log(hd->ps[j-2].ro));
+		logslope[1] = (log(hd->ps[j].dark->Mencremove)-log(hd->ps[j-1].dark->Mencremove))/(log(hd->ps[j].ro)-log(hd->ps[j-1].ro));
+		}
+	    else {
+		logslope[0] = 0;
+		logslope[1] = 0;
+		}
+	    slope = 1;
+	    if ((logslope[0] >= slope) && (logslope[1] < slope) && (hd->rvcmaxdarktrunc == 0)) {
+		/*
+		** Calculate rcheck & Mrcheck
+		*/
+		m = (log(radius[1])-log(radius[0]))/(logslope[1]-logslope[0]);
+		d = slope-logslope[0];
+		rcheck = exp(log(radius[0])+m*d);
+		if (rcheck <= hd->ps[j-1].ro) {
+		    radius[0] = hd->ps[j-2].ro;
+		    radius[1] = hd->ps[j-1].ro;
+		    Menc[0] = hd->ps[j-2].dark->Mencremove;
+		    Menc[1] = hd->ps[j-1].dark->Mencremove;
+		    }
+		else {
+		    radius[0] = hd->ps[j-1].ro;
+		    radius[1] = hd->ps[j].ro;
+		    Menc[0] = hd->ps[j-1].dark->Mencremove;
+		    Menc[1] = hd->ps[j].dark->Mencremove;
+		    }
+		m = (log(Menc[1])-log(Menc[0]))/(log(radius[1])-log(radius[0]));
+		d = log(rcheck)-log(radius[0]);
+		Mrcheck = exp(log(Menc[0])+m*d);
+		/*
+		** Check criteria
+		*/
+		Qcheck = Mrcheck/rcheck;
+		Ncheck = 0;
+		Scheck = 0;
+		for (k = j; (hd->ps[k].ro <= gi.fcheckrvcmax*rcheck) && (k < hd->NBin+1); k++) {
+		    Ncheck++;
+		    Qcomp = hd->ps[k].dark->Mencremove/hd->ps[k].ro;
+		    if (Qcheck >= Qcomp) Scheck++;
+		    }
+		if ((Scheck == Ncheck) && (rcheck <= rmaxok)) {
+		    hd->rvcmaxdarktrunc = rcheck;
+		    hd->Mrvcmaxdarktrunc = Mrcheck;
+		    assert(hd->rvcmaxdarktrunc > 0);
+		    assert(hd->Mrvcmaxdarktrunc > 0);
+		    }
+		}
+	    }
 	}
     }
 
