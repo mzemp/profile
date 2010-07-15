@@ -211,6 +211,7 @@ void calculate_derived_properties(GI, HALO_DATA *);
 void calculate_overdensity_characteristics(GI, HALO_DATA *);
 void calculate_static_characteristics(GI, HALO_DATA *);
 void calculate_truncation_characteristics(GI, HALO_DATA *, double);
+void remove_background(GI, HALO_DATA *);
 void calculate_velocity_characteristics(GI, HALO_DATA *);
 void determine_halo_hierarchy(GI, HALO_DATA *);
 void write_output(GI, HALO_DATA *);
@@ -2424,9 +2425,9 @@ void calculate_total_matter_distribution(GI gi, HALO_DATA *hd) {
 
 void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 
-    int i, j;
+    int i;
 
-#pragma omp parallel for default(none) private(i,j) shared(hd,gi)
+#pragma omp parallel for default(none) private(i) shared(hd,gi)
     for (i = 0; i < gi.NHalo; i++) {
 	/*
 	** Calculate derived properties
@@ -2448,27 +2449,9 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	** Remove background (Option for later: unbinding)
 	** Attention: Numbers and velocities not correct any more!
 	*/
-	if (hd[i].rtrunc > 0) {
-	    hd[i].Mrtrunc -= hd[i].rhobgtot*4*M_PI*pow(hd[i].rtrunc,3)/3.0;
-	    if (hd[i].Mrtrunc > 0) {
-		for (j = 0; j < (hd[i].NBin+1); j++) {
-		    hd[i].ps[j].tot->Mencremove  -= hd[i].rhobgtot*hd[i].ps[j].Venc;
-		    if(gi.darkcontained) hd[i].ps[j].dark->Mencremove -= hd[i].rhobgdark*hd[i].ps[j].Venc;
-		    }
-		}
-	    else {
-		/*
-		** Probably got a too small rtrunc (noisy profile) => reset
-		*/
-		hd[i].rtruncindicator = 0;
-		hd[i].rtrunc = 0;
-		hd[i].Mrtrunc = 0;
-		hd[i].rhobgtot = 0;
-		if (gi.gascontained) hd[i].rhobggas = 0;
-		if (gi.darkcontained) hd[i].rhobgdark = 0;
-		if (gi.starcontained) hd[i].rhobgstar = 0;
-		}
-	    }
+	hd[i].ExtraHaloID = 1;
+	remove_background(gi,&hd[i]);
+	hd[i].ExtraHaloID = 0;
 	/*
 	** Calculate rvcmaxtot, Mrvcmaxtot, rvcmaxdark, Mrvcmaxdark 
 	** as well as rvcmaxtottrunc, Mrvcmaxtottrunc, rvcmaxdarktrunc, Mrvcmaxdarktrunc
@@ -3081,6 +3064,36 @@ void calculate_truncation_characteristics(GI gi, HALO_DATA *hd, double fexclude)
 		    else if ((rhostar == 0) && (rhostarmin != 1e100)) hd->rhobgstar = rhostarmin;
 		    }
 		}
+	    }
+	}
+    }
+
+void remove_background(GI gi, HALO_DATA *hd) {
+
+    int j;
+
+    if (hd->rtrunc > 0) {
+	hd->Mrtrunc -= hd->rhobgtot*4*M_PI*pow(hd->rtrunc,3)/3.0;
+	if (hd->Mrtrunc > 0) {
+	    for (j = 0; j < (hd->NBin+1); j++) {
+		hd->ps[j].tot->Mencremove  -= hd->rhobgtot*hd->ps[j].Venc;
+		if(gi.darkcontained) hd->ps[j].dark->Mencremove -= hd->rhobgdark*hd->ps[j].Venc;
+		}
+	    }
+	else {
+	    /*
+	    ** Probably got a too small rtrunc (noisy profile) => reset and try again
+	    */
+	    hd->rtruncindicator = 0;
+	    hd->rtrunc = 0;
+	    hd->Mrtrunc = 0;
+	    hd->rhobgtot = 0;
+	    if (gi.gascontained) hd->rhobggas = 0;
+	    if (gi.darkcontained) hd->rhobgdark = 0;
+	    if (gi.starcontained) hd->rhobgstar = 0;
+	    hd->ExtraHaloID++;
+	    calculate_truncation_characteristics(gi,hd,pow(gi.fexclude,hd->ExtraHaloID));
+	    remove_background(gi,hd);
 	    }
 	}
     }
