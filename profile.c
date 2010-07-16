@@ -3390,7 +3390,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     for (i = 0; i < gi.NHalo; i++) {
 	size = hd[i].rcrit;
 	Qcheck = hd[i].Mrcrit;
-	if ((hd[i].rtrunc < size) && (hd[i].rtrunc > 0)) {
+	if ((hd[i].rtrunc < size || size == 0) && (hd[i].rtrunc > 0)) {
 	    size = hd[i].rtrunc;
 	    Qcheck = hd[i].Mrtrunc;
 	    }
@@ -3446,9 +3446,9 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		    }
 		d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
 		size = hd[i].rcrit;
-		if ((hd[i].rtrunc < size) && (hd[i].rtrunc > 0)) size = hd[i].rtrunc;
+		if ((hd[i].rtrunc < size || size == 0) && (hd[i].rtrunc > 0)) size = hd[i].rtrunc;
 		Qcheck = hd[j].rcrit;
-		if ((hd[j].rtrunc < Qcheck) && (hd[j].rtrunc > 0)) Qcheck = hd[j].rtrunc;
+		if ((hd[j].rtrunc < Qcheck || Qcheck == 0) && (hd[j].rtrunc > 0)) Qcheck = hd[j].rtrunc;
 		size = 0.5*(size+Qcheck);
 		/*
 		** Check if the pair is close enough
