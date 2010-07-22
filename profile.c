@@ -1535,7 +1535,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrtruncindicator = 1.2;
     gi->fexclude = 3;
     gi->fduplicate = 0;
-    gi->slopertruncindicator = -0.2;
+    gi->slopertruncindicator = -0.5;
     gi->Deltabgmaxscale = 50;
     gi->vraddispmin = 2;
     gi->Nsigmavrad = 1.5;
