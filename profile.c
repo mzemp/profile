@@ -257,7 +257,8 @@ void calculate_truncation_characteristics(GI, HALO_DATA *, double);
 void remove_background(GI, HALO_DATA *);
 void calculate_velocity_characteristics(GI, HALO_DATA *);
 void determine_halo_hierarchy(GI, HALO_DATA *);
-void write_output(GI, HALO_DATA *);
+void write_output_spherical_profile(GI, HALO_DATA *);
+void write_output_shape_profile(GI, HALO_DATA *, int);
 
 int main(int argc, char **argv) {
 
@@ -803,6 +804,7 @@ int main(int argc, char **argv) {
     assert(gi.Nparticleperblockstar > 0);
     assert(gi.NCellData > 0);
     assert(gi.NCellHalo > 0);
+    assert(gi.profilingmode < 3);
 
     /*
     ** Read header files
@@ -1478,10 +1480,25 @@ int main(int argc, char **argv) {
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
 	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. The fraction of converged bins so far is %g.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,convergencefraction);
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
+	    fprintf(stderr,"Writing output ... ");
+	    write_output_shape_profile(gi,hd,gi.ILoopRead+1);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 	    }
 	else if (gi.profilingmode == 3 && gi.ILoopRead == 0) {
 
 	    double fproperty = gi.fincludeshapeproperty;
+
+	    /*
+	    ** This is still under construction: the shape values are pretty sensitive to the selected set.
+	    ** Probably worth trying median in stead of mean => how to calculate median efficiently on the fly
+	    ** without storing data & sorting?
+	    ** Maybe try to loop over density iteration as well
+	    */
 
 	    for (i = 0; i < gi.NHalo; i++) {
 		for (j = 0; j < hd[i].NBin+1; j++) {
@@ -1615,14 +1632,16 @@ int main(int argc, char **argv) {
     ** Write output
     */
 
-    gettimeofday(&time,NULL);
-    timestartsub = time.tv_sec;
-    fprintf(stderr,"Writing output ... ");
-    write_output(gi,hd);
-    gettimeofday(&time,NULL);
-    timeendsub = time.tv_sec;
-    timediff = timeendsub-timestartsub;
-    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+    if (gi.profilingmode == 0) {
+	gettimeofday(&time,NULL);
+	timestartsub = time.tv_sec;
+	fprintf(stderr,"Writing output ... ");
+	write_output_spherical_profile(gi,hd);
+	gettimeofday(&time,NULL);
+	timeendsub = time.tv_sec;
+	timediff = timeendsub-timestartsub;
+	fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+	}
 
     /*
     ** Some more output if desired
@@ -1802,8 +1821,10 @@ void usage(void) {
     fprintf(stderr,"\n");
     fprintf(stderr,"-spp                                 : set this flag if input files have single precision positions (default)\n");
     fprintf(stderr,"-dpp                                 : set this flag if input files have double precision positions\n");
+    fprintf(stderr,"-profilingmode <value>               : 0 = spherical profiles / 1 = shape enclosed / 2 = shape shell (default: 0)\n");
     fprintf(stderr,"-dataformat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
     fprintf(stderr,"-halocatalogueformat <value>         : 0 = generic / 1 = 6DFOF / 2 = characteristics (default: 0)\n");
+    fprintf(stderr,"-shapetensorformat <value>           : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
     fprintf(stderr,"-ltphysical                          : rmin and rmax values are interpreted as physical lengths (default)\n");
     fprintf(stderr,"-ltcomoving                          : rmin and rmax values are interpreted as comoving lengths\n");
     fprintf(stderr,"-rmin <value>                        : minimum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
@@ -3390,7 +3411,7 @@ double diagonalise_shape_tensors(GI gi, HALO_DATA *hd) {
     const double ez[3] = {0,0,1};
     double sp, ec[3];
     double re_b_a, re_c_a;
-    double dummy;
+/*    double dummy;*/
 
     Ntot = 0;
     Nconverged = 0;
@@ -4907,140 +4928,171 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     free(NextIndex);
     }
 
-void write_output(GI gi, HALO_DATA *hd) {
+void write_output_spherical_profile(GI gi, HALO_DATA *hd) {
 
     int i, j, k;
     char outputfilename[256];
     FILE *outputfile;
 
-    if (gi.profilingmode == 0) {
-	/*
-	** Characteristics
-	*/
-	sprintf(outputfilename,"%s.characteristics",gi.OutputName);
-	outputfile = fopen(outputfilename,"w");
-	assert(outputfile != NULL);
-	fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rtruncindicator/35 HostHaloID/36 ExtraHaloID/37\n");
-	for (i = 0; i < gi.NHalo; i++) {
+    /*
+    ** Characteristics
+    */
+    sprintf(outputfilename,"%s.characteristics",gi.OutputName);
+    outputfile = fopen(outputfilename,"w");
+    assert(outputfile != NULL);
+    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rtruncindicator/35 HostHaloID/36 ExtraHaloID/37\n");
+    for (i = 0; i < gi.NHalo; i++) {
+	fprintf(outputfile,"%d",hd[i].ID);
+	fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
+	fprintf(outputfile," %.6e %.6e %.6e",hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
+	fprintf(outputfile," %.6e %.6e",hd[i].rmin,hd[i].rmax);
+	fprintf(outputfile," %d",hd[i].NBin+1);
+	fprintf(outputfile," %.6e %.6e",hd[i].rbg,hd[i].Mrbg);
+	fprintf(outputfile," %.6e %.6e",hd[i].rcrit,hd[i].Mrcrit);
+	fprintf(outputfile," %.6e %.6e",hd[i].rstatic,hd[i].Mrstatic);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark);
+	fprintf(outputfile," %.6e %.6e",hd[i].rtrunc,hd[i].Mrtrunc);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtottrunc,hd[i].Mrvcmaxtottrunc,hd[i].rvcmaxdarktrunc,hd[i].Mrvcmaxdarktrunc);
+	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper);
+	fprintf(outputfile," %.6e",hd[i].rtruncindicator);
+	fprintf(outputfile," %d %d",hd[i].HostHaloID,hd[i].ExtraHaloID);
+	fprintf(outputfile,"\n");
+	}
+    fclose(outputfile);
+    /*
+    ** Total matter
+    */
+    sprintf(outputfilename,"%s.profiles.tot",gi.OutputName);
+    outputfile = fopen(outputfilename,"w");
+    assert(outputfile != NULL);
+    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_tot/7 Menc_tot/8 N_tot/9 Nenc_tot/10 v_tot_1/11 v_tot_2/12 v_tot_3/13 vdt_tot_11/14 vdt_tot_22/15 vdt_tot_33/16 vdt_tot_12/17 vdt_tot_13/18 vdt_tot_23/19 L_tot_x/20 L_tot_y/21 L_tot_z/22 v_tot_radsmooth/23\n");
+    for (i = 0; i < gi.NHalo; i++) {
+	for (j = 0; j < (hd[i].NBin+1); j++) {
 	    fprintf(outputfile,"%d",hd[i].ID);
-	    fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
-	    fprintf(outputfile," %.6e %.6e %.6e",hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
-	    fprintf(outputfile," %.6e %.6e",hd[i].rmin,hd[i].rmax);
-	    fprintf(outputfile," %d",hd[i].NBin+1);
-	    fprintf(outputfile," %.6e %.6e",hd[i].rbg,hd[i].Mrbg);
-	    fprintf(outputfile," %.6e %.6e",hd[i].rcrit,hd[i].Mrcrit);
-	    fprintf(outputfile," %.6e %.6e",hd[i].rstatic,hd[i].Mrstatic);
-	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark);
-	    fprintf(outputfile," %.6e %.6e",hd[i].rtrunc,hd[i].Mrtrunc);
-	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar);
-	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtottrunc,hd[i].Mrvcmaxtottrunc,hd[i].rvcmaxdarktrunc,hd[i].Mrvcmaxdarktrunc);
-	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper);
-	    fprintf(outputfile," %.6e",hd[i].rtruncindicator);
-	    fprintf(outputfile," %d %d",hd[i].HostHaloID,hd[i].ExtraHaloID);
+	    fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
+	    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].tot->M,hd[i].ps[j].tot->Menc);
+	    fprintf(outputfile," %ld %ld",hd[i].ps[j].tot->N,hd[i].ps[j].tot->Nenc);
+	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->v[k]);
+	    for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->vdt[k]);
+	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->L[k]);
+	    fprintf(outputfile," %.6e",hd[i].ps[j].tot->vradsmooth);
 	    fprintf(outputfile,"\n");
 	    }
-	fclose(outputfile);
-	/*
-	** Total matter
-	*/
-	sprintf(outputfilename,"%s.profiles.tot",gi.OutputName);
+	}
+    fclose(outputfile);
+    /*
+    ** Gas
+    */
+    if (gi.gascontained) {
+	sprintf(outputfilename,"%s.profiles.gas",gi.OutputName);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
-	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_tot/7 Menc_tot/8 N_tot/9 Nenc_tot/10 v_tot_1/11 v_tot_2/12 v_tot_3/13 vdt_tot_11/14 vdt_tot_22/15 vdt_tot_33/16 vdt_tot_12/17 vdt_tot_13/18 vdt_tot_23/19 L_tot_x/20 L_tot_y/21 L_tot_z/22 v_tot_radsmooth/23\n");
+	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_gas/7 Menc_gas/8 N_gas/9 Nenc_gas/10 v_gas_1/11 v_gas_2/12 v_gas_3/13 vdt_gas_11/14 vdt_gas_22/15 vdt_gas_33/16 vdt_gas_12/17 vdt_gas_13/18 vdt_gas_23/19 L_gas_x/20 L_gas_y/21 L_gas_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_HI/26 Menc_HI/27 M_HII/28 Menc_HII/29 M_HeI/30 Menc_HeI/31 M_HeII/32 Menc_HeII/33 M_HeIII/34 Menc_HeIII/35 M_H2/36 Menc_H2/37 M_metals/38 Menc_metals/39\n");
 	for (i = 0; i < gi.NHalo; i++) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
 		fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
-		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].tot->M,hd[i].ps[j].tot->Menc);
-		fprintf(outputfile," %ld %ld",hd[i].ps[j].tot->N,hd[i].ps[j].tot->Nenc);
-		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->v[k]);
-		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->vdt[k]);
-		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].tot->L[k]);
-		fprintf(outputfile," %.6e",hd[i].ps[j].tot->vradsmooth);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M,hd[i].ps[j].gas->Menc);
+		fprintf(outputfile," %ld %ld",hd[i].ps[j].gas->N,hd[i].ps[j].gas->Nenc);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->v[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->vdt[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->L[k]);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->metallicity,hd[i].ps[j].gas->metallicity_SNII,hd[i].ps[j].gas->metallicity_SNIa);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].gas->M_HI,hd[i].ps[j].gas->Menc_HI,hd[i].ps[j].gas->M_HII,hd[i].ps[j].gas->Menc_HII);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].gas->M_HeI,hd[i].ps[j].gas->Menc_HeI,hd[i].ps[j].gas->M_HeII,hd[i].ps[j].gas->Menc_HeII,hd[i].ps[j].gas->M_HeIII,hd[i].ps[j].gas->Menc_HeIII);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M_H2,hd[i].ps[j].gas->Menc_H2);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M_metals,hd[i].ps[j].gas->Menc_metals);
 		fprintf(outputfile,"\n");
 		}
 	    }
 	fclose(outputfile);
-	/*
-	** Gas
-	*/
-	if (gi.gascontained) {
-	    sprintf(outputfilename,"%s.profiles.gas",gi.OutputName);
-	    outputfile = fopen(outputfilename,"w");
-	    assert(outputfile != NULL);
-	    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_gas/7 Menc_gas/8 N_gas/9 Nenc_gas/10 v_gas_1/11 v_gas_2/12 v_gas_3/13 vdt_gas_11/14 vdt_gas_22/15 vdt_gas_33/16 vdt_gas_12/17 vdt_gas_13/18 vdt_gas_23/19 L_gas_x/20 L_gas_y/21 L_gas_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_HI/26 Menc_HI/27 M_HII/28 Menc_HII/29 M_HeI/30 Menc_HeI/31 M_HeII/32 Menc_HeII/33 M_HeIII/34 Menc_HeIII/35 M_H2/36 Menc_H2/37 M_metals/38 Menc_metals/39\n");
-	    for (i = 0; i < gi.NHalo; i++) {
-		for (j = 0; j < (hd[i].NBin+1); j++) {
-		    fprintf(outputfile,"%d",hd[i].ID);
-		    fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M,hd[i].ps[j].gas->Menc);
-		    fprintf(outputfile," %ld %ld",hd[i].ps[j].gas->N,hd[i].ps[j].gas->Nenc);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->v[k]);
-		    for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->vdt[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gas->L[k]);
-		    fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].gas->metallicity,hd[i].ps[j].gas->metallicity_SNII,hd[i].ps[j].gas->metallicity_SNIa);
-		    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].ps[j].gas->M_HI,hd[i].ps[j].gas->Menc_HI,hd[i].ps[j].gas->M_HII,hd[i].ps[j].gas->Menc_HII);
-		    fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].gas->M_HeI,hd[i].ps[j].gas->Menc_HeI,hd[i].ps[j].gas->M_HeII,hd[i].ps[j].gas->Menc_HeII,hd[i].ps[j].gas->M_HeIII,hd[i].ps[j].gas->Menc_HeIII);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M_H2,hd[i].ps[j].gas->Menc_H2);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gas->M_metals,hd[i].ps[j].gas->Menc_metals);
-		    fprintf(outputfile,"\n");
-		    }
+	}
+    /*
+    ** Dark matter
+    */
+    if (gi.darkcontained) {
+	sprintf(outputfilename,"%s.profiles.dark",gi.OutputName);
+	outputfile = fopen(outputfilename,"w");
+	assert(outputfile != NULL);
+	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_dark/7 Menc_dark/8 N_dark/9 Nenc_dark/10 v_dark_1/11 v_dark_2/12 v_dark_3/13 vdt_dark_11/14 vdt_dark_22/15 vdt_dark_33/16 vdt_dark_12/17 vdt_dark_13/18 vdt_dark_23/19 L_dark_x/20 L_dark_y/21 L_dark_z/22\n");
+	for (i = 0; i < gi.NHalo; i++) {
+	    for (j = 0; j < (hd[i].NBin+1); j++) {
+		fprintf(outputfile,"%d",hd[i].ID);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].dark->M,hd[i].ps[j].dark->Menc);
+		fprintf(outputfile," %ld %ld",hd[i].ps[j].dark->N,hd[i].ps[j].dark->Nenc);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->v[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->vdt[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->L[k]);
+		fprintf(outputfile,"\n");
 		}
-	    fclose(outputfile);
 	    }
-	/*
-	** Dark matter
-	*/
-	if (gi.darkcontained) {
-	    sprintf(outputfilename,"%s.profiles.dark",gi.OutputName);
-	    outputfile = fopen(outputfilename,"w");
-	    assert(outputfile != NULL);
-	    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_dark/7 Menc_dark/8 N_dark/9 Nenc_dark/10 v_dark_1/11 v_dark_2/12 v_dark_3/13 vdt_dark_11/14 vdt_dark_22/15 vdt_dark_33/16 vdt_dark_12/17 vdt_dark_13/18 vdt_dark_23/19 L_dark_x/20 L_dark_y/21 L_dark_z/22\n");
-	    for (i = 0; i < gi.NHalo; i++) {
-		for (j = 0; j < (hd[i].NBin+1); j++) {
-		    fprintf(outputfile,"%d",hd[i].ID);
-		    fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].dark->M,hd[i].ps[j].dark->Menc);
-		    fprintf(outputfile," %ld %ld",hd[i].ps[j].dark->N,hd[i].ps[j].dark->Nenc);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->v[k]);
-		    for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->vdt[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].dark->L[k]);
-		    fprintf(outputfile,"\n");
-		    }
+	fclose(outputfile);
+	}
+    /*
+    ** Stars
+    */
+    if (gi.starcontained) {
+	sprintf(outputfilename,"%s.profiles.star",gi.OutputName);
+	outputfile = fopen(outputfilename,"w");
+	assert(outputfile != NULL);
+	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_star/7 Menc_star/8 N_star/9 Nenc_star/10 v_star_1/11 v_star_2/12 v_star_3/13 vdt_star_11/14 vdt_star_22/15 vdt_star_33/16 vdt_star_12/17 vdt_star_13/18 vdt_star_23/19 L_star_x/20 L_star_y/21 L_star_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_metals/26 Menc_metals/27 t_form/28\n");
+	for (i = 0; i < gi.NHalo; i++) {
+	    for (j = 0; j < (hd[i].NBin+1); j++) {
+		fprintf(outputfile,"%d",hd[i].ID);
+		fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].star->M,hd[i].ps[j].star->Menc);
+		fprintf(outputfile," %ld %ld",hd[i].ps[j].star->N,hd[i].ps[j].star->Nenc);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->v[k]);
+		for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->vdt[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->L[k]);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].star->metallicity,hd[i].ps[j].star->metallicity_SNII,hd[i].ps[j].star->metallicity_SNIa);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].star->M_metals,hd[i].ps[j].star->Menc_metals);
+		fprintf(outputfile," %.6e",hd[i].ps[j].star->t_form);
+		fprintf(outputfile,"\n");
 		}
-	    fclose(outputfile);
 	    }
-	/*
-	** Stars
-	*/
-	if (gi.starcontained) {
-	    sprintf(outputfilename,"%s.profiles.star",gi.OutputName);
-	    outputfile = fopen(outputfilename,"w");
-	    assert(outputfile != NULL);
-	    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 V/5 Venc/6 M_star/7 Menc_star/8 N_star/9 Nenc_star/10 v_star_1/11 v_star_2/12 v_star_3/13 vdt_star_11/14 vdt_star_22/15 vdt_star_33/16 vdt_star_12/17 vdt_star_13/18 vdt_star_23/19 L_star_x/20 L_star_y/21 L_star_z/22 Z/23 Z_SNII/24 Z_SNIa/25 M_metals/26 Menc_metals/27 t_form/28\n");
-	    for (i = 0; i < gi.NHalo; i++) {
-		for (j = 0; j < (hd[i].NBin+1); j++) {
-		    fprintf(outputfile,"%d",hd[i].ID);
-		    fprintf(outputfile," %.6e %.6e %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro,hd[i].ps[j].V,hd[i].ps[j].Venc);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].star->M,hd[i].ps[j].star->Menc);
-		    fprintf(outputfile," %ld %ld",hd[i].ps[j].star->N,hd[i].ps[j].star->Nenc);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->v[k]);
-		    for (k = 0; k < 6; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->vdt[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].star->L[k]);
-		    fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].star->metallicity,hd[i].ps[j].star->metallicity_SNII,hd[i].ps[j].star->metallicity_SNIa);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].star->M_metals,hd[i].ps[j].star->Menc_metals);
-		    fprintf(outputfile," %.6e",hd[i].ps[j].star->t_form);
-		    fprintf(outputfile,"\n");
-		    }
-		}
-	    fclose(outputfile);
+	fclose(outputfile);
+	}
+    }
+
+void write_output_shape_profile(GI gi, HALO_DATA *hd, int ILoop) {
+
+    int i, j, k;
+    char outputfilename[256];
+    FILE *outputfile;
+
+    /*
+    ** Total matter
+    */
+    sprintf(outputfilename,"%s.shape.%03d.profiles.tot",gi.OutputName,ILoop);
+    outputfile = fopen(outputfilename,"w");
+    assert(outputfile != NULL);
+    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b_a/7 c_a/8 a_1/9 a_2/10 a_3/11 b_1/12 b_2/13 b_3/14 c_1/15 c_2/16 c_3/17 re_b_a/18 re_c_a/19 NLoopConverged/20\n");
+    for (i = 0; i < gi.NHalo; i++) {
+	for (j = 0; j < (hd[i].NBin+1); j++) {
+	    fprintf(outputfile,"%d",hd[i].ID);
+	    fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro);
+	    fprintf(outputfile," %.6e %ld",hd[i].ps[j].totshape->M,hd[i].ps[j].totshape->N);
+	    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].totshape->b_a,hd[i].ps[j].totshape->c_a);
+	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].totshape->a[k]);
+	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].totshape->b[k]);
+	    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].totshape->c[k]);
+	    fprintf(outputfile," %.6e",(hd[i].ps[j].totshape->b_a/hd[i].ps[j].totshape->b_a_old)-1);
+	    fprintf(outputfile," %.6e",(hd[i].ps[j].totshape->c_a/hd[i].ps[j].totshape->c_a_old)-1);
+	    fprintf(outputfile," %d",hd[i].ps[j].totshape->NLoopConverged);
+	    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].totshape->dmin,hd[i].ps[j].totshape->dmax);
+	    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].totshape->propertymin,hd[i].ps[j].totshape->propertymax);
+	    fprintf(outputfile,"\n");
 	    }
 	}
-    else if (gi.profilingmode > 0) {
-	/*
-	** Total matter
-	*/
-	sprintf(outputfilename,"%s.shape.profiles.tot",gi.OutputName);
+    fclose(outputfile);
+    /*
+    ** Gas
+    */
+    if (gi.gascontained) {
+	sprintf(outputfilename,"%s.shape.%03d.profiles.gas",gi.OutputName,ILoop);
 	outputfile = fopen(outputfilename,"w");
 	assert(outputfile != NULL);
 	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b_a/7 c_a/8 a_1/9 a_2/10 a_3/11 b_1/12 b_2/13 b_3/14 c_1/15 c_2/16 c_3/17 re_b_a/18 re_c_a/19 NLoopConverged/20\n");
@@ -5048,101 +5100,74 @@ void write_output(GI gi, HALO_DATA *hd) {
 	    for (j = 0; j < (hd[i].NBin+1); j++) {
 		fprintf(outputfile,"%d",hd[i].ID);
 		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro);
-		fprintf(outputfile," %.6e %ld",hd[i].ps[j].totshape->M,hd[i].ps[j].totshape->N);
-		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].totshape->b_a,hd[i].ps[j].totshape->c_a);
-		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].totshape->a[k]);
-		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].totshape->b[k]);
-		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].totshape->c[k]);
-		fprintf(outputfile," %.6e",(hd[i].ps[j].totshape->b_a/hd[i].ps[j].totshape->b_a_old)-1);
-		fprintf(outputfile," %.6e",(hd[i].ps[j].totshape->c_a/hd[i].ps[j].totshape->c_a_old)-1);
-		fprintf(outputfile," %d",hd[i].ps[j].totshape->NLoopConverged);
-		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].totshape->dmin,hd[i].ps[j].totshape->dmax);
-		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].totshape->propertymin,hd[i].ps[j].totshape->propertymax);
+		fprintf(outputfile," %.6e %ld",hd[i].ps[j].gasshape->M,hd[i].ps[j].gasshape->N);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gasshape->b_a,hd[i].ps[j].gasshape->c_a);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gasshape->a[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gasshape->b[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gasshape->c[k]);
+		fprintf(outputfile," %.6e",(hd[i].ps[j].gasshape->b_a/hd[i].ps[j].gasshape->b_a_old)-1);
+		fprintf(outputfile," %.6e",(hd[i].ps[j].gasshape->c_a/hd[i].ps[j].gasshape->c_a_old)-1);
+		fprintf(outputfile," %d",hd[i].ps[j].gasshape->NLoopConverged);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gasshape->dmin,hd[i].ps[j].gasshape->dmax);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gasshape->propertymin,hd[i].ps[j].gasshape->propertymax);
 		fprintf(outputfile,"\n");
 		}
 	    }
 	fclose(outputfile);
-	/*
-	** Gas
-	*/
-	if (gi.gascontained) {
-	    sprintf(outputfilename,"%s.shape.profiles.gas",gi.OutputName);
-	    outputfile = fopen(outputfilename,"w");
-	    assert(outputfile != NULL);
-	    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b_a/7 c_a/8 a_1/9 a_2/10 a_3/11 b_1/12 b_2/13 b_3/14 c_1/15 c_2/16 c_3/17 re_b_a/18 re_c_a/19 NLoopConverged/20\n");
-	    for (i = 0; i < gi.NHalo; i++) {
-		for (j = 0; j < (hd[i].NBin+1); j++) {
-		    fprintf(outputfile,"%d",hd[i].ID);
-		    fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro);
-		    fprintf(outputfile," %.6e %ld",hd[i].ps[j].gasshape->M,hd[i].ps[j].gasshape->N);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gasshape->b_a,hd[i].ps[j].gasshape->c_a);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gasshape->a[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gasshape->b[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].gasshape->c[k]);
-		    fprintf(outputfile," %.6e",(hd[i].ps[j].gasshape->b_a/hd[i].ps[j].gasshape->b_a_old)-1);
-		    fprintf(outputfile," %.6e",(hd[i].ps[j].gasshape->c_a/hd[i].ps[j].gasshape->c_a_old)-1);
-		    fprintf(outputfile," %d",hd[i].ps[j].gasshape->NLoopConverged);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gasshape->dmin,hd[i].ps[j].gasshape->dmax);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gasshape->propertymin,hd[i].ps[j].gasshape->propertymax);
-		    fprintf(outputfile,"\n");
-		    }
+	}
+    /*
+    ** Dark matter
+    */
+    if (gi.darkcontained) {
+	sprintf(outputfilename,"%s.shape.%03d.profiles.dark",gi.OutputName,ILoop);
+	outputfile = fopen(outputfilename,"w");
+	assert(outputfile != NULL);
+	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b_a/7 c_a/8 a_1/9 a_2/10 a_3/11 b_1/12 b_2/13 b_3/14 c_1/15 c_2/16 c_3/17 re_b_a/18 re_c_a/19 NLoopConverged/20\n");
+	for (i = 0; i < gi.NHalo; i++) {
+	    for (j = 0; j < (hd[i].NBin+1); j++) {
+		fprintf(outputfile,"%d",hd[i].ID);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro);
+		fprintf(outputfile," %.6e %ld",hd[i].ps[j].darkshape->M,hd[i].ps[j].darkshape->N);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].darkshape->b_a,hd[i].ps[j].darkshape->c_a);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].darkshape->a[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].darkshape->b[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].darkshape->c[k]);
+		fprintf(outputfile," %.6e",(hd[i].ps[j].darkshape->b_a/hd[i].ps[j].darkshape->b_a_old)-1);
+		fprintf(outputfile," %.6e",(hd[i].ps[j].darkshape->c_a/hd[i].ps[j].darkshape->c_a_old)-1);
+		fprintf(outputfile," %d",hd[i].ps[j].darkshape->NLoopConverged);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].darkshape->dmin,hd[i].ps[j].darkshape->dmax);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].darkshape->propertymin,hd[i].ps[j].darkshape->propertymax);
+		fprintf(outputfile,"\n");
 		}
-	    fclose(outputfile);
 	    }
-	/*
-	** Dark matter
-	*/
-	if (gi.darkcontained) {
-	    sprintf(outputfilename,"%s.shape.profiles.dark",gi.OutputName);
-	    outputfile = fopen(outputfilename,"w");
-	    assert(outputfile != NULL);
-	    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b_a/7 c_a/8 a_1/9 a_2/10 a_3/11 b_1/12 b_2/13 b_3/14 c_1/15 c_2/16 c_3/17 re_b_a/18 re_c_a/19 NLoopConverged/20\n");
-	    for (i = 0; i < gi.NHalo; i++) {
-		for (j = 0; j < (hd[i].NBin+1); j++) {
-		    fprintf(outputfile,"%d",hd[i].ID);
-		    fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro);
-		    fprintf(outputfile," %.6e %ld",hd[i].ps[j].darkshape->M,hd[i].ps[j].darkshape->N);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].darkshape->b_a,hd[i].ps[j].darkshape->c_a);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].darkshape->a[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].darkshape->b[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].darkshape->c[k]);
-		    fprintf(outputfile," %.6e",(hd[i].ps[j].darkshape->b_a/hd[i].ps[j].darkshape->b_a_old)-1);
-		    fprintf(outputfile," %.6e",(hd[i].ps[j].darkshape->c_a/hd[i].ps[j].darkshape->c_a_old)-1);
-		    fprintf(outputfile," %d",hd[i].ps[j].darkshape->NLoopConverged);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].darkshape->dmin,hd[i].ps[j].darkshape->dmax);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].darkshape->propertymin,hd[i].ps[j].darkshape->propertymax);
-		    fprintf(outputfile,"\n");
-		    }
+	fclose(outputfile);
+	}
+    /*
+    ** Stars
+    */
+    if (gi.starcontained) {
+	sprintf(outputfilename,"%s.shape.%03d.profiles.star",gi.OutputName,ILoop);
+	outputfile = fopen(outputfilename,"w");
+	assert(outputfile != NULL);
+	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b_a/7 c_a/8 a_1/9 a_2/10 a_3/11 b_1/12 b_2/13 b_3/14 c_1/15 c_2/16 c_3/17 re_b_a/18 re_c_a/19 NLoopConverged/20\n");
+	for (i = 0; i < gi.NHalo; i++) {
+	    for (j = 0; j < (hd[i].NBin+1); j++) {
+		fprintf(outputfile,"%d",hd[i].ID);
+		fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro);
+		fprintf(outputfile," %.6e %ld",hd[i].ps[j].starshape->M,hd[i].ps[j].starshape->N);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].starshape->b_a,hd[i].ps[j].starshape->c_a);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].starshape->a[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].starshape->b[k]);
+		for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].starshape->c[k]);
+		fprintf(outputfile," %.6e",(hd[i].ps[j].starshape->b_a/hd[i].ps[j].starshape->b_a_old)-1);
+		fprintf(outputfile," %.6e",(hd[i].ps[j].starshape->c_a/hd[i].ps[j].starshape->c_a_old)-1);
+		fprintf(outputfile," %d",hd[i].ps[j].starshape->NLoopConverged);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].starshape->dmin,hd[i].ps[j].starshape->dmax);
+		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].starshape->propertymin,hd[i].ps[j].starshape->propertymax);
+		fprintf(outputfile,"\n");
 		}
-	    fclose(outputfile);
 	    }
-	/*
-	** Stars
-	*/
-	if (gi.starcontained) {
-	    sprintf(outputfilename,"%s.shape.profiles.star",gi.OutputName);
-	    outputfile = fopen(outputfilename,"w");
-	    assert(outputfile != NULL);
-	    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b_a/7 c_a/8 a_1/9 a_2/10 a_3/11 b_1/12 b_2/13 b_3/14 c_1/15 c_2/16 c_3/17 re_b_a/18 re_c_a/19 NLoopConverged/20\n");
-	    for (i = 0; i < gi.NHalo; i++) {
-		for (j = 0; j < (hd[i].NBin+1); j++) {
-		    fprintf(outputfile,"%d",hd[i].ID);
-		    fprintf(outputfile," %.6e %.6e %.6e",hd[i].ps[j].ri,hd[i].ps[j].rm,hd[i].ps[j].ro);
-		    fprintf(outputfile," %.6e %ld",hd[i].ps[j].starshape->M,hd[i].ps[j].starshape->N);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].starshape->b_a,hd[i].ps[j].starshape->c_a);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].starshape->a[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].starshape->b[k]);
-		    for (k = 0; k < 3; k++) fprintf(outputfile," %.6e",hd[i].ps[j].starshape->c[k]);
-		    fprintf(outputfile," %.6e",(hd[i].ps[j].starshape->b_a/hd[i].ps[j].starshape->b_a_old)-1);
-		    fprintf(outputfile," %.6e",(hd[i].ps[j].starshape->c_a/hd[i].ps[j].starshape->c_a_old)-1);
-		    fprintf(outputfile," %d",hd[i].ps[j].starshape->NLoopConverged);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].starshape->dmin,hd[i].ps[j].starshape->dmax);
-		    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].starshape->propertymin,hd[i].ps[j].starshape->propertymax);
-		    fprintf(outputfile,"\n");
-		    }
-		}
-	    fclose(outputfile);
-	    }
+	fclose(outputfile);
 	}
     }
 
