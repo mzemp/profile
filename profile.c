@@ -209,6 +209,7 @@ typedef struct general_info {
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
     int NLoopRead, NLoopRecentre, NLoopProcessData, NLoopShapeIterationMax, ILoopRead;
+    int OutputFrequencyShapeIteration;
     double rhobg, rhocrit;
     double rhoencbg, rhoenccrit, rhoencmaxscale;
     double Deltabg, Deltacrit;
@@ -640,6 +641,12 @@ int main(int argc, char **argv) {
             i++;
             if (i >= argc) usage();
             gi.NLoopShapeIterationMax = (int) atof(argv[i]);
+            i++;
+            }
+	else if (strcmp(argv[i],"-OutputFrequencySI") == 0) {
+            i++;
+            if (i >= argc) usage();
+            gi.OutputFrequencyShapeIteration = (int) atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-Lmaxgasanalysis") == 0) {
@@ -1480,14 +1487,18 @@ int main(int argc, char **argv) {
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
 	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. The fraction of converged bins so far is %g.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,convergencefraction);
-	    gettimeofday(&time,NULL);
-	    timestartsub = time.tv_sec;
-	    fprintf(stderr,"Writing output ... ");
-	    write_output_shape_profile(gi,hd,gi.ILoopRead+1);
-	    gettimeofday(&time,NULL);
-	    timeendsub = time.tv_sec;
-	    timediff = timeendsub-timestartsub;
-	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+	    if (convergencefraction == 1 || 
+		(gi.ILoopRead+1)%gi.OutputFrequencyShapeIteration == 0 ||
+		gi.ILoopRead+1 == gi.NLoopShapeIterationMax) {
+		gettimeofday(&time,NULL);
+		timestartsub = time.tv_sec;
+		fprintf(stderr,"Writing output ... ");
+		write_output_shape_profile(gi,hd,gi.ILoopRead+1);
+		gettimeofday(&time,NULL);
+		timeendsub = time.tv_sec;
+		timediff = timeendsub-timestartsub;
+		fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+		}
 	    }
 	else if (gi.profilingmode == 3 && gi.ILoopRead == 0) {
 
@@ -1786,6 +1797,7 @@ int main(int argc, char **argv) {
         fprintf(stderr,"NLoopShapeIterationMax  : %d\n",gi.NLoopShapeIterationMax);
         fprintf(stderr,"NLoopProcessData        : %d\n",gi.NLoopProcessData);
         fprintf(stderr,"NLoopRead               : %d\n",gi.NLoopRead);
+        fprintf(stderr,"OutputFrequencySI       : %d\n",gi.OutputFrequencyShapeIteration);
 	fprintf(stderr,"frecentrermin           : %.6e\n",gi.frecentrermin);
 	fprintf(stderr,"frecentredist           : %.6e\n",gi.frecentredist);
 	fprintf(stderr,"frhobg                  : %.6e\n",gi.frhobg);
@@ -1921,6 +1933,7 @@ void set_default_values_general_info(GI *gi) {
     gi->NLoopRecentre = 0;
     gi->NLoopShapeIterationMax = 50;
     gi->NLoopProcessData = 1;
+    gi->OutputFrequencyShapeIteration = 10;
 
     gi->ascale = 0;
     gi->rhobg = 0;
@@ -5082,8 +5095,10 @@ void write_output_shape_profile(GI gi, HALO_DATA *hd, int ILoop) {
 	    fprintf(outputfile," %.6e",(hd[i].ps[j].totshape->b_a/hd[i].ps[j].totshape->b_a_old)-1);
 	    fprintf(outputfile," %.6e",(hd[i].ps[j].totshape->c_a/hd[i].ps[j].totshape->c_a_old)-1);
 	    fprintf(outputfile," %d",hd[i].ps[j].totshape->NLoopConverged);
+/*
 	    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].totshape->dmin,hd[i].ps[j].totshape->dmax);
 	    fprintf(outputfile," %.6e %.6e",hd[i].ps[j].totshape->propertymin,hd[i].ps[j].totshape->propertymax);
+*/
 	    fprintf(outputfile,"\n");
 	    }
 	}
