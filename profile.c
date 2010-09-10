@@ -199,6 +199,7 @@ typedef struct profile_star_particle {
 typedef struct general_info {
 
     int profilingmode;
+    int dataprocessingmode;
     int centretype;
     int velocityprojection;
     int shapetensorform;
@@ -208,6 +209,10 @@ typedef struct general_info {
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
+    int SizeStorageIncrement;
+    int SizeStorageGas, Nparticleinstoragegas;
+    int SizeStorageDark, Nparticleinstoragedark;
+    int SizeStorageStar, Nparticleinstoragestar;
     int NLoopRead, NLoopRecentre, NLoopProcessData, NLoopShapeIterationMax, ILoopRead;
     int OutputFrequencyShapeIteration;
     double rhobg, rhocrit;
@@ -222,6 +227,7 @@ typedef struct general_info {
     double fcheckrbgcrit, fcheckrvcmax, fcheckrstatic, fcheckrtruncindicator;
     double fexclude, fduplicate, slopertruncindicator;
     double fincludeshapeproperty, fincludeshaperadius;
+    double fincludestorageradius;
     double Deltabgmaxscale;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     double shapeiterationtolerance;
@@ -244,12 +250,15 @@ void read_spherical_profiles(GI, HALO_DATA *);
 void put_pgp_in_bins(GI, HALO_DATA *, PROFILE_GAS_PARTICLE *);
 void put_pdp_in_bins(GI, HALO_DATA *, PROFILE_DARK_PARTICLE *);
 void put_psp_in_bins(GI, HALO_DATA *, PROFILE_STAR_PARTICLE *);
+void put_pgp_in_storage(GI *, HALO_DATA *, PROFILE_GAS_PARTICLE *, PROFILE_GAS_PARTICLE **);
+void put_pdp_in_storage(GI *, HALO_DATA *, PROFILE_DARK_PARTICLE *, PROFILE_DARK_PARTICLE **);
+void put_psp_in_storage(GI *, HALO_DATA *, PROFILE_STAR_PARTICLE *, PROFILE_STAR_PARTICLE **);
 int intersect(double, int, HALO_DATA, int *, double *, double);
 void calculate_coordinates_principal_axes(PROFILE_SHAPE_PROPERTIES *, double [3], double [3], double *);
 void calculate_recentred_halo_coordinates(GI, HALO_DATA *);
 void calculate_total_matter_distribution(GI, HALO_DATA *);
 int diagonalise_matrix(double [3][3], double *, double [3], double *, double [3], double *, double [3]);
-double diagonalise_shape_tensors(GI, HALO_DATA *);
+double diagonalise_shape_tensors(GI, HALO_DATA *, int);
 void calculate_halo_properties(GI, HALO_DATA *);
 void calculate_derived_properties(GI, HALO_DATA *);
 void calculate_overdensity_characteristics(GI, HALO_DATA *);
@@ -304,6 +313,9 @@ int main(int argc, char **argv) {
     PROFILE_GAS_PARTICLE *pgp = NULL;
     PROFILE_DARK_PARTICLE *pdp = NULL;
     PROFILE_STAR_PARTICLE *psp = NULL;
+    PROFILE_GAS_PARTICLE *pgp_storage = NULL;
+    PROFILE_DARK_PARTICLE *pdp_storage = NULL;
+    PROFILE_STAR_PARTICLE *psp_storage = NULL;
     COORDINATE_TRANSFORMATION cosmo2internal_ct;
     XDR xdrs;
     fpos_t *PosGasFile = NULL, *PosCoordinatesDataFile = NULL, *PosStarPropertiesFile = NULL;
@@ -361,6 +373,12 @@ int main(int argc, char **argv) {
             i++;
             if (i >= argc) usage();
 	    gi.profilingmode = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-dataprocessingmode") == 0) {
+            i++;
+            if (i >= argc) usage();
+	    gi.dataprocessingmode = atoi(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-shapetensorform") == 0) {
@@ -812,6 +830,7 @@ int main(int argc, char **argv) {
     assert(gi.NCellData > 0);
     assert(gi.NCellHalo > 0);
     assert(gi.profilingmode < 3);
+    assert(gi.dataprocessingmode < 2);
 
     /*
     ** Read header files
@@ -983,10 +1002,15 @@ int main(int argc, char **argv) {
     ** Harvest data
     */
 
-    if (gi.profilingmode >= 0 && gi.profilingmode <= 3 && gi.NLoopRecentre > 0) {
+    if (gi.profilingmode >= 1 && gi.profilingmode <= 3 && gi.NLoopRecentre > 0) {
 	gi.NLoopRecentre = 0;
 	fprintf(stderr,"No recentering in any shape profiling mode allowed. Reset NLoopRecentre to 0.\n\n");
 	}
+    if (gi.profilingmode == 0 && gi.dataprocessingmode == 1) {
+	gi.dataprocessingmode = 0;
+	fprintf(stderr,"No normal profiling possible with storage data processing mode. Reset data processing mode to 0.\n\n");
+	}
+
     assert(gi.NLoopProcessData == 1);
     gi.NLoopRead = gi.NLoopRecentre + gi.NLoopProcessData;
 
@@ -1048,7 +1072,8 @@ int main(int argc, char **argv) {
 		    ** Block is full or we reached end of gas particles
 		    */
 		    gi.Nparticleinblockgas = Icurrentblockgas;
-		    if (gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,pgp);
+		    if (gi.dataprocessingmode == 0 && gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,pgp);
+		    else if (gi.dataprocessingmode == 1) put_pgp_in_storage(&gi,hd,pgp,&pgp_storage);
 		    Icurrentblockgas = 0;
 		    }
 		}
@@ -1097,7 +1122,8 @@ int main(int argc, char **argv) {
 		    ** Block is full or we reached end of dark matter particles
 		    */
 		    gi.Nparticleinblockdark = Icurrentblockdark;
-		    put_pdp_in_bins(gi,hd,pdp);
+		    if (gi.dataprocessingmode == 0) put_pdp_in_bins(gi,hd,pdp);
+		    else if (gi.dataprocessingmode == 1) put_pdp_in_storage(&gi,hd,pdp,&pdp_storage);
 		    Icurrentblockdark = 0;
 		    }
 		}
@@ -1146,7 +1172,8 @@ int main(int argc, char **argv) {
 		    ** Block is full or we reached end of star matter particles
 		    */
 		    gi.Nparticleinblockstar = Icurrentblockstar;
-		    put_psp_in_bins(gi,hd,psp);
+		    if (gi.dataprocessingmode == 0) put_psp_in_bins(gi,hd,psp);
+		    else if (gi.dataprocessingmode == 1) put_psp_in_storage(&gi,hd,psp,&psp_storage);
 		    Icurrentblockstar = 0;
 		    }
 		}
@@ -1284,7 +1311,8 @@ int main(int argc, char **argv) {
 				** Block is full or we reached end of gas particles
 				*/
 				gi.Nparticleinblockgas = Icurrentblockgas;
-				if (gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,pgp);
+				if (gi.dataprocessingmode == 0 && gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,pgp);
+				else if (gi.dataprocessingmode == 1) put_pgp_in_storage(&gi,hd,pgp,&pgp_storage);
 				Icurrentblockgas = 0;
 				}
 			    }
@@ -1401,7 +1429,8 @@ int main(int argc, char **argv) {
 				** Block is full or we reached end of dark matter particles
 				*/
 				gi.Nparticleinblockdark = Icurrentblockdark;
-				put_pdp_in_bins(gi,hd,pdp);
+				if (gi.dataprocessingmode == 0) put_pdp_in_bins(gi,hd,pdp);
+				else if (gi.dataprocessingmode == 1) put_pdp_in_storage(&gi,hd,pdp,&pdp_storage);
 				Icurrentblockdark = 0;
 				}
 			    }
@@ -1436,7 +1465,8 @@ int main(int argc, char **argv) {
 				** Block is full or we reached end of star particles
 				*/
 				gi.Nparticleinblockstar = Icurrentblockstar;
-				put_psp_in_bins(gi,hd,psp);
+				if (gi.dataprocessingmode == 0) put_psp_in_bins(gi,hd,psp);
+				else if (gi.dataprocessingmode == 1) put_psp_in_storage(&gi,hd,psp,&psp_storage);
 				Icurrentblockstar = 0;
 				}
 			    }
@@ -1458,152 +1488,157 @@ int main(int argc, char **argv) {
 	/*
 	** Do loop specific stuff
 	*/
-	if (gi.profilingmode == 0 && gi.ILoopRead < gi.NLoopRecentre) {
-	    /*
-	    ** Calculate recentred halo coordinates
-	    */
-	    calculate_recentred_halo_coordinates(gi,hd);
-	    }
-	else if (gi.profilingmode == 0 && gi.ILoopRead >= gi.NLoopRecentre) {
-	    /*
-	    ** Calculate total matter distribution
-	    */
-	    calculate_total_matter_distribution(gi,hd);
-	    }
-	else if (gi.profilingmode >= 1 && gi.profilingmode <= 2) {
-	    /*
-	    ** Diagonalise enclosed shape tensor
-	    */
-	    gettimeofday(&time,NULL);
-	    timestartsub = time.tv_sec;
-	    fprintf(stderr,"Diagonalising shape tensors ... ");
-	    convergencefraction = diagonalise_shape_tensors(gi,hd);
-	    if (convergencefraction < 1 && gi.ILoopRead < gi.NLoopShapeIterationMax-1) {
-		reset_halo_profile_shape(gi,hd);
-		gi.NLoopRead++;
-		gi.NLoopProcessData++;
+	if (gi.dataprocessingmode == 0) {
+	    if (gi.profilingmode == 0 && gi.ILoopRead < gi.NLoopRecentre) {
+		/*
+		** Calculate recentred halo coordinates
+		*/
+		calculate_recentred_halo_coordinates(gi,hd);
 		}
-	    gettimeofday(&time,NULL);
-	    timeendsub = time.tv_sec;
-	    timediff = timeendsub-timestartsub;
-	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. The fraction of converged bins so far is %g.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,convergencefraction);
-	    if (convergencefraction == 1 || 
-		(gi.ILoopRead+1)%gi.OutputFrequencyShapeIteration == 0 ||
-		gi.ILoopRead+1 == gi.NLoopShapeIterationMax) {
+	    else if (gi.profilingmode == 0 && gi.ILoopRead >= gi.NLoopRecentre) {
+		/*
+		** Calculate total matter distribution
+		*/
+		calculate_total_matter_distribution(gi,hd);
+		}
+	    else if (gi.profilingmode >= 1 && gi.profilingmode <= 2) {
+		/*
+		** Diagonalise enclosed shape tensor
+		*/
 		gettimeofday(&time,NULL);
 		timestartsub = time.tv_sec;
-		fprintf(stderr,"Writing output ... ");
-		write_output_shape_profile(gi,hd,gi.ILoopRead+1);
+		fprintf(stderr,"Diagonalising shape tensors ... ");
+		convergencefraction = diagonalise_shape_tensors(gi,hd,gi.ILoopRead+1);
+		if (convergencefraction < 1 && gi.ILoopRead < gi.NLoopShapeIterationMax-1) {
+		    reset_halo_profile_shape(gi,hd);
+		    gi.NLoopRead++;
+		    gi.NLoopProcessData++;
+		    }
 		gettimeofday(&time,NULL);
 		timeendsub = time.tv_sec;
 		timediff = timeendsub-timestartsub;
-		fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+		fprintf(stderr,"Done. It took %d s = %d h %d m %d s. The fraction of converged bins so far is %g.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,convergencefraction);
+		if (convergencefraction == 1 || 
+		    (gi.ILoopRead+1)%gi.OutputFrequencyShapeIteration == 0 ||
+		    gi.ILoopRead+1 == gi.NLoopShapeIterationMax) {
+		    gettimeofday(&time,NULL);
+		    timestartsub = time.tv_sec;
+		    fprintf(stderr,"Writing output ... ");
+		    write_output_shape_profile(gi,hd,gi.ILoopRead+1);
+		    gettimeofday(&time,NULL);
+		    timeendsub = time.tv_sec;
+		    timediff = timeendsub-timestartsub;
+		    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+		    }
 		}
-	    }
-	else if (gi.profilingmode == 3 && gi.ILoopRead == 0) {
+	    else if (gi.profilingmode == 3 && gi.ILoopRead == 0) {
 
-	    double fproperty = gi.fincludeshapeproperty;
+		double fproperty = gi.fincludeshapeproperty;
 
-	    /*
-	    ** This is still under construction: the shape values are pretty sensitive to the selected set.
-	    ** Probably worth trying median in stead of mean => how to calculate median efficiently on the fly
-	    ** without storing data & sorting?
-	    ** Maybe try to loop over density iteration as well
-	    */
+		/*
+		** This is still under construction: the shape values are pretty sensitive to the selected set.
+		** Probably worth trying median in stead of mean => how to calculate median efficiently on the fly
+		** without storing data & sorting?
+		** Maybe try to loop over density iteration as well
+		*/
 
-	    for (i = 0; i < gi.NHalo; i++) {
-		for (j = 0; j < hd[i].NBin+1; j++) {
-		    /*
-		    ** Total matter
-		    */
-		    if (hd[i].ps[j].totshape->N > 0) hd[i].ps[j].totshape->propertymean /= hd[i].ps[j].totshape->N;
-		    hd[i].ps[j].totshape->propertymin = hd[i].ps[j].totshape->propertymean/fproperty;
-		    hd[i].ps[j].totshape->propertymax = hd[i].ps[j].totshape->propertymean*fproperty;
+		for (i = 0; i < gi.NHalo; i++) {
+		    for (j = 0; j < hd[i].NBin+1; j++) {
+			/*
+			** Total matter
+			*/
+			if (hd[i].ps[j].totshape->N > 0) hd[i].ps[j].totshape->propertymean /= hd[i].ps[j].totshape->N;
+			hd[i].ps[j].totshape->propertymin = hd[i].ps[j].totshape->propertymean/fproperty;
+			hd[i].ps[j].totshape->propertymax = hd[i].ps[j].totshape->propertymean*fproperty;
 /*
-		    fprintf(stderr,"i %ld j %ld N %ld propertymin %.6e propertymean %.6e propertymax %.6e\n",i,j,hd[i].ps[j].totshape->N,
-			    hd[i].ps[j].totshape->propertymin,hd[i].ps[j].totshape->propertymax,hd[i].ps[j].totshape->propertymean);
+  fprintf(stderr,"i %ld j %ld N %ld propertymin %.6e propertymean %.6e propertymax %.6e\n",i,j,hd[i].ps[j].totshape->N,
+  hd[i].ps[j].totshape->propertymin,hd[i].ps[j].totshape->propertymax,hd[i].ps[j].totshape->propertymean);
 */
-		    hd[i].ps[j].totshape->N = 0;
-		    /*
-		    ** Gas
-		    */
+			hd[i].ps[j].totshape->N = 0;
+			/*
+			** Gas
+			*/
+			if (gi.gascontained) {
+			    if (hd[i].ps[j].gasshape->N > 0) hd[i].ps[j].gasshape->propertymean /= hd[i].ps[j].gasshape->N;
+			    hd[i].ps[j].gasshape->propertymin = hd[i].ps[j].gasshape->propertymean/fproperty;
+			    hd[i].ps[j].gasshape->propertymax = hd[i].ps[j].gasshape->propertymean*fproperty;
+/*
+  fprintf(stderr,"i %ld j %ld N %ld propertymin %.6e propertymean %.6e propertymax %.6e\n",i,j,hd[i].ps[j].gasshape->N,
+  hd[i].ps[j].gasshape->propertymin,hd[i].ps[j].gasshape->propertymax,hd[i].ps[j].gasshape->propertymean);
+*/
+			    hd[i].ps[j].gasshape->N = 0;
+			    }
+			/*
+			** Dark matter
+			*/
+			if (gi.darkcontained) {
+			    if (hd[i].ps[j].darkshape->N > 0) hd[i].ps[j].darkshape->propertymean /= hd[i].ps[j].darkshape->N;
+			    hd[i].ps[j].darkshape->propertymin = hd[i].ps[j].darkshape->propertymean/fproperty;
+			    hd[i].ps[j].darkshape->propertymax = hd[i].ps[j].darkshape->propertymean*fproperty;
+/*
+  fprintf(stderr,"i %ld j %ld N %ld propertymin %.6e propertymean %.6e propertymax %.6e\n",i,j,hd[i].ps[j].darkshape->N,
+  hd[i].ps[j].darkshape->propertymin,hd[i].ps[j].darkshape->propertymax,hd[i].ps[j].darkshape->propertymean);
+*/
+			    hd[i].ps[j].darkshape->N = 0;
+			    }
+			/*
+			** Stars
+			*/
+			if (gi.starcontained) {
+			    if (hd[i].ps[j].starshape->N > 0) hd[i].ps[j].starshape->propertymean /= hd[i].ps[j].starshape->N;
+			    hd[i].ps[j].starshape->propertymin = hd[i].ps[j].starshape->propertymean/fproperty;
+			    hd[i].ps[j].starshape->propertymax = hd[i].ps[j].starshape->propertymean*fproperty;
+/*
+  fprintf(stderr,"i %ld j %ld N %ld propertymin %.6e propertymean %.6e propertymax %.6e\n",i,j,hd[i].ps[j].starshape->N,
+  hd[i].ps[j].starshape->propertymin,hd[i].ps[j].starshape->propertymean,hd[i].ps[j].starshape->propertymax);
+*/
+			    hd[i].ps[j].starshape->N = 0;
+			    }
+			}
+		    }
+
+		gi.NLoopRead++;
+		gi.NLoopProcessData++;
+
+		}
+	    else if (gi.profilingmode == 3 && gi.ILoopRead == 1) {
+		/*
+		** Close density files
+		*/
+		if (0) {
+		    xdr_destroy(&TotDensityXDR);
+		    fclose(TotDensityFile);
 		    if (gi.gascontained) {
-			if (hd[i].ps[j].gasshape->N > 0) hd[i].ps[j].gasshape->propertymean /= hd[i].ps[j].gasshape->N;
-			hd[i].ps[j].gasshape->propertymin = hd[i].ps[j].gasshape->propertymean/fproperty;
-			hd[i].ps[j].gasshape->propertymax = hd[i].ps[j].gasshape->propertymean*fproperty;
-/*
-			fprintf(stderr,"i %ld j %ld N %ld propertymin %.6e propertymean %.6e propertymax %.6e\n",i,j,hd[i].ps[j].gasshape->N,
-				hd[i].ps[j].gasshape->propertymin,hd[i].ps[j].gasshape->propertymax,hd[i].ps[j].gasshape->propertymean);
-*/
-			hd[i].ps[j].gasshape->N = 0;
+			xdr_destroy(&GasDensityXDR);
+			fclose(GasDensityFile);
 			}
-		    /*
-		    ** Dark matter
-		    */
 		    if (gi.darkcontained) {
-			if (hd[i].ps[j].darkshape->N > 0) hd[i].ps[j].darkshape->propertymean /= hd[i].ps[j].darkshape->N;
-			hd[i].ps[j].darkshape->propertymin = hd[i].ps[j].darkshape->propertymean/fproperty;
-			hd[i].ps[j].darkshape->propertymax = hd[i].ps[j].darkshape->propertymean*fproperty;
-/*
-			fprintf(stderr,"i %ld j %ld N %ld propertymin %.6e propertymean %.6e propertymax %.6e\n",i,j,hd[i].ps[j].darkshape->N,
-				hd[i].ps[j].darkshape->propertymin,hd[i].ps[j].darkshape->propertymax,hd[i].ps[j].darkshape->propertymean);
-*/
-			hd[i].ps[j].darkshape->N = 0;
+			xdr_destroy(&DarkDensityXDR);
+			fclose(DarkDensityFile);
 			}
-		    /*
-		    ** Stars
-		    */
 		    if (gi.starcontained) {
-			if (hd[i].ps[j].starshape->N > 0) hd[i].ps[j].starshape->propertymean /= hd[i].ps[j].starshape->N;
-			hd[i].ps[j].starshape->propertymin = hd[i].ps[j].starshape->propertymean/fproperty;
-			hd[i].ps[j].starshape->propertymax = hd[i].ps[j].starshape->propertymean*fproperty;
-/*
-			fprintf(stderr,"i %ld j %ld N %ld propertymin %.6e propertymean %.6e propertymax %.6e\n",i,j,hd[i].ps[j].starshape->N,
-				hd[i].ps[j].starshape->propertymin,hd[i].ps[j].starshape->propertymean,hd[i].ps[j].starshape->propertymax);
-*/
-			hd[i].ps[j].starshape->N = 0;
+			xdr_destroy(&StarDensityXDR);
+			fclose(StarDensityFile);
 			}
 		    }
-		}
-
-	    gi.NLoopRead++;
-	    gi.NLoopProcessData++;
-
-	    }
-	else if (gi.profilingmode == 3 && gi.ILoopRead == 1) {
-	    /*
-	    ** Close density files
-	    */
-	    if (0) {
-		xdr_destroy(&TotDensityXDR);
-		fclose(TotDensityFile);
-		if (gi.gascontained) {
-		    xdr_destroy(&GasDensityXDR);
-		    fclose(GasDensityFile);
-		    }
-		if (gi.darkcontained) {
-		    xdr_destroy(&DarkDensityXDR);
-		    fclose(DarkDensityFile);
-		    }
-		if (gi.starcontained) {
-		    xdr_destroy(&StarDensityXDR);
-		    fclose(StarDensityFile);
-		    }
-		}
-	    /*
-	    ** Diagonalise local shape tensor
-	    */
-	    diagonalise_shape_tensors(gi,hd);
+		/*
+		** Diagonalise local shape tensor
+		*/
+		diagonalise_shape_tensors(gi,hd,gi.ILoopRead+1);
 /*
-	    gi.NLoopRead++;
-	    gi.NLoopProcessData++;
+  gi.NLoopRead++;
+  gi.NLoopProcessData++;
 */
-	    }
+		}
 /*
 	else if (gi.profilingmode == 3 && gi.ILoopRead == 2) {
 	    diagonalise_shape_tensors(gi,hd);
 	    }
 */
+	    }
+	else if (gi.dataprocessingmode == 1) {
+	    fprintf(stderr,"Put %d gas, %d dark matter and %d star particles into storage.\n",gi.Nparticleinstoragegas,gi.Nparticleinstoragedark,gi.Nparticleinstoragestar);
+	    }
 	gettimeofday(&time,NULL);
 	timeendloop = time.tv_sec;
 	timediff = timeendloop-timestartloop;
@@ -1639,6 +1674,76 @@ int main(int argc, char **argv) {
 	timediff = timeendsub-timestartsub;
 	fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
 	}
+
+    /*
+    ** Diagonalise enclosed shape tensor
+    */
+
+    if (gi.dataprocessingmode == 1 && gi.profilingmode >= 1 && gi.profilingmode <= 2) {
+	for (i = 0; i < gi.NLoopShapeIterationMax; i++) {
+	    /*
+	    ** Put particles in bins
+	    */
+	    gettimeofday(&time,NULL);
+	    timestartloop = time.tv_sec;
+	    fprintf(stderr,"Doing iteration %ld ...\n",i+1);
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
+	    fprintf(stderr,"Processing gas ... ");
+	    put_pgp_in_bins(gi,hd,pgp_storage);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d gas particles.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,gi.Nparticleinstoragegas);
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
+	    fprintf(stderr,"Processing dark matter ... ");
+	    put_pdp_in_bins(gi,hd,pdp_storage);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d dark matter particles.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,gi.Nparticleinstoragedark);
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
+	    fprintf(stderr,"Processing stars ... ");
+	    put_psp_in_bins(gi,hd,psp_storage);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. Processed in total %d star particles.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,gi.Nparticleinstoragestar);
+	    /*
+	    ** Diagonalise enclosed shape tensor
+	    */
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
+	    fprintf(stderr,"Diagonalising shape tensors ... ");
+	    convergencefraction = diagonalise_shape_tensors(gi,hd,i+1);
+	    if (convergencefraction < 1 && i < gi.NLoopShapeIterationMax-1) reset_halo_profile_shape(gi,hd);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s. The fraction of converged bins so far is %g.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60,convergencefraction);
+	    if (convergencefraction == 1 || 
+		(i+1)%gi.OutputFrequencyShapeIteration == 0 ||
+		i+1 == gi.NLoopShapeIterationMax) {
+		gettimeofday(&time,NULL);
+		timestartsub = time.tv_sec;
+		fprintf(stderr,"Writing output ... ");
+		write_output_shape_profile(gi,hd,i+1);
+		gettimeofday(&time,NULL);
+		timeendsub = time.tv_sec;
+		timediff = timeendsub-timestartsub;
+		fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+		}
+	    gettimeofday(&time,NULL);
+	    timeendloop = time.tv_sec;
+	    timediff = timeendloop-timestartloop;
+	    fprintf(stderr,"Done with iteration %ld. It took %d s = %d h %d m %d s.\n\n",i+1,timediff,timediff/3600,(timediff/60)%60,timediff%60);
+
+
+	    }
+	}
+
     /*
     ** Write output
     */
@@ -1809,6 +1914,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fduplicate              : %.6e\n",gi.fduplicate);
 	fprintf(stderr,"fincludeshapeproperty   : %.6e\n",gi.fincludeshapeproperty);
 	fprintf(stderr,"fincludeshaperadius     : %.6e\n",gi.fincludeshaperadius);
+	fprintf(stderr,"fincludestorageradius   : %.6e\n",gi.fincludestorageradius);
 	fprintf(stderr,"slopertruncindicator    : %.6e\n",gi.slopertruncindicator);
 	fprintf(stderr,"Delta_bg_maxscale       : %.6e\n",gi.Deltabgmaxscale);
 	fprintf(stderr,"vraddispmin             : %.6e VU (internal velocity) = %.6e km s^{-1} (peculiar)\n",gi.vraddispmin,gi.vraddispmin/(cosmo2internal_ct.V_usf*cosmo2internal_ct.V_cssf*ConversionFactors.km_per_s_2_kpc_per_Gyr));
@@ -1867,7 +1973,7 @@ void usage(void) {
     fprintf(stderr,"-NCellData <value>                   : number of cells per dimension in linked cell method for data loops (default: 20)\n");
     fprintf(stderr,"-NCellHalo <value>                   : number of cells per dimension in linked cell method for halo loops (default: 10)\n");
     fprintf(stderr,"-NLoopRecentre <value>               : number of loops for recentering (default: 0)\n");
-    fprintf(stderr,"-NLoopShapeIterationMax <value>      : number of maximum loops for shape iteration (default: 10)\n");
+    fprintf(stderr,"-NLoopShapeIterationMax <value>      : number of maximum loops for shape iteration (default: 50)\n");
     fprintf(stderr,"-GRAVITY <value>                     : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
     fprintf(stderr,"-HYDRO <value>                       : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
     fprintf(stderr,"-ADVECT_SPECIES <value>              : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
@@ -1907,6 +2013,7 @@ void set_default_values_general_info(GI *gi) {
     gi->cosmous.rhocrit0 = 0;
 
     gi->profilingmode = 0;
+    gi->dataprocessingmode = 0;
     gi->shapetensorform = 0;
     gi->centretype = 0;
     gi->velocityprojection = 0;
@@ -1918,15 +2025,23 @@ void set_default_values_general_info(GI *gi) {
     gi->NBinPerDex = 0;
     gi->NHalo = 0;
 
-    gi->Nparticleperblockgas = 10000000;
+    gi->Nparticleperblockgas = 1e7;
     gi->Nparticleinblockgas = 0;
     gi->Nblockgas = 0;
-    gi->Nparticleperblockdark = 10000000;
+    gi->Nparticleperblockdark = 1e7;
     gi->Nparticleinblockdark = 0;
     gi->Nblockdark = 0;
-    gi->Nparticleperblockstar = 10000000;
+    gi->Nparticleperblockstar = 1e7;
     gi->Nparticleinblockstar = 0;
     gi->Nblockstar = 0;
+
+    gi->SizeStorageIncrement = 1e7;
+    gi->SizeStorageGas = 0;
+    gi->SizeStorageDark = 0;
+    gi->SizeStorageStar = 0;
+    gi->Nparticleinstoragegas = 0;
+    gi->Nparticleinstoragedark = 0;
+    gi->Nparticleinstoragestar = 0;
 
     gi->NCellData = 20;
     gi->NCellHalo = 10;
@@ -1955,6 +2070,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fduplicate = 0;
     gi->fincludeshapeproperty = 1.1;
     gi->fincludeshaperadius = 2;
+    gi->fincludestorageradius = 1;
     gi->slopertruncindicator = -0.5;
     gi->Deltabgmaxscale = 50;
     gi->vraddispmin = 2;
@@ -2583,12 +2699,15 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 
     int i, j, k, l;
     int index[3];
+    int Nparticlegas = 0;
     int ***HeadIndex, *NextIndex;
     double r[3], rell[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
     double d, size, dell;
     double shift[3];
 
+    if (gi.dataprocessingmode == 0) Nparticlegas = gi.Nparticleinblockgas;
+    else if (gi.dataprocessingmode == 1) Nparticlegas = gi.Nparticleinstoragegas;
     /*
     ** Initialise linked list stuff
     */
@@ -2602,7 +2721,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
-    NextIndex = malloc(gi.Nparticleinblockgas*sizeof(int));
+    NextIndex = malloc(Nparticlegas*sizeof(int));
     assert(NextIndex != NULL);
     for (i = 0; i < gi.NCellData; i++) {
 	for (j = 0; j < gi.NCellData; j++) {
@@ -2611,12 +2730,12 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 		}
 	    }
 	}
-    for (i = 0; i < gi.Nparticleinblockgas; i++) NextIndex[i] = -1;
+    for (i = 0; i < Nparticlegas; i++) NextIndex[i] = -1;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
     */
-    for (i = 0; i < gi.Nparticleinblockgas; i++) {
+    for (i = 0; i < Nparticlegas; i++) {
 	for (j = 0; j < 3; j++) {
 	    index[j] = (int)(gi.NCellData*(pgp[i].r[j]+shift[j])/gi.us.LBox);
 	    if (index[j] == gi.NCellData) index[j] = gi.NCellData-1; /* Case where particles are exactly on the boundary */
@@ -2782,12 +2901,15 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 
     int i, j, k, l;
     int index[3];
+    int Nparticledark = 0;
     int ***HeadIndex, *NextIndex;
     double r[3], rell[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
     double d, size, dell;
     double shift[3];
 
+    if (gi.dataprocessingmode == 0) Nparticledark = gi.Nparticleinblockdark;
+    else if (gi.dataprocessingmode == 1) Nparticledark = gi.Nparticleinstoragedark;
     /*
     ** Initialise linked list stuff
     */
@@ -2801,7 +2923,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
-    NextIndex = malloc(gi.Nparticleinblockdark*sizeof(int));
+    NextIndex = malloc(Nparticledark*sizeof(int));
     assert(NextIndex != NULL);
     for (i = 0; i < gi.NCellData; i++) {
 	for (j = 0; j < gi.NCellData; j++) {
@@ -2810,12 +2932,12 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 		}
 	    }
 	}
-    for (i = 0; i < gi.Nparticleinblockdark; i++) NextIndex[i] = -1;
+    for (i = 0; i < Nparticledark; i++) NextIndex[i] = -1;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
     */
-    for (i = 0; i < gi.Nparticleinblockdark; i++) {
+    for (i = 0; i < Nparticledark; i++) {
 	for (j = 0; j < 3; j++) {
 	    index[j] = (int)(gi.NCellData*(pdp[i].r[j]+shift[j])/gi.us.LBox);
 	    if (index[j] == gi.NCellData) index[j] = gi.NCellData-1; /* Case where particles are exactly on the boundary */
@@ -3000,12 +3122,15 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 
     int i, j, k, l;
     int index[3];
+    int Nparticlestar = 0;
     int ***HeadIndex, *NextIndex;
     double r[3], rell[3], v[3], vproj[3];
     double erad[3], ephi[3], etheta[3];
     double d, size, dell;
     double shift[3];
 
+    if (gi.dataprocessingmode == 0) Nparticlestar = gi.Nparticleinblockstar;
+    else if (gi.dataprocessingmode == 1) Nparticlestar = gi.Nparticleinstoragestar;
     /*
     ** Initialise linked list stuff
     */
@@ -3019,7 +3144,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 	    assert(HeadIndex[i][j] != NULL);
 	    }
 	}
-    NextIndex = malloc(gi.Nparticleinblockstar*sizeof(int));
+    NextIndex = malloc(Nparticlestar*sizeof(int));
     assert(NextIndex != NULL);
     for (i = 0; i < gi.NCellData; i++) {
 	for (j = 0; j < gi.NCellData; j++) {
@@ -3028,12 +3153,12 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 		}
 	    }
 	}
-    for (i = 0; i < gi.Nparticleinblockstar; i++) NextIndex[i] = -1;
+    for (i = 0; i < Nparticlestar; i++) NextIndex[i] = -1;
     for (i = 0; i < 3; i++) shift[i] = 0-gi.bc[i];
     /*
     ** Generate linked list
     */
-    for (i = 0; i < gi.Nparticleinblockstar; i++) {
+    for (i = 0; i < Nparticlestar; i++) {
 	for (j = 0; j < 3; j++) {
 	    index[j] = (int)(gi.NCellData*(psp[i].r[j]+shift[j])/gi.us.LBox);
 	    if (index[j] == gi.NCellData) index[j] = gi.NCellData-1; /* Case where particles are exactly on the boundary */
@@ -3215,6 +3340,291 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 	}
     free(HeadIndex);
     free(NextIndex);
+    }
+
+void put_pgp_in_storage(GI *gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp, PROFILE_GAS_PARTICLE **pgp_storage_in) {
+
+    int i, j, k;
+    int index[3];
+    int Nparticlegas;
+    int ***HeadIndex, *NextIndex, *AlreadyStored;
+    double r[3], d, size, shift[3];
+    PROFILE_GAS_PARTICLE *pgp_storage;
+
+    Nparticlegas = gi->Nparticleinblockgas;
+    pgp_storage = *pgp_storage_in;
+    /*
+    ** Initialise linked list stuff
+    */
+    HeadIndex = malloc(gi->NCellData*sizeof(int **));
+    assert(HeadIndex != NULL);
+    for (i = 0; i < gi->NCellData; i ++) {
+	HeadIndex[i] = malloc(gi->NCellData*sizeof(int *));
+	assert(HeadIndex[i] != NULL);
+	for (j = 0; j < gi->NCellData; j++) {
+	    HeadIndex[i][j] = malloc(gi->NCellData*sizeof(int));
+	    assert(HeadIndex[i][j] != NULL);
+	    }
+	}
+    NextIndex = malloc(Nparticlegas*sizeof(int));
+    assert(NextIndex != NULL);
+    for (i = 0; i < gi->NCellData; i++) {
+	for (j = 0; j < gi->NCellData; j++) {
+	    for (k = 0; k < gi->NCellData; k++) {
+		HeadIndex[i][j][k] = -1;
+		}
+	    }
+	}
+    for (i = 0; i < Nparticlegas; i++) NextIndex[i] = -1;
+    for (i = 0; i < 3; i++) shift[i] = 0-gi->bc[i];
+    /*
+    ** Array for quick and dirty way to keep track which particle is already stored
+    */
+    AlreadyStored = malloc(Nparticlegas*sizeof(int));
+    assert(AlreadyStored != NULL);
+    for (i = 0; i < Nparticlegas; i++) AlreadyStored[i] = 0;
+    /*
+    ** Generate linked list
+    */
+    for (i = 0; i < Nparticlegas; i++) {
+	for (j = 0; j < 3; j++) {
+	    index[j] = (int)(gi->NCellData*(pgp[i].r[j]+shift[j])/gi->us.LBox);
+	    if (index[j] == gi->NCellData) index[j] = gi->NCellData-1; /* Case where particles are exactly on the boundary */
+	    assert(index[j] >= 0 && index[j] < gi->NCellData);
+	    }
+	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
+	HeadIndex[index[0]][index[1]][index[2]] = i;
+	}
+    /*
+    ** Go through linked list
+    */
+    for (index[0] = 0; index[0] < gi->NCellData; index[0]++) {
+	for (index[1] = 0; index[1] < gi->NCellData; index[1]++) {
+	    for (index[2] = 0; index[2] < gi->NCellData; index[2]++) {
+		for (j = 0; j < gi->NHalo; j++) {
+		    /*
+		    ** Process data
+		    */
+		    size = gi->fincludestorageradius*hd[j].ps[hd[j].NBin].ro;
+		    if (intersect(gi->us.LBox,gi->NCellData,hd[j],index,shift,size)) {
+			i = HeadIndex[index[0]][index[1]][index[2]];
+			while (i >= 0) {
+			    for (k = 0; k < 3; k++) {
+				r[k] = correct_position(hd[j].rcentre[k],pgp[i].r[k],gi->us.LBox);
+				r[k] = r[k]-hd[j].rcentre[k];
+				}
+			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+			    if (d <= size && AlreadyStored[i] == 0) {
+				/*
+				** Add particle to storage
+				*/
+				gi->Nparticleinstoragegas++;
+				if (gi->SizeStorageGas < gi->Nparticleinstoragegas) {
+				    gi->SizeStorageGas += gi->SizeStorageIncrement; 
+				    pgp_storage = realloc(pgp_storage,gi->SizeStorageGas*sizeof(PROFILE_GAS_PARTICLE));
+				    assert(pgp_storage != NULL);
+				    }
+				pgp_storage[gi->Nparticleinstoragegas-1] = pgp[i];
+				AlreadyStored[i] = 1;
+				}
+			    i = NextIndex[i];
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    *pgp_storage_in = pgp_storage;
+    }
+
+void put_pdp_in_storage(GI *gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, PROFILE_DARK_PARTICLE **pdp_storage_in) {
+
+    int i, j, k;
+    int index[3];
+    int Nparticledark;
+    int ***HeadIndex, *NextIndex, *AlreadyStored;
+    double r[3], d, size, shift[3];
+    PROFILE_DARK_PARTICLE *pdp_storage;
+
+    Nparticledark = gi->Nparticleinblockdark;
+    pdp_storage = *pdp_storage_in;
+    /*
+    ** Initialise linked list stuff
+    */
+    HeadIndex = malloc(gi->NCellData*sizeof(int **));
+    assert(HeadIndex != NULL);
+    for (i = 0; i < gi->NCellData; i ++) {
+	HeadIndex[i] = malloc(gi->NCellData*sizeof(int *));
+	assert(HeadIndex[i] != NULL);
+	for (j = 0; j < gi->NCellData; j++) {
+	    HeadIndex[i][j] = malloc(gi->NCellData*sizeof(int));
+	    assert(HeadIndex[i][j] != NULL);
+	    }
+	}
+    NextIndex = malloc(Nparticledark*sizeof(int));
+    assert(NextIndex != NULL);
+    for (i = 0; i < gi->NCellData; i++) {
+	for (j = 0; j < gi->NCellData; j++) {
+	    for (k = 0; k < gi->NCellData; k++) {
+		HeadIndex[i][j][k] = -1;
+		}
+	    }
+	}
+    for (i = 0; i < Nparticledark; i++) NextIndex[i] = -1;
+    for (i = 0; i < 3; i++) shift[i] = 0-gi->bc[i];
+    /*
+    ** Generate linked list
+    */
+    for (i = 0; i < Nparticledark; i++) {
+	for (j = 0; j < 3; j++) {
+	    index[j] = (int)(gi->NCellData*(pdp[i].r[j]+shift[j])/gi->us.LBox);
+	    if (index[j] == gi->NCellData) index[j] = gi->NCellData-1; /* Case where particles are exactly on the boundary */
+	    assert(index[j] >= 0 && index[j] < gi->NCellData);
+	    }
+	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
+	HeadIndex[index[0]][index[1]][index[2]] = i;
+	}
+    /*
+    ** Array for quick and dirty way to keep track which particle is already stored
+    */
+    AlreadyStored = malloc(Nparticledark*sizeof(int));
+    assert(AlreadyStored != NULL);
+    for (i = 0; i < Nparticledark; i++) AlreadyStored[i] = 0;
+    /*
+    ** Go through linked list
+    */
+    for (index[0] = 0; index[0] < gi->NCellData; index[0]++) {
+	for (index[1] = 0; index[1] < gi->NCellData; index[1]++) {
+	    for (index[2] = 0; index[2] < gi->NCellData; index[2]++) {
+		for (j = 0; j < gi->NHalo; j++) {
+		    /*
+		    ** Process data
+		    */
+		    size = gi->fincludestorageradius*hd[j].ps[hd[j].NBin].ro;
+		    if (intersect(gi->us.LBox,gi->NCellData,hd[j],index,shift,size)) {
+			i = HeadIndex[index[0]][index[1]][index[2]];
+			while (i >= 0) {
+			    for (k = 0; k < 3; k++) {
+				r[k] = correct_position(hd[j].rcentre[k],pdp[i].r[k],gi->us.LBox);
+				r[k] = r[k]-hd[j].rcentre[k];
+				}
+			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+			    if (d <= size && AlreadyStored[i] == 0) {
+				/*
+				** Add particle to storage
+				*/
+				gi->Nparticleinstoragedark++;
+				if (gi->SizeStorageDark < gi->Nparticleinstoragedark) {
+				    gi->SizeStorageDark += gi->SizeStorageIncrement; 
+				    pdp_storage = realloc(pdp_storage,gi->SizeStorageDark*sizeof(PROFILE_DARK_PARTICLE));
+				    assert(pdp_storage != NULL);
+				    }
+				pdp_storage[gi->Nparticleinstoragedark-1] = pdp[i];
+				AlreadyStored[i] = 1;
+				}
+			    i = NextIndex[i];
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    *pdp_storage_in = pdp_storage;
+    }
+
+void put_psp_in_storage(GI *gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, PROFILE_STAR_PARTICLE **psp_storage_in) {
+
+    int i, j, k;
+    int index[3];
+    int Nparticlestar;
+    int ***HeadIndex, *NextIndex, *AlreadyStored;
+    double r[3], d, size, shift[3];
+    PROFILE_STAR_PARTICLE *psp_storage;
+
+    Nparticlestar = gi->Nparticleinblockstar;
+    psp_storage = *psp_storage_in;
+    /*
+    ** Initialise linked list stuff
+    */
+    HeadIndex = malloc(gi->NCellData*sizeof(int **));
+    assert(HeadIndex != NULL);
+    for (i = 0; i < gi->NCellData; i ++) {
+	HeadIndex[i] = malloc(gi->NCellData*sizeof(int *));
+	assert(HeadIndex[i] != NULL);
+	for (j = 0; j < gi->NCellData; j++) {
+	    HeadIndex[i][j] = malloc(gi->NCellData*sizeof(int));
+	    assert(HeadIndex[i][j] != NULL);
+	    }
+	}
+    NextIndex = malloc(Nparticlestar*sizeof(int));
+    assert(NextIndex != NULL);
+    for (i = 0; i < gi->NCellData; i++) {
+	for (j = 0; j < gi->NCellData; j++) {
+	    for (k = 0; k < gi->NCellData; k++) {
+		HeadIndex[i][j][k] = -1;
+		}
+	    }
+	}
+    for (i = 0; i < Nparticlestar; i++) NextIndex[i] = -1;
+    for (i = 0; i < 3; i++) shift[i] = 0-gi->bc[i];
+    /*
+    ** Generate linked list
+    */
+    for (i = 0; i < Nparticlestar; i++) {
+	for (j = 0; j < 3; j++) {
+	    index[j] = (int)(gi->NCellData*(psp[i].r[j]+shift[j])/gi->us.LBox);
+	    if (index[j] == gi->NCellData) index[j] = gi->NCellData-1; /* Case where particles are exactly on the boundary */
+	    assert(index[j] >= 0 && index[j] < gi->NCellData);
+	    }
+	NextIndex[i] = HeadIndex[index[0]][index[1]][index[2]];
+	HeadIndex[index[0]][index[1]][index[2]] = i;
+	}
+    /*
+    ** Array for quick and dirty way to keep track which particle is already stored
+    */
+    AlreadyStored = malloc(Nparticlestar*sizeof(int));
+    assert(AlreadyStored != NULL);
+    for (i = 0; i < Nparticlestar; i++) AlreadyStored[i] = 0;
+    /*
+    ** Go through linked list
+    */
+    for (index[0] = 0; index[0] < gi->NCellData; index[0]++) {
+	for (index[1] = 0; index[1] < gi->NCellData; index[1]++) {
+	    for (index[2] = 0; index[2] < gi->NCellData; index[2]++) {
+		for (j = 0; j < gi->NHalo; j++) {
+		    /*
+		    ** Process data
+		    */
+		    size = gi->fincludestorageradius*hd[j].ps[hd[j].NBin].ro;
+		    if (intersect(gi->us.LBox,gi->NCellData,hd[j],index,shift,size)) {
+			i = HeadIndex[index[0]][index[1]][index[2]];
+			while (i >= 0) {
+			    for (k = 0; k < 3; k++) {
+				r[k] = correct_position(hd[j].rcentre[k],psp[i].r[k],gi->us.LBox);
+				r[k] = r[k]-hd[j].rcentre[k];
+				}
+			    d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+			    if (d <= size && AlreadyStored[i] == 0) {
+				/*
+				** Add particle to storage
+				*/
+				gi->Nparticleinstoragestar++;
+				if (gi->SizeStorageStar < gi->Nparticleinstoragestar) {
+				    gi->SizeStorageStar += gi->SizeStorageIncrement; 
+				    psp_storage = realloc(psp_storage,gi->SizeStorageStar*sizeof(PROFILE_STAR_PARTICLE));
+				    assert(psp_storage != NULL);
+				    }
+				psp_storage[gi->Nparticleinstoragestar-1] = psp[i];
+				AlreadyStored[i] = 1;
+				}
+			    i = NextIndex[i];
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    *psp_storage_in = psp_storage;
     }
 
 int intersect(double LBox, int NCell, HALO_DATA hd, int index[3], double shift[3], double size) {
@@ -3411,7 +3821,7 @@ int diagonalise_matrix(double min[3][3], double *evala, double eveca[3], double 
     return status1+status2;
     }
 
-double diagonalise_shape_tensors(GI gi, HALO_DATA *hd) {
+double diagonalise_shape_tensors(GI gi, HALO_DATA *hd, int ILoop) {
 
     int i, j, k;
     int status;
@@ -3517,7 +3927,7 @@ double diagonalise_shape_tensors(GI gi, HALO_DATA *hd) {
 		re_c_a = (hd[i].ps[j].totshape->c_a-hd[i].ps[j].totshape->c_a_old)/hd[i].ps[j].totshape->c_a_old;
 		if (fabs(re_b_a) <= gi.shapeiterationtolerance && fabs(re_c_a) <= gi.shapeiterationtolerance) {
 		    Nconverged++;
-		    hd[i].ps[j].totshape->NLoopConverged = gi.ILoopRead+1;
+		    hd[i].ps[j].totshape->NLoopConverged = ILoop;
 		    }
 		}
 	    else {
@@ -3672,7 +4082,7 @@ double diagonalise_shape_tensors(GI gi, HALO_DATA *hd) {
 		    re_c_a = (hd[i].ps[j].gasshape->c_a-hd[i].ps[j].gasshape->c_a_old)/hd[i].ps[j].gasshape->c_a_old;
 		    if (fabs(re_b_a) <= gi.shapeiterationtolerance && fabs(re_c_a) <= gi.shapeiterationtolerance) {
 			Nconverged++;
-			hd[i].ps[j].gasshape->NLoopConverged = gi.ILoopRead+1;
+			hd[i].ps[j].gasshape->NLoopConverged = ILoop;
 			}
 		    }
 		else {
@@ -3765,7 +4175,7 @@ double diagonalise_shape_tensors(GI gi, HALO_DATA *hd) {
 		    re_c_a = (hd[i].ps[j].darkshape->c_a-hd[i].ps[j].darkshape->c_a_old)/hd[i].ps[j].darkshape->c_a_old;
 		    if (fabs(re_b_a) <= gi.shapeiterationtolerance && fabs(re_c_a) <= gi.shapeiterationtolerance) {
 			Nconverged++;
-			hd[i].ps[j].darkshape->NLoopConverged = gi.ILoopRead+1;
+			hd[i].ps[j].darkshape->NLoopConverged = ILoop;
 			}
 		    }
 		else {
@@ -3858,7 +4268,7 @@ double diagonalise_shape_tensors(GI gi, HALO_DATA *hd) {
 		    re_c_a = (hd[i].ps[j].starshape->c_a-hd[i].ps[j].starshape->c_a_old)/hd[i].ps[j].starshape->c_a_old;
 		    if (fabs(re_b_a) <= gi.shapeiterationtolerance && fabs(re_c_a) <= gi.shapeiterationtolerance) {
 			Nconverged++;
-			hd[i].ps[j].starshape->NLoopConverged = gi.ILoopRead+1;
+			hd[i].ps[j].starshape->NLoopConverged = ILoop;
 			}
 		    }
 		else {
@@ -5077,6 +5487,22 @@ void write_output_shape_profile(GI gi, HALO_DATA *hd, int ILoop) {
     FILE *outputfile;
 
     /*
+    ** Characteristics
+    */
+    sprintf(outputfilename,"%s.shape.%03d.characteristics",gi.OutputName,ILoop);
+    outputfile = fopen(outputfilename,"w");
+    assert(outputfile != NULL);
+    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10\n");
+    for (i = 0; i < gi.NHalo; i++) {
+	fprintf(outputfile,"%d",hd[i].ID);
+	fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
+	fprintf(outputfile," %.6e %.6e %.6e",hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
+	fprintf(outputfile," %.6e %.6e",hd[i].rmin,hd[i].rmax);
+	fprintf(outputfile," %d",hd[i].NBin+1);
+	fprintf(outputfile,"\n");
+	}
+    fclose(outputfile);
+    /*
     ** Total matter
     */
     sprintf(outputfilename,"%s.shape.%03d.profiles.tot",gi.OutputName,ILoop);
@@ -5123,8 +5549,10 @@ void write_output_shape_profile(GI gi, HALO_DATA *hd, int ILoop) {
 		fprintf(outputfile," %.6e",(hd[i].ps[j].gasshape->b_a/hd[i].ps[j].gasshape->b_a_old)-1);
 		fprintf(outputfile," %.6e",(hd[i].ps[j].gasshape->c_a/hd[i].ps[j].gasshape->c_a_old)-1);
 		fprintf(outputfile," %d",hd[i].ps[j].gasshape->NLoopConverged);
+/*
 		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gasshape->dmin,hd[i].ps[j].gasshape->dmax);
 		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].gasshape->propertymin,hd[i].ps[j].gasshape->propertymax);
+*/
 		fprintf(outputfile,"\n");
 		}
 	    }
@@ -5150,8 +5578,10 @@ void write_output_shape_profile(GI gi, HALO_DATA *hd, int ILoop) {
 		fprintf(outputfile," %.6e",(hd[i].ps[j].darkshape->b_a/hd[i].ps[j].darkshape->b_a_old)-1);
 		fprintf(outputfile," %.6e",(hd[i].ps[j].darkshape->c_a/hd[i].ps[j].darkshape->c_a_old)-1);
 		fprintf(outputfile," %d",hd[i].ps[j].darkshape->NLoopConverged);
+/*
 		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].darkshape->dmin,hd[i].ps[j].darkshape->dmax);
 		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].darkshape->propertymin,hd[i].ps[j].darkshape->propertymax);
+*/
 		fprintf(outputfile,"\n");
 		}
 	    }
@@ -5177,8 +5607,10 @@ void write_output_shape_profile(GI gi, HALO_DATA *hd, int ILoop) {
 		fprintf(outputfile," %.6e",(hd[i].ps[j].starshape->b_a/hd[i].ps[j].starshape->b_a_old)-1);
 		fprintf(outputfile," %.6e",(hd[i].ps[j].starshape->c_a/hd[i].ps[j].starshape->c_a_old)-1);
 		fprintf(outputfile," %d",hd[i].ps[j].starshape->NLoopConverged);
+/*
 		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].starshape->dmin,hd[i].ps[j].starshape->dmax);
 		fprintf(outputfile," %.6e %.6e",hd[i].ps[j].starshape->propertymin,hd[i].ps[j].starshape->propertymax);
+*/
 		fprintf(outputfile,"\n");
 		}
 	    }
