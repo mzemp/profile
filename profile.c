@@ -1866,6 +1866,7 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"Halocatalogue format    : %s\n",cdummy);
         fprintf(stderr,"Velocity projection     : %s\n",(gi.velocityprojection == 0)?"coordinate axes":"spherical");
 	fprintf(stderr,"Profiling mode          : %d\n",gi.profilingmode);
+	fprintf(stderr,"Data processing mode    : %d\n",gi.dataprocessingmode);
 	if (gi.profilingmode > 0) fprintf(stderr,"Shape tensor form       : %d\n",gi.shapetensorform);
 	if (gi.profilingmode == 0) {
 	    fprintf(stderr,"Delta_bg                : %.6e\n",gi.Deltabg);
@@ -1940,6 +1941,7 @@ void usage(void) {
     fprintf(stderr,"-spp                                 : set this flag if input files have single precision positions (default)\n");
     fprintf(stderr,"-dpp                                 : set this flag if input files have double precision positions\n");
     fprintf(stderr,"-profilingmode <value>               : 0 = spherical profiles / 1 = shape enclosed / 2 = shape shell (default: 0)\n");
+    fprintf(stderr,"-dataprocessingmode <value>          : 0 = read data again in every loop / 1 = store data in memory (default: 0)\n");
     fprintf(stderr,"-dataformat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
     fprintf(stderr,"-halocatalogueformat <value>         : 0 = generic / 1 = 6DFOF / 2 = characteristics (default: 0)\n");
     fprintf(stderr,"-shapetensorformat <value>           : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
