@@ -3436,6 +3436,15 @@ void put_pgp_in_storage(GI *gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp, PROFIL
 		}
 	    }
 	}
+    for (i = 0; i < gi->NCellData; i ++) {
+	for (j = 0; j < gi->NCellData; j++) {
+	    free(HeadIndex[i][j]);
+	    }
+	free(HeadIndex[i]);
+	}
+    free(HeadIndex);
+    free(NextIndex);
+    free(AlreadyStored);
     *pgp_storage_in = pgp_storage;
     }
 
@@ -3531,6 +3540,15 @@ void put_pdp_in_storage(GI *gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp, PROFI
 		}
 	    }
 	}
+    for (i = 0; i < gi->NCellData; i ++) {
+	for (j = 0; j < gi->NCellData; j++) {
+	    free(HeadIndex[i][j]);
+	    }
+	free(HeadIndex[i]);
+	}
+    free(HeadIndex);
+    free(NextIndex);
+    free(AlreadyStored);
     *pdp_storage_in = pdp_storage;
     }
 
@@ -3626,6 +3644,15 @@ void put_psp_in_storage(GI *gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp, PROFI
 		}
 	    }
 	}
+    for (i = 0; i < gi->NCellData; i ++) {
+	for (j = 0; j < gi->NCellData; j++) {
+	    free(HeadIndex[i][j]);
+	    }
+	free(HeadIndex[i]);
+	}
+    free(HeadIndex);
+    free(NextIndex);
+    free(AlreadyStored);
     *psp_storage_in = psp_storage;
     }
 
