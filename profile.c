@@ -1944,7 +1944,7 @@ void usage(void) {
     fprintf(stderr,"-dataprocessingmode <value>          : 0 = read data again in every loop / 1 = store data in memory (default: 0)\n");
     fprintf(stderr,"-dataformat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
     fprintf(stderr,"-halocatalogueformat <value>         : 0 = generic / 1 = 6DFOF / 2 = characteristics (default: 0)\n");
-    fprintf(stderr,"-shapetensorformat <value>           : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
+    fprintf(stderr,"-shapetensorform <value>             : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
     fprintf(stderr,"-ltphysical                          : rmin and rmax values are interpreted as physical lengths (default)\n");
     fprintf(stderr,"-ltcomoving                          : rmin and rmax values are interpreted as comoving lengths\n");
     fprintf(stderr,"-rmin <value>                        : minimum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
