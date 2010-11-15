@@ -127,12 +127,21 @@ typedef struct profile_structure {
     PROFILE_SHAPE_PROPERTIES *starshape;
     } PROFILE_STRUCTURE;
 
+typedef struct halo_data_exclude {
+
+    int ID;
+    double rcentre[3];
+    double size;
+    } HALO_DATA_EXCLUDE;
+
 typedef struct halo_data {
 
     int ID;
     int HostHaloID;
     int ExtraHaloID;
     int NBin;
+    int NHaloExclude;
+    int SizeHaloExcludeData;
     double rcentre[3];
     double vcentre[3];
     double rcentrenew[3];
@@ -152,6 +161,7 @@ typedef struct halo_data {
     double rvradrangelower, rvradrangeupper;
     double vradmean, vraddisp;
     PROFILE_STRUCTURE *ps;
+    HALO_DATA_EXCLUDE *hde;
     } HALO_DATA;
 
 typedef struct profile_gas_particle {
@@ -206,7 +216,7 @@ typedef struct general_info {
     int rmaxfromhalocatalogue;
     int excludeparticles;
     int gascontained, darkcontained, starcontained;
-    int NBin, NHalo, NHaloExclude, NCellData, NCellHalo;
+    int NBin, NHalo, NHaloExcludeGlobal, NCellData, NCellHalo;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
     int Nparticleperblockdark, Nparticleinblockdark, Nblockdark;
     int Nparticleperblockstar, Nparticleinblockstar, Nblockstar;
@@ -226,9 +236,10 @@ typedef struct general_info {
     double binfactor;
     double frecentrermin, frecentredist, frhobg;
     double fcheckrbgcrit, fcheckrvcmax, fcheckrstatic, fcheckrtruncindicator;
-    double fexclude, fduplicate, slopertruncindicator;
+    double fexclude, slopertruncindicator;
     double fincludeshapeproperty, fincludeshaperadius;
     double fincludestorageradius;
+    double fhaloexcludesize, fhaloexcludedistance, fhaloduplicate;
     double Deltabgmaxscale;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     double shapeiterationtolerance;
@@ -242,19 +253,19 @@ void usage(void);
 void set_default_values_general_info(GI *);
 void calculate_densities(GI *);
 void read_halocatalogue_ascii_generic(GI *, HALO_DATA **);
-void read_halocatalogue_ascii_generic_excludehalo(GI *, HALO_DATA **);
 void read_halocatalogue_ascii_6DFOF(GI *, HALO_DATA **);
 void read_halocatalogue_ascii_characteristics(GI *, HALO_DATA **);
+int read_halocatalogue_ascii_characteristics_excludehalo(GI *, HALO_DATA *, HALO_DATA_EXCLUDE **);
 void initialise_halo_profile(HALO_DATA *);
 void initialise_halo_profile_shape(HALO_DATA *);
 void reset_halo_profile_shape(GI, HALO_DATA *);
 void read_spherical_profiles(GI, HALO_DATA *);
-void put_pgp_in_bins(GI, HALO_DATA *, HALO_DATA *, PROFILE_GAS_PARTICLE *);
-void put_pdp_in_bins(GI, HALO_DATA *, HALO_DATA *, PROFILE_DARK_PARTICLE *);
-void put_psp_in_bins(GI, HALO_DATA *, HALO_DATA *, PROFILE_STAR_PARTICLE *);
-void put_pgp_in_storage(GI *, HALO_DATA *, HALO_DATA *, PROFILE_GAS_PARTICLE *, PROFILE_GAS_PARTICLE **);
-void put_pdp_in_storage(GI *, HALO_DATA *, HALO_DATA *, PROFILE_DARK_PARTICLE *, PROFILE_DARK_PARTICLE **);
-void put_psp_in_storage(GI *, HALO_DATA *, HALO_DATA *, PROFILE_STAR_PARTICLE *, PROFILE_STAR_PARTICLE **);
+void put_pgp_in_bins(GI, HALO_DATA *, PROFILE_GAS_PARTICLE *);
+void put_pdp_in_bins(GI, HALO_DATA *, PROFILE_DARK_PARTICLE *);
+void put_psp_in_bins(GI, HALO_DATA *, PROFILE_STAR_PARTICLE *);
+void put_pgp_in_storage(GI *, HALO_DATA *, HALO_DATA_EXCLUDE *, PROFILE_GAS_PARTICLE *, PROFILE_GAS_PARTICLE **);
+void put_pdp_in_storage(GI *, HALO_DATA *, HALO_DATA_EXCLUDE *, PROFILE_DARK_PARTICLE *, PROFILE_DARK_PARTICLE **);
+void put_psp_in_storage(GI *, HALO_DATA *, HALO_DATA_EXCLUDE *, PROFILE_STAR_PARTICLE *, PROFILE_STAR_PARTICLE **);
 int intersect(double, int, HALO_DATA, int *, double *, double);
 void calculate_coordinates_principal_axes(PROFILE_SHAPE_PROPERTIES *, double [3], double [3], double *);
 void calculate_recentred_halo_coordinates(GI, HALO_DATA *);
@@ -311,7 +322,8 @@ int main(int argc, char **argv) {
     ART_GAS_PROPERTIES agp;
     ART_STAR_PROPERTIES asp;
     ART_COORDINATES *ac = NULL;
-    HALO_DATA *hd = NULL, *hdexclude = NULL;
+    HALO_DATA *hd = NULL;
+    HALO_DATA_EXCLUDE *hdeg = NULL;
     PROFILE_GAS_PARTICLE *pgp = NULL;
     PROFILE_DARK_PARTICLE *pdp = NULL;
     PROFILE_STAR_PARTICLE *psp = NULL;
@@ -519,10 +531,22 @@ int main(int argc, char **argv) {
 	    gi.fexclude = atof(argv[i]);
 	    i++;
 	    }
-	else if (strcmp(argv[i],"-fduplicate") == 0) {
+	else if (strcmp(argv[i],"-fhaloexcludesize") == 0) {
 	    i++;
             if (i >= argc) usage();
-	    gi.fduplicate = atof(argv[i]);
+	    gi.fhaloexcludesize = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-fhaloexcludedistance") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.fhaloexcludedistance = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-fhaloduplicate") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.fhaloduplicate = atof(argv[i]);
 	    i++;
 	    }
 	else if (strcmp(argv[i],"-fincludeshapeproperty") == 0) {
@@ -977,11 +1001,13 @@ int main(int argc, char **argv) {
 	gettimeofday(&time,NULL);
 	timestartsub = time.tv_sec;
 	fprintf(stderr,"Reading halo catalogues for particle exclusion ... ");
-	read_halocatalogue_ascii_generic_excludehalo(&gi,&hdexclude);
+	i = read_halocatalogue_ascii_characteristics_excludehalo(&gi,hd,&hdeg);
+	j = 0;
+	for (k = 0; k < gi.NHalo; k++) j += hd[k].NHaloExclude;
 	gettimeofday(&time,NULL);
 	timeendsub = time.tv_sec;
 	timediff = timeendsub-timestartsub;
-	fprintf(stderr,"Done. Read in %d haloes. It took %d s = %d h %d m %d s.\n\n",gi.NHaloExclude,timediff,timediff/3600,(timediff/60)%60,timediff%60);
+	fprintf(stderr,"Done. Read in %ld haloes in total leading to %d global and %ld local haloes for exclusion. It took %d s = %d h %d m %d s.\n\n",i,gi.NHaloExcludeGlobal,j,timediff,timediff/3600,(timediff/60)%60,timediff%60);
 	}
 
     /*
@@ -1101,8 +1127,8 @@ int main(int argc, char **argv) {
 		    ** Block is full or we reached end of gas particles
 		    */
 		    gi.Nparticleinblockgas = Icurrentblockgas;
-		    if (gi.dataprocessingmode == 0 && gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,hdexclude,pgp);
-		    else if (gi.dataprocessingmode == 1) put_pgp_in_storage(&gi,hd,hdexclude,pgp,&pgp_storage);
+		    if (gi.dataprocessingmode == 0 && gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,pgp);
+		    else if (gi.dataprocessingmode == 1) put_pgp_in_storage(&gi,hd,hdeg,pgp,&pgp_storage);
 		    Icurrentblockgas = 0;
 		    }
 		}
@@ -1151,8 +1177,8 @@ int main(int argc, char **argv) {
 		    ** Block is full or we reached end of dark matter particles
 		    */
 		    gi.Nparticleinblockdark = Icurrentblockdark;
-		    if (gi.dataprocessingmode == 0) put_pdp_in_bins(gi,hd,hdexclude,pdp);
-		    else if (gi.dataprocessingmode == 1) put_pdp_in_storage(&gi,hd,hdexclude,pdp,&pdp_storage);
+		    if (gi.dataprocessingmode == 0) put_pdp_in_bins(gi,hd,pdp);
+		    else if (gi.dataprocessingmode == 1) put_pdp_in_storage(&gi,hd,hdeg,pdp,&pdp_storage);
 		    Icurrentblockdark = 0;
 		    }
 		}
@@ -1201,8 +1227,8 @@ int main(int argc, char **argv) {
 		    ** Block is full or we reached end of star matter particles
 		    */
 		    gi.Nparticleinblockstar = Icurrentblockstar;
-		    if (gi.dataprocessingmode == 0) put_psp_in_bins(gi,hd,hdexclude,psp);
-		    else if (gi.dataprocessingmode == 1) put_psp_in_storage(&gi,hd,hdexclude,psp,&psp_storage);
+		    if (gi.dataprocessingmode == 0) put_psp_in_bins(gi,hd,psp);
+		    else if (gi.dataprocessingmode == 1) put_psp_in_storage(&gi,hd,hdeg,psp,&psp_storage);
 		    Icurrentblockstar = 0;
 		    }
 		}
@@ -1340,8 +1366,8 @@ int main(int argc, char **argv) {
 				** Block is full or we reached end of gas particles
 				*/
 				gi.Nparticleinblockgas = Icurrentblockgas;
-				if (gi.dataprocessingmode == 0 && gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,hdexclude,pgp);
-				else if (gi.dataprocessingmode == 1) put_pgp_in_storage(&gi,hd,hdexclude,pgp,&pgp_storage);
+				if (gi.dataprocessingmode == 0 && gi.ILoopRead >= gi.NLoopRecentre) put_pgp_in_bins(gi,hd,pgp);
+				else if (gi.dataprocessingmode == 1) put_pgp_in_storage(&gi,hd,hdeg,pgp,&pgp_storage);
 				Icurrentblockgas = 0;
 				}
 			    }
@@ -1458,8 +1484,8 @@ int main(int argc, char **argv) {
 				** Block is full or we reached end of dark matter particles
 				*/
 				gi.Nparticleinblockdark = Icurrentblockdark;
-				if (gi.dataprocessingmode == 0) put_pdp_in_bins(gi,hd,hdexclude,pdp);
-				else if (gi.dataprocessingmode == 1) put_pdp_in_storage(&gi,hd,hdexclude,pdp,&pdp_storage);
+				if (gi.dataprocessingmode == 0) put_pdp_in_bins(gi,hd,pdp);
+				else if (gi.dataprocessingmode == 1) put_pdp_in_storage(&gi,hd,hdeg,pdp,&pdp_storage);
 				Icurrentblockdark = 0;
 				}
 			    }
@@ -1494,8 +1520,8 @@ int main(int argc, char **argv) {
 				** Block is full or we reached end of star particles
 				*/
 				gi.Nparticleinblockstar = Icurrentblockstar;
-				if (gi.dataprocessingmode == 0) put_psp_in_bins(gi,hd,hdexclude,psp);
-				else if (gi.dataprocessingmode == 1) put_psp_in_storage(&gi,hd,hdexclude,psp,&psp_storage);
+				if (gi.dataprocessingmode == 0) put_psp_in_bins(gi,hd,psp);
+				else if (gi.dataprocessingmode == 1) put_psp_in_storage(&gi,hd,hdeg,psp,&psp_storage);
 				Icurrentblockstar = 0;
 				}
 			    }
@@ -1719,7 +1745,7 @@ int main(int argc, char **argv) {
 	    gettimeofday(&time,NULL);
 	    timestartsub = time.tv_sec;
 	    fprintf(stderr,"Processing gas ... ");
-	    put_pgp_in_bins(gi,hd,hdexclude,pgp_storage);
+	    put_pgp_in_bins(gi,hd,pgp_storage);
 	    gettimeofday(&time,NULL);
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
@@ -1727,7 +1753,7 @@ int main(int argc, char **argv) {
 	    gettimeofday(&time,NULL);
 	    timestartsub = time.tv_sec;
 	    fprintf(stderr,"Processing dark matter ... ");
-	    put_pdp_in_bins(gi,hd,hdexclude,pdp_storage);
+	    put_pdp_in_bins(gi,hd,pdp_storage);
 	    gettimeofday(&time,NULL);
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
@@ -1735,7 +1761,7 @@ int main(int argc, char **argv) {
 	    gettimeofday(&time,NULL);
 	    timestartsub = time.tv_sec;
 	    fprintf(stderr,"Processing stars ... ");
-	    put_psp_in_bins(gi,hd,hdexclude,psp_storage);
+	    put_psp_in_bins(gi,hd,psp_storage);
 	    gettimeofday(&time,NULL);
 	    timeendsub = time.tv_sec;
 	    timediff = timeendsub-timestartsub;
@@ -1921,7 +1947,7 @@ int main(int argc, char **argv) {
         fprintf(stderr,"NBin                    : %d\n",gi.NBin);
         fprintf(stderr,"NBinPerDex              : %g\n",gi.NBinPerDex);
         fprintf(stderr,"NHalo                   : %d\n",gi.NHalo);
-        fprintf(stderr,"NHaloExclude            : %d\n",gi.NHaloExclude);
+        fprintf(stderr,"NHaloExcludeGlobal      : %d\n",gi.NHaloExcludeGlobal);
         fprintf(stderr,"Nparticleperblockgas    : %d\n",gi.Nparticleperblockgas);
         fprintf(stderr,"Nparticleperblockdark   : %d\n",gi.Nparticleperblockdark);
         fprintf(stderr,"Nparticleperblockstar   : %d\n",gi.Nparticleperblockstar);
@@ -1940,7 +1966,9 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fcheckrstatic           : %.6e\n",gi.fcheckrstatic);
 	fprintf(stderr,"fcheckrtruncindicator   : %.6e\n",gi.fcheckrtruncindicator);
 	fprintf(stderr,"fexclude                : %.6e\n",gi.fexclude);
-	fprintf(stderr,"fduplicate              : %.6e\n",gi.fduplicate);
+	fprintf(stderr,"fhaloexcludesize        : %.6e\n",gi.fhaloexcludesize);
+	fprintf(stderr,"fhaloexcludedistance    : %.6e\n",gi.fhaloexcludedistance);
+	fprintf(stderr,"fhaloduplicate          : %.6e\n",gi.fhaloduplicate);
 	fprintf(stderr,"fincludeshapeproperty   : %.6e\n",gi.fincludeshapeproperty);
 	fprintf(stderr,"fincludeshaperadius     : %.6e\n",gi.fincludeshaperadius);
 	fprintf(stderr,"fincludestorageradius   : %.6e\n",gi.fincludestorageradius);
@@ -2019,7 +2047,7 @@ void usage(void) {
     fprintf(stderr,"-starpropertiesfile <name>           : star properties file in ART native binary format\n");
     fprintf(stderr,"-gasfile <name>                      : gas file in ART native binary format\n");
     fprintf(stderr,"-halocatalogue <name>                : halo catalouge file\n");
-    fprintf(stderr,"-excludehalocatalogue <name>         : halo catalouge file (only generic format supported)\n");
+    fprintf(stderr,"-excludehalocatalogue <name>         : halo catalouge file (only characteristics format supported)\n");
     fprintf(stderr,"-output <name>                       : name of output files (endings like .characteristics etc. appended)\n");
     fprintf(stderr,"-v                                   : more informative output to screen\n");
     fprintf(stderr,"\n");
@@ -2057,7 +2085,7 @@ void set_default_values_general_info(GI *gi) {
     gi->NBin = 0;
     gi->NBinPerDex = 0;
     gi->NHalo = 0;
-    gi->NHaloExclude = 0;
+    gi->NHaloExcludeGlobal = 0;
 
     gi->Nparticleperblockgas = 1e7;
     gi->Nparticleinblockgas = 0;
@@ -2101,7 +2129,9 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrstatic = 3;
     gi->fcheckrtruncindicator = 1.2;
     gi->fexclude = 3;
-    gi->fduplicate = 0;
+    gi->fhaloexcludesize = 0.4;
+    gi->fhaloexcludedistance = 0.5;
+    gi->fhaloduplicate = 0;
     gi->fincludeshapeproperty = 1.1;
     gi->fincludeshaperadius = 2;
     gi->fincludestorageradius = 1;
@@ -2145,7 +2175,8 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
     int SizeHaloData = SizeHaloDataIncrement;
     int i, j, idummy, ID, NBin, NHaloRead;
     double ddummy;
-    double rx, ry, rz, vx, vy, vz, rmin, rmax;
+    double r[3], v[3];
+    double rmin, rmax;
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL;
 
@@ -2159,12 +2190,12 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
     NHaloRead = 0;
     while (1) {
 	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); rx = put_in_box(ddummy,gi->bc[0],gi->bc[3]);
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); ry = put_in_box(ddummy,gi->bc[1],gi->bc[4]);
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); rz = put_in_box(ddummy,gi->bc[2],gi->bc[5]);
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); vx = ddummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); vy = ddummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); vz = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[0] = put_in_box(ddummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[1] = put_in_box(ddummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[2] = put_in_box(ddummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[0] = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[1] = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[2] = ddummy;
 	fscanf(HaloCatalogueFile,"%lg",&ddummy); rmin = ddummy;
 	fscanf(HaloCatalogueFile,"%lg",&ddummy); rmax = ddummy;
 	fscanf(HaloCatalogueFile,"%i",&idummy); NBin = idummy;
@@ -2177,12 +2208,10 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	    }
 	i = NHaloRead-1;
 	hd[i].ID = ID;
-	hd[i].rcentre[0] = rx;
-	hd[i].rcentre[1] = ry;
-	hd[i].rcentre[2] = rz;
-	hd[i].vcentre[0] = vx;
-	hd[i].vcentre[1] = vy;
-	hd[i].vcentre[2] = vz;
+	for (j = 0; j < 3; j++) {
+	    hd[i].rcentre[j] = r[j];
+	    hd[i].vcentre[j] = v[j];
+	    }
 	hd[i].rmin = (gi->rmin != 0)?gi->rmin:rmin;
 	hd[i].rmax = (gi->rmax != 0)?gi->rmax:rmax;
 	hd[i].NBin = (gi->NBin != 0)?gi->NBin:NBin;
@@ -2229,59 +2258,6 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
     fclose(HaloCatalogueFile);
     *hdin = hd;
     gi->NHalo = NHaloRead;
-    }
-
-void read_halocatalogue_ascii_generic_excludehalo(GI *gi, HALO_DATA **hdin) {
-
-    int SizeHaloDataIncrement = 1000;
-    int SizeHaloData = SizeHaloDataIncrement;
-    int i, idummy, ID, NBin, NHaloRead;
-    double ddummy;
-    double rx, ry, rz, vx, vy, vz, rmin, rmax;
-    HALO_DATA *hd;
-    FILE *HaloCatalogueFile = NULL;
-
-    HaloCatalogueFile = fopen(gi->ExcludeHaloCatalogueFileName,"r");
-    assert(HaloCatalogueFile != NULL);
-
-    hd = *hdin;
-    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
-    assert(hd != NULL);
-
-    NHaloRead = 0;
-    while (1) {
-	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); rx = put_in_box(ddummy,gi->bc[0],gi->bc[3]);
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); ry = put_in_box(ddummy,gi->bc[1],gi->bc[4]);
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); rz = put_in_box(ddummy,gi->bc[2],gi->bc[5]);
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); vx = ddummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); vy = ddummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); vz = ddummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); rmin = ddummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); rmax = ddummy;
-	fscanf(HaloCatalogueFile,"%i",&idummy); NBin = idummy;
-	if (feof(HaloCatalogueFile)) break;
-	NHaloRead++;
-	if (SizeHaloData < NHaloRead){
-	    SizeHaloData += SizeHaloDataIncrement;
-	    hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
-	    assert(hd != NULL);
-	    }
-	i = NHaloRead-1;
-	hd[i].ID = ID;
-	hd[i].rcentre[0] = rx;
-	hd[i].rcentre[1] = ry;
-	hd[i].rcentre[2] = rz;
-	hd[i].vcentre[0] = vx;
-	hd[i].vcentre[1] = vy;
-	hd[i].vcentre[2] = vz;
-	hd[i].rmin = rmin;
-	hd[i].rmax = rmax;
-	hd[i].NBin = NBin;
-	}
-    fclose(HaloCatalogueFile);
-    *hdin = hd;
-    gi->NHaloExclude = NHaloRead;
     }
 
 void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
@@ -2393,7 +2369,7 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 
 void read_halocatalogue_ascii_characteristics(GI *gi, HALO_DATA **hdin) {
 
-    int SizeHaloDataIncrement = 25;
+    int SizeHaloDataIncrement = 1000;
     int SizeHaloData = SizeHaloDataIncrement;
     int i, j, ID, NBin, idummy, NHaloRead;
     double ddummy;
@@ -2414,9 +2390,9 @@ void read_halocatalogue_ascii_characteristics(GI *gi, HALO_DATA **hdin) {
     NHaloRead = 0;
     while (1) {
 	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[0] = ddummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[1] = ddummy;
-	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[2] = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[0] = put_in_box(ddummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[1] = put_in_box(ddummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[2] = put_in_box(ddummy,gi->bc[2],gi->bc[5]);
 	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[0] = ddummy;
 	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[1] = ddummy;
 	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[2] = ddummy;
@@ -2487,6 +2463,158 @@ void read_halocatalogue_ascii_characteristics(GI *gi, HALO_DATA **hdin) {
     gi->NHalo = NHaloRead;
     }
 
+int read_halocatalogue_ascii_characteristics_excludehalo(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUDE **hdegin) {
+
+    int SizeHaloDataIncrement = 1000;
+    int SizeHaloData = SizeHaloDataIncrement;
+    int i, j, k, l, idummy, ID, NBin, NHaloRead, NIndexArray;
+    int movetogloballist, containedinhdlist, Ntot, Ncheck;
+    int *IndexArray = NULL;
+    double ddummy;
+    double r[3], rcheck[3], v[3];
+    double rmin, rmax, d;
+    double rbg, rcrit, rtrunc, sizeorig, size;
+    double *SizeArray = NULL;
+    char cdummy[1000];
+    HALO_DATA_EXCLUDE *hdeg;
+    FILE *HaloCatalogueFile = NULL;
+
+    HaloCatalogueFile = fopen(gi->ExcludeHaloCatalogueFileName,"r");
+    assert(HaloCatalogueFile != NULL);
+
+    for (j = 0; j < gi->NHalo; j++) {
+	hd[j].SizeHaloExcludeData = SizeHaloDataIncrement;
+	hd[j].hde = realloc(hd[j].hde,hd[j].SizeHaloExcludeData*sizeof(HALO_DATA_EXCLUDE));
+	assert(hd[j].hde != NULL);
+	}
+
+    hdeg = *hdegin;
+    hdeg = realloc(hdeg,SizeHaloData*sizeof(HALO_DATA_EXCLUDE));
+    assert(hdeg != NULL);
+
+    IndexArray = malloc(gi->NHalo*sizeof(int));
+    assert(IndexArray != NULL);
+    SizeArray = malloc(gi->NHalo*sizeof(double));
+    assert(SizeArray != NULL);
+
+    fgets(cdummy,1000,HaloCatalogueFile);
+    NHaloRead = 0;
+    while (1) {
+	fscanf(HaloCatalogueFile,"%i",&idummy); ID = idummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[0] = put_in_box(ddummy,gi->bc[0],gi->bc[3]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[1] = put_in_box(ddummy,gi->bc[1],gi->bc[4]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); r[2] = put_in_box(ddummy,gi->bc[2],gi->bc[5]);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[0] = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[1] = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); v[2] = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rmin = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rmax = ddummy;
+	fscanf(HaloCatalogueFile,"%i",&idummy); NBin = idummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rbg = ddummy;
+	fscanf(HaloCatalogueFile,"%lg",&ddummy);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rcrit = ddummy;
+	for (j = 0; j < 7; j++) fscanf(HaloCatalogueFile,"%lg",&ddummy);
+	fscanf(HaloCatalogueFile,"%lg",&ddummy); rtrunc = ddummy;
+	for (j = 0; j < 16; j++) fscanf(HaloCatalogueFile,"%lg",&ddummy);
+	if (feof(HaloCatalogueFile)) break;
+	NHaloRead++;
+	if (rcrit == 0 && rtrunc > 0) sizeorig = rtrunc;
+	else if (rcrit > 0 && rtrunc > 0 && rtrunc < rcrit) sizeorig = rtrunc;
+	else sizeorig = gi->fhaloexcludesize*rcrit;
+	/*
+	** Now determine if it is a excluded halo
+	*/
+	containedinhdlist = 0;
+	NIndexArray = 0;
+	for (j = 0; j < gi->NHalo; j++) {
+	    if (hd[j].ID == ID) {
+		containedinhdlist = 1;
+		continue; /* Don't exclude yourself */
+		}
+	    for (k = 0; k < 3; k++) {
+		rcheck[k] = correct_position(hd[j].rcentre[k],r[k],gi->us.LBox);
+		rcheck[k] = rcheck[k]-hd[j].rcentre[k];
+		}
+	    d = sqrt(rcheck[0]*rcheck[0]+rcheck[1]*rcheck[1]+rcheck[2]*rcheck[2]);
+	    if (d <= hd[j].ps[hd[j].NBin].ro) {
+		if (sizeorig > d) size = gi->fhaloexcludedistance*d;
+		else size = sizeorig;
+		if (size > 0) {
+		    hd[j].NHaloExclude++;
+		    NIndexArray++;
+		    IndexArray[NIndexArray-1] = j;
+		    SizeArray[NIndexArray-1] = size;
+		    if (hd[j].SizeHaloExcludeData < hd[j].NHaloExclude) {
+			hd[j].SizeHaloExcludeData += SizeHaloDataIncrement;
+			hd[j].hde = realloc(hd[j].hde,hd[j].SizeHaloExcludeData*sizeof(HALO_DATA_EXCLUDE));
+			assert(hd[j].hde != NULL);
+			}
+		    i = hd[j].NHaloExclude-1;
+		    hd[j].hde[i].ID = ID;
+		    for (k = 0; k < 3; k++) hd[j].hde[i].rcentre[k] = r[k];
+		    hd[j].hde[i].size = size;
+		    }
+		}
+	    }
+	/*
+	** In the case of dataprocessingmode == 0 we're done now.
+	** But if we use dataprocessingmode == 1 we can move the haloes that have a single size and
+	** are not in the hd halo list to the global exclude list, i.e. we never have to consider
+	** these particles at all.
+	*/
+	if (gi->dataprocessingmode == 1 && NIndexArray > 0) {
+	    movetogloballist = 0;
+	    Ntot = 0;
+	    Ncheck = 0;
+	    /*
+	    ** Only if in all appearances the halo has the same size move it to the global list
+	    */
+	    if (NIndexArray == 1) movetogloballist = 1;
+	    else if (NIndexArray > 1) {
+		for (j = 1; j < NIndexArray; j++) {
+		    Ntot++;
+		    if (SizeArray[j] == SizeArray[j-1]) Ncheck++;
+		    }
+		if (Ntot == Ncheck) movetogloballist = 1;
+		}
+	    /*
+	    ** Halo is not allowed to be in the hd halo list
+	    */
+	    if (containedinhdlist) movetogloballist = 0;
+	    if (movetogloballist) {
+		for (j = 0; j < NIndexArray; j++) {
+		    i = IndexArray[j];
+		    /*
+		    ** Transfer the halo
+		    */
+		    if (j == 0) {
+			gi->NHaloExcludeGlobal++;
+			if (SizeHaloData < gi->NHaloExcludeGlobal) {
+			    SizeHaloData += SizeHaloDataIncrement;
+			    hdeg = realloc(hdeg,SizeHaloData*sizeof(HALO_DATA_EXCLUDE));
+			    assert(hdeg != NULL);
+			    }
+			l = gi->NHaloExcludeGlobal-1;
+			hdeg[l].ID = ID;
+			for (k = 0; k < 3; k++) hdeg[l].rcentre[k] = r[k];
+			hdeg[l].size = SizeArray[0];
+			}
+		    /*
+		    ** Remove the haloes from the local list
+		    */
+		    assert(hd[i].hde[hd[i].NHaloExclude-1].ID == ID);
+		    hd[i].NHaloExclude--;
+		    }
+		}
+	    }
+	} /* while loop */
+    fclose(HaloCatalogueFile);
+    free(IndexArray);
+    free(SizeArray);
+    *hdegin = hdeg;
+    return NHaloRead;
+    }
+
 void initialise_halo_profile(HALO_DATA *hd) {
 
     int j, k;
@@ -2502,6 +2630,8 @@ void initialise_halo_profile(HALO_DATA *hd) {
 
     hd->HostHaloID = 0;
     hd->ExtraHaloID = 0;
+    hd->NHaloExclude = 0;
+    hd->SizeHaloExcludeData = 0;
     hd->rbg = 0;
     hd->Mrbg = 0;
     hd->rcrit = 0;
@@ -2782,7 +2912,7 @@ void add_particle_to_shape_tensor(GI gi, PROFILE_SHAPE_PROPERTIES *shape, double
     shape->st[5] += M*r[1]*r[2]*fst;
     }
 
-void put_pgp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_GAS_PARTICLE *pgp) {
+void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 
     int i, j, k, l;
     int index[3];
@@ -2838,7 +2968,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_GAS_PAR
     for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,hdexclude,pgp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    /*
 		    ** Process data
@@ -2858,14 +2988,14 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_GAS_PAR
 				** Now check if it is outside an excluded subhalo
 				*/
 				particleaccepted = 1;
-				if (gi.excludeparticles == 1 && gi.dataprocessingmode == 0) {
-				    for (l = 0; l < gi.NHaloExclude; l++) {
+				if (gi.excludeparticles == 1) {
+				    for (l = 0; l < hd[j].NHaloExclude; l++) {
 					for (k = 0; k < 3; k++) {
-					    rell[k] = correct_position(hdexclude[l].rcentre[k],pgp[i].r[k],gi.us.LBox);
-					    rell[k] = rell[k]-hdexclude[l].rcentre[k];
+					    rell[k] = correct_position(hd[j].hde[l].rcentre[k],pgp[i].r[k],gi.us.LBox);
+					    rell[k] = rell[k]-hd[j].hde[l].rcentre[k];
 					    }
 					dell = sqrt(rell[0]*rell[0]+rell[1]*rell[1]+rell[2]*rell[2]);
-					if (dell <= hdexclude[l].rmax) {
+					if (dell <= hd[j].hde[l].size) {
 					    particleaccepted = 0;
 					    break;
 					    }
@@ -3004,7 +3134,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_GAS_PAR
     free(NextIndex);
     }
 
-void put_pdp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_DARK_PARTICLE *pdp) {
+void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 
     int i, j, k, l;
     int index[3];
@@ -3060,7 +3190,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_DARK_PA
     for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,hdexclude,pdp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,pdp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
 			/*
@@ -3107,14 +3237,14 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_DARK_PA
 				    ** Now check if it is outside an excluded subhalo
 				    */
 				    particleaccepted = 1;
-				    if (gi.excludeparticles == 1 && gi.dataprocessingmode == 0) {
-					for (l = 0; l < gi.NHaloExclude; l++) {
+				    if (gi.excludeparticles == 1) {
+					for (l = 0; l < hd[j].NHaloExclude; l++) {
 					    for (k = 0; k < 3; k++) {
-						rell[k] = correct_position(hdexclude[l].rcentre[k],pdp[i].r[k],gi.us.LBox);
-						rell[k] = rell[k]-hdexclude[l].rcentre[k];
+						rell[k] = correct_position(hd[j].hde[l].rcentre[k],pdp[i].r[k],gi.us.LBox);
+						rell[k] = rell[k]-hd[j].hde[l].rcentre[k];
 						}
 					    dell = sqrt(rell[0]*rell[0]+rell[1]*rell[1]+rell[2]*rell[2]);
-					    if (dell <= hdexclude[l].rmax) {
+					    if (dell <= hd[j].hde[l].size) {
 						particleaccepted = 0;
 						break;
 						}
@@ -3245,7 +3375,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_DARK_PA
     free(NextIndex);
     }
 
-void put_psp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_STAR_PARTICLE *psp) {
+void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 
     int i, j, k, l;
     int index[3];
@@ -3301,7 +3431,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_STAR_PA
     for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,hdexclude,psp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,psp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
 			/*
@@ -3348,14 +3478,14 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_STAR_PA
 				    ** Now check if it is outside an excluded subhalo
 				    */
 				    particleaccepted = 1;
-				    if (gi.excludeparticles == 1 && gi.dataprocessingmode == 0) {
-					for (l = 0; l < gi.NHaloExclude; l++) {
+				    if (gi.excludeparticles == 1) {
+					for (l = 0; l < hd[j].NHaloExclude; l++) {
 					    for (k = 0; k < 3; k++) {
-						rell[k] = correct_position(hdexclude[l].rcentre[k],psp[i].r[k],gi.us.LBox);
-						rell[k] = rell[k]-hdexclude[l].rcentre[k];
+						rell[k] = correct_position(hd[j].hde[l].rcentre[k],psp[i].r[k],gi.us.LBox);
+						rell[k] = rell[k]-hd[j].hde[l].rcentre[k];
 						}
 					    dell = sqrt(rell[0]*rell[0]+rell[1]*rell[1]+rell[2]*rell[2]);
-					    if (dell <= hdexclude[l].rmax) {
+					    if (dell <= hd[j].hde[l].size) {
 						particleaccepted = 0;
 						break;
 						}
@@ -3489,7 +3619,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_STAR_PA
     free(NextIndex);
     }
 
-void put_pgp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_GAS_PARTICLE *pgp, PROFILE_GAS_PARTICLE **pgp_storage_in) {
+void put_pgp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUDE *hdeg, PROFILE_GAS_PARTICLE *pgp, PROFILE_GAS_PARTICLE **pgp_storage_in) {
 
     int i, j, k, l;
     int index[3];
@@ -3568,13 +3698,13 @@ void put_pgp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_GAS
 				*/
 				particleaccepted = 1;
 				if (gi->excludeparticles == 1) {
-				    for (l = 0; l < gi->NHaloExclude; l++) {
+				    for (l = 0; l < gi->NHaloExcludeGlobal; l++) {
 					for (k = 0; k < 3; k++) {
-					    rexclude[k] = correct_position(hdexclude[l].rcentre[k],pgp[i].r[k],gi->us.LBox);
-					    rexclude[k] = rexclude[k]-hdexclude[l].rcentre[k];
+					    rexclude[k] = correct_position(hdeg[l].rcentre[k],pgp[i].r[k],gi->us.LBox);
+					    rexclude[k] = rexclude[k]-hdeg[l].rcentre[k];
 					    }
 					dexclude = sqrt(rexclude[0]*rexclude[0]+rexclude[1]*rexclude[1]+rexclude[2]*rexclude[2]);
-					if (dexclude <= hdexclude[l].rmax) {
+					if (dexclude <= hdeg[l].size) {
 					    particleaccepted = 0;
 					    break;
 					    }
@@ -3613,7 +3743,7 @@ void put_pgp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_GAS
     *pgp_storage_in = pgp_storage;
     }
 
-void put_pdp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_DARK_PARTICLE *pdp, PROFILE_DARK_PARTICLE **pdp_storage_in) {
+void put_pdp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUDE *hdeg, PROFILE_DARK_PARTICLE *pdp, PROFILE_DARK_PARTICLE **pdp_storage_in) {
 
     int i, j, k, l;
     int index[3];
@@ -3692,13 +3822,13 @@ void put_pdp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_DAR
 				*/
 				particleaccepted = 1;
 				if (gi->excludeparticles == 1) {
-				    for (l = 0; l < gi->NHaloExclude; l++) {
+				    for (l = 0; l < gi->NHaloExcludeGlobal; l++) {
 					for (k = 0; k < 3; k++) {
-					    rexclude[k] = correct_position(hdexclude[l].rcentre[k],pdp[i].r[k],gi->us.LBox);
-					    rexclude[k] = rexclude[k]-hdexclude[l].rcentre[k];
+					    rexclude[k] = correct_position(hdeg[l].rcentre[k],pdp[i].r[k],gi->us.LBox);
+					    rexclude[k] = rexclude[k]-hdeg[l].rcentre[k];
 					    }
 					dexclude = sqrt(rexclude[0]*rexclude[0]+rexclude[1]*rexclude[1]+rexclude[2]*rexclude[2]);
-					if (dexclude <= hdexclude[l].rmax) {
+					if (dexclude <= hdeg[l].size) {
 					    particleaccepted = 0;
 					    break;
 					    }
@@ -3737,7 +3867,7 @@ void put_pdp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_DAR
     *pdp_storage_in = pdp_storage;
     }
 
-void put_psp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_STAR_PARTICLE *psp, PROFILE_STAR_PARTICLE **psp_storage_in) {
+void put_psp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUDE *hdeg, PROFILE_STAR_PARTICLE *psp, PROFILE_STAR_PARTICLE **psp_storage_in) {
 
     int i, j, k, l;
     int index[3];
@@ -3816,13 +3946,13 @@ void put_psp_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA *hdexclude, PROFILE_STA
 				*/
 				particleaccepted = 1;
 				if (gi->excludeparticles == 1) {
-				    for (l = 0; l < gi->NHaloExclude; l++) {
+				    for (l = 0; l < gi->NHaloExcludeGlobal; l++) {
 					for (k = 0; k < 3; k++) {
-					    rexclude[k] = correct_position(hdexclude[l].rcentre[k],psp[i].r[k],gi->us.LBox);
-					    rexclude[k] = rexclude[k]-hdexclude[l].rcentre[k];
+					    rexclude[k] = correct_position(hdeg[l].rcentre[k],psp[i].r[k],gi->us.LBox);
+					    rexclude[k] = rexclude[k]-hdeg[l].rcentre[k];
 					    }
 					dexclude = sqrt(rexclude[0]*rexclude[0]+rexclude[1]*rexclude[1]+rexclude[2]*rexclude[2]);
-					if (dexclude <= hdexclude[l].rmax) {
+					if (dexclude <= hdeg[l].size) {
 					    particleaccepted = 0;
 					    break;
 					    }
@@ -5543,7 +5673,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		/*
 		** Check if the pair is close enough
 		*/
-		if (d <= gi.fduplicate*size) {
+		if (d <= gi.fhaloduplicate*size) {
 		    /*
 		    ** Found a duplicate
 		    */
