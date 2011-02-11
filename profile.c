@@ -160,6 +160,7 @@ typedef struct halo_data {
     double rmin, rmax;
     double rvradrangelower, rvradrangeupper;
     double vradmean, vraddisp;
+    double zaxis[3], zheight;
     PROFILE_STRUCTURE *ps;
     HALO_DATA_EXCLUDE *hde;
     } HALO_DATA;
@@ -211,10 +212,12 @@ typedef struct general_info {
     int profilingmode;
     int dataprocessingmode;
     int centretype;
+    int binning;
     int velocityprojection;
     int shapetensorform;
     int rmaxfromhalocatalogue;
     int excludeparticles;
+    int zaxiscataloguespecified;
     int gascontained, darkcontained, starcontained;
     int NBin, NHalo, NHaloExcludeGlobal, NCellData, NCellHalo;
     int Nparticleperblockgas, Nparticleinblockgas, Nblockgas;
@@ -243,9 +246,10 @@ typedef struct general_info {
     double Deltabgmaxscale;
     double Nsigmavrad, Nsigmaextreme, vraddispmin;
     double shapeiterationtolerance;
+    double zaxis[3], zheight;
     COSMOLOGICAL_PARAMETERS cp;
     UNIT_SYSTEM us, cosmous;
-    char HaloCatalogueFileName[256], ExcludeHaloCatalogueFileName[256], OutputName[256];
+    char HaloCatalogueFileName[256], ExcludeHaloCatalogueFileName[256], ZAxisCatalogueFileName[256], OutputName[256];
     char TotProfilesFileName[256], GasProfilesFileName[256], DarkProfilesFileName[256], StarProfilesFileName[256];
     } GI;
 
@@ -257,7 +261,6 @@ void read_halocatalogue_ascii_6DFOF(GI *, HALO_DATA **);
 void read_halocatalogue_ascii_characteristics(GI *, HALO_DATA **);
 int read_halocatalogue_ascii_characteristics_excludehalo(GI *, HALO_DATA *, HALO_DATA_EXCLUDE **);
 void initialise_halo_profile(HALO_DATA *);
-void initialise_halo_profile_shape(HALO_DATA *);
 void reset_halo_profile_shape(GI, HALO_DATA *);
 void read_spherical_profiles(GI, HALO_DATA *);
 void put_pgp_in_bins(GI, HALO_DATA *, PROFILE_GAS_PARTICLE *);
@@ -280,7 +283,7 @@ void calculate_truncation_characteristics(GI, HALO_DATA *, double);
 void remove_background(GI, HALO_DATA *);
 void calculate_velocity_characteristics(GI, HALO_DATA *);
 void determine_halo_hierarchy(GI, HALO_DATA *);
-void write_output_spherical_profile(GI, HALO_DATA *);
+void write_output_matter_profile(GI, HALO_DATA *);
 void write_output_shape_profile(GI, HALO_DATA *, int);
 
 int main(int argc, char **argv) {
@@ -371,6 +374,12 @@ int main(int argc, char **argv) {
             positionprecision = 1;
             i++;
             }
+        else if (strcmp(argv[i],"-pfm") == 0) {
+	    i++;
+	    if (i >= argc) usage();
+            ad.particle_file_mode = atoi(argv[i]);
+            i++;
+            }
         else if (strcmp(argv[i],"-dataformat") == 0) {
             i++;
             if (i >= argc) usage();
@@ -453,6 +462,14 @@ int main(int argc, char **argv) {
             gi.centretype = 1;
             i++;
             }
+        else if (strcmp(argv[i],"-binspherical") == 0) {
+            gi.binning = 0;
+            i++;
+            }
+        else if (strcmp(argv[i],"-bincylindrical") == 0) {
+            gi.binning = 1;
+            i++;
+            }
         else if (strcmp(argv[i],"-vpaxes") == 0) {
             gi.velocityprojection = 0;
             i++;
@@ -460,6 +477,34 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i],"-vpspherical") == 0) {
             gi.velocityprojection = 1;
             i++;
+            }
+        else if (strcmp(argv[i],"-vpcylindrical") == 0) {
+            gi.velocityprojection = 2;
+            i++;
+            }
+        else if (strcmp(argv[i],"-zaxis_x") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.zaxis[0] = atof(argv[i]);
+	    i++;
+            }
+        else if (strcmp(argv[i],"-zaxis_y") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.zaxis[1] = atof(argv[i]);
+	    i++;
+            }
+        else if (strcmp(argv[i],"-zaxis_z") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.zaxis[2] = atof(argv[i]);
+	    i++;
+            }
+	else if (strcmp(argv[i],"-zheight") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    gi.zheight = atof(argv[i]);
+	    i++;
             }
         else if (strcmp(argv[i],"-rmaxfromhalocatalogue") == 0) {
             gi.rmaxfromhalocatalogue = 1;
@@ -765,6 +810,13 @@ int main(int argc, char **argv) {
             strcpy(gi.ExcludeHaloCatalogueFileName,argv[i]);
             i++;
             }
+        else if (strcmp(argv[i],"-zaxiscatalogue") == 0) {
+            i++;
+            if (i >= argc) usage();
+            strcpy(gi.ZAxisCatalogueFileName,argv[i]);
+	    gi.zaxiscataloguespecified = 1;
+            i++;
+            }
         else if (strcmp(argv[i],"-output") == 0) {
             i++;
             if (i >= argc) usage();
@@ -966,6 +1018,7 @@ int main(int argc, char **argv) {
     if (gi.profilingmode == 0) {
 	if (halocatalogueformat == 0) read_halocatalogue_ascii_generic(&gi,&hd);
 	else if (halocatalogueformat == 1) read_halocatalogue_ascii_6DFOF(&gi,&hd);
+	else if (halocatalogueformat == 2) read_halocatalogue_ascii_characteristics(&gi,&hd);
 	}
     else if (gi.profilingmode >= 1 && gi.profilingmode <= 3) {
 	assert(halocatalogueformat == 2);
@@ -1805,7 +1858,7 @@ int main(int argc, char **argv) {
 	gettimeofday(&time,NULL);
 	timestartsub = time.tv_sec;
 	fprintf(stderr,"Writing output ... ");
-	write_output_spherical_profile(gi,hd);
+	write_output_matter_profile(gi,hd);
 	gettimeofday(&time,NULL);
 	timeendsub = time.tv_sec;
 	timediff = timeendsub-timestartsub;
@@ -1860,6 +1913,7 @@ int main(int argc, char **argv) {
 		}
 	    fprintf(stderr,"\n");
 	    fprintf(stderr,"ART data properties:\n\n");
+	    fprintf(stderr,"Particle File Mode : %d\n",ad.particle_file_mode);
 	    fprintf(stderr,"Nparticleperrecord : %d\n",ad.Nparticleperrecord);
 	    fprintf(stderr,"Nrecord            : %d\n",ad.Nrecord);
 	    fprintf(stderr,"Nhydroproperties   : %d\n",ad.Nhydroproperties);
@@ -1917,7 +1971,17 @@ int main(int argc, char **argv) {
 	case 2: strcpy(cdummy,"characteristics"); break;
 	default: strcpy(cdummy,"not supported"); }
 	fprintf(stderr,"Halocatalogue format    : %s\n",cdummy);
-        fprintf(stderr,"Velocity projection     : %s\n",(gi.velocityprojection == 0)?"coordinate axes":"spherical");
+	switch(gi.binning) {
+	case 0: strcpy(cdummy,"spherical"); break;
+	case 1: strcpy(cdummy,"cylindrical"); break;
+	default: strcpy(cdummy,"not supported"); }
+        fprintf(stderr,"Binning                 : %s\n",cdummy);
+	switch(gi.velocityprojection) {
+	case 0: strcpy(cdummy,"coordinate axes"); break;
+	case 1: strcpy(cdummy,"spherical"); break;
+	case 2: strcpy(cdummy,"cylindrical"); break;
+	default: strcpy(cdummy,"not supported"); }
+        fprintf(stderr,"Velocity projection     : %s\n",cdummy);
 	fprintf(stderr,"Profiling mode          : %d\n",gi.profilingmode);
 	fprintf(stderr,"Data processing mode    : %d\n",gi.dataprocessingmode);
 	if (gi.profilingmode > 0) fprintf(stderr,"Shape tensor form       : %d\n",gi.shapetensorform);
@@ -1958,6 +2022,10 @@ int main(int argc, char **argv) {
         fprintf(stderr,"NLoopProcessData        : %d\n",gi.NLoopProcessData);
         fprintf(stderr,"NLoopRead               : %d\n",gi.NLoopRead);
         fprintf(stderr,"OutputFrequencySI       : %d\n",gi.OutputFrequencyShapeIteration);
+	fprintf(stderr,"zaxis_x                 : %.6e\n",gi.zaxis[0]);
+	fprintf(stderr,"zaxis_y                 : %.6e\n",gi.zaxis[1]);
+	fprintf(stderr,"zaxis_z                 : %.6e\n",gi.zaxis[2]);
+	fprintf(stderr,"zheight                 : %.6e\n",gi.zheight);
 	fprintf(stderr,"frecentrermin           : %.6e\n",gi.frecentrermin);
 	fprintf(stderr,"frecentredist           : %.6e\n",gi.frecentredist);
 	fprintf(stderr,"frhobg                  : %.6e\n",gi.frhobg);
@@ -1969,8 +2037,10 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fhaloexcludesize        : %.6e\n",gi.fhaloexcludesize);
 	fprintf(stderr,"fhaloexcludedistance    : %.6e\n",gi.fhaloexcludedistance);
 	fprintf(stderr,"fhaloduplicate          : %.6e\n",gi.fhaloduplicate);
+/*
 	fprintf(stderr,"fincludeshapeproperty   : %.6e\n",gi.fincludeshapeproperty);
 	fprintf(stderr,"fincludeshaperadius     : %.6e\n",gi.fincludeshaperadius);
+*/
 	fprintf(stderr,"fincludestorageradius   : %.6e\n",gi.fincludestorageradius);
 	fprintf(stderr,"slopertruncindicator    : %.6e\n",gi.slopertruncindicator);
 	fprintf(stderr,"Delta_bg_maxscale       : %.6e\n",gi.Deltabgmaxscale);
@@ -2010,8 +2080,15 @@ void usage(void) {
     fprintf(stderr,"-NBinPerDex <value>                  : number of bins per decade between rmin and rmax - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-ctcom                               : set this flag for centre-of-mass centres from 6DFOF file\n");
     fprintf(stderr,"-ctpotorden                          : set this flag for potmin or denmax centres from 6DFOF file\n");
+    fprintf(stderr,"-binspherical                        : set this flag for binning in spherical coordinates (default)\n");
+    fprintf(stderr,"-bincylindrical                      : set this flag for binning in cylindrical coordinates\n");
     fprintf(stderr,"-vpaxes                              : set this flag for velocity projection along coordinate axes (default)\n");
     fprintf(stderr,"-vpspherical                         : set this flag for velocity projection in spherical coordinates\n");
+    fprintf(stderr,"-vpcylindrical                       : set this flag for velocity projection in cylindrical coordinates\n");
+    fprintf(stderr,"-zaxis_x                             : x-component of global z-axis for cylindrical coordinates (default: not set)\n");
+    fprintf(stderr,"-zaxis_y                             : y-component of global z-axis for cylindrical coordinates (default: not set)\n");
+    fprintf(stderr,"-zaxis_z                             : z-component of global z-axis for cylindrical coordinates (default: not set)\n");
+    fprintf(stderr,"-zheight                             : height above mid-plane for inclusion for cylindrical binning (default: not set)\n");
     fprintf(stderr,"-binfactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5)\n");
     fprintf(stderr,"-rmaxfromhalocatalogue               : set this flag for rmax determined from 6DFOF file\n");
     fprintf(stderr,"-OmegaM0 <value>                     : OmegaM0 value (default: 0) [only necessary for Tipsy format]\n");
@@ -2048,6 +2125,7 @@ void usage(void) {
     fprintf(stderr,"-gasfile <name>                      : gas file in ART native binary format\n");
     fprintf(stderr,"-halocatalogue <name>                : halo catalouge file\n");
     fprintf(stderr,"-excludehalocatalogue <name>         : halo catalouge file (only characteristics format supported)\n");
+    fprintf(stderr,"-zaxiscatalogue <name>               : z-axis catalouge file\n");
     fprintf(stderr,"-output <name>                       : name of output files (endings like .characteristics etc. appended)\n");
     fprintf(stderr,"-v                                   : more informative output to screen\n");
     fprintf(stderr,"\n");
@@ -2076,7 +2154,9 @@ void set_default_values_general_info(GI *gi) {
     gi->dataprocessingmode = 0;
     gi->shapetensorform = 0;
     gi->excludeparticles = 0;
+    gi->zaxiscataloguespecified = 0;
     gi->centretype = 0;
+    gi->binning = 0;
     gi->velocityprojection = 0;
     gi->rmaxfromhalocatalogue = 0;
     gi->gascontained = 0;
@@ -2086,6 +2166,11 @@ void set_default_values_general_info(GI *gi) {
     gi->NBinPerDex = 0;
     gi->NHalo = 0;
     gi->NHaloExcludeGlobal = 0;
+
+    gi->zaxis[0] = 0;
+    gi->zaxis[1] = 0;
+    gi->zaxis[2] = 0;
+    gi->zheight = 0;
 
     gi->Nparticleperblockgas = 1e7;
     gi->Nparticleinblockgas = 0;
@@ -2173,15 +2258,22 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloDataIncrement = 1000;
     int SizeHaloData = SizeHaloDataIncrement;
-    int i, j, idummy, ID, NBin, NHaloRead;
+    int i, j, idummy, ID, IDz, NBin, NHaloRead;
     double ddummy;
-    double r[3], v[3];
+    double r[3], v[3], zaxis[3], zheight;
     double rmin, rmax;
+    char cdummy[1000];
     HALO_DATA *hd;
-    FILE *HaloCatalogueFile = NULL;
+    FILE *HaloCatalogueFile = NULL, *ZAxisCatalogueFile = NULL;
 
     HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
     assert(HaloCatalogueFile != NULL);
+
+    if (gi->zaxiscataloguespecified) {
+	ZAxisCatalogueFile = fopen(gi->ZAxisCatalogueFileName,"r");
+	assert(ZAxisCatalogueFile != NULL);
+	fgets(cdummy,1000,ZAxisCatalogueFile);
+	}
 
     hd = *hdin;
     hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
@@ -2253,9 +2345,34 @@ void read_halocatalogue_ascii_generic(GI *gi, HALO_DATA **hdin) {
 	    hd[i].ps[j].darkshape = NULL;
 	    hd[i].ps[j].starshape = NULL;
 	    }
+	hd[i].zaxis[0] = 0;
+	hd[i].zaxis[1] = 0;
+	hd[i].zaxis[2] = 1;
+	hd[i].zheight = hd[i].rmax;
+	if (gi->zaxiscataloguespecified) {
+	    fscanf(ZAxisCatalogueFile,"%i",&idummy); IDz = idummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[0] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[1] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[2] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zheight = ddummy;
+	    assert(ID == IDz);
+	    ddummy = 1.0/sqrt(pow(zaxis[0],2)+pow(zaxis[1],2)+pow(zaxis[2],2));
+	    hd[i].zaxis[0] = zaxis[0]*ddummy;
+	    hd[i].zaxis[1] = zaxis[1]*ddummy;
+	    hd[i].zaxis[2] = zaxis[2]*ddummy;
+	    hd[i].zheight = (zheight != 0)?zheight:hd[i].zheight;
+	    }
+	if (gi->zaxis[0] != 0 || gi->zaxis[1] != 0 ||  gi->zaxis[2] != 0) {
+	    ddummy = 1.0/sqrt(pow(gi->zaxis[0],2)+pow(gi->zaxis[1],2)+pow(gi->zaxis[2],2));
+	    hd[i].zaxis[0] = gi->zaxis[0]*ddummy;
+	    hd[i].zaxis[1] = gi->zaxis[1]*ddummy;
+	    hd[i].zaxis[2] = gi->zaxis[2]*ddummy;
+	    }
+	hd[i].zheight = (gi->zheight != 0)?gi->zheight:hd[i].zheight;
 	initialise_halo_profile(&hd[i]);
 	}
     fclose(HaloCatalogueFile);
+    if (gi->zaxiscataloguespecified) fclose(ZAxisCatalogueFile);
     *hdin = hd;
     gi->NHalo = NHaloRead;
     }
@@ -2264,15 +2381,22 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloDataIncrement = 1000;
     int SizeHaloData = SizeHaloDataIncrement;
-    int i, j, ID, N, idummy, NHaloRead;
+    int i, j, ID, IDz, N, idummy, NHaloRead;
     double ddummy;
     double mass, radius;
-    double rcom[3], rpotorden[3], v[3];
+    double rcom[3], rpotorden[3], v[3], zaxis[3], zheight;
+    char cdummy[1000];
     HALO_DATA *hd;
-    FILE *HaloCatalogueFile = NULL;
+    FILE *HaloCatalogueFile = NULL, *ZAxisCatalogueFile = NULL;;
 
     HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
     assert(HaloCatalogueFile != NULL);
+
+    if (gi->zaxiscataloguespecified) {
+	ZAxisCatalogueFile = fopen(gi->ZAxisCatalogueFileName,"r");
+	assert(ZAxisCatalogueFile != NULL);
+	fgets(cdummy,1000,ZAxisCatalogueFile);
+	}
 
     hd = *hdin;
     hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
@@ -2360,9 +2484,34 @@ void read_halocatalogue_ascii_6DFOF(GI *gi, HALO_DATA **hdin) {
 	    hd[i].ps[j].darkshape = NULL;
 	    hd[i].ps[j].starshape = NULL;
 	    }
+	hd[i].zaxis[0] = 0;
+	hd[i].zaxis[1] = 0;
+	hd[i].zaxis[2] = 1;
+	hd[i].zheight = hd[i].rmax;
+	if (gi->zaxiscataloguespecified) {
+	    fscanf(ZAxisCatalogueFile,"%i",&idummy); IDz = idummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[0] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[1] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[2] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zheight = ddummy;
+	    assert(ID == IDz);
+	    ddummy = 1.0/sqrt(pow(zaxis[0],2)+pow(zaxis[1],2)+pow(zaxis[2],2));
+	    hd[i].zaxis[0] = zaxis[0]*ddummy;
+	    hd[i].zaxis[1] = zaxis[1]*ddummy;
+	    hd[i].zaxis[2] = zaxis[2]*ddummy;
+	    hd[i].zheight = (zheight != 0)?zheight:hd[i].zheight;
+	    }
+	if (gi->zaxis[0] != 0 || gi->zaxis[1] != 0 ||  gi->zaxis[2] != 0) {
+	    ddummy = 1.0/sqrt(pow(gi->zaxis[0],2)+pow(gi->zaxis[1],2)+pow(gi->zaxis[2],2));
+	    hd[i].zaxis[0] = gi->zaxis[0]*ddummy;
+	    hd[i].zaxis[1] = gi->zaxis[1]*ddummy;
+	    hd[i].zaxis[2] = gi->zaxis[2]*ddummy;
+	    }
+	hd[i].zheight = (gi->zheight != 0)?gi->zheight:hd[i].zheight;
 	initialise_halo_profile(&hd[i]);
 	}
     fclose(HaloCatalogueFile);
+    if (gi->zaxiscataloguespecified) fclose(ZAxisCatalogueFile);
     *hdin = hd;
     gi->NHalo = NHaloRead;
     }
@@ -2371,16 +2520,22 @@ void read_halocatalogue_ascii_characteristics(GI *gi, HALO_DATA **hdin) {
 
     int SizeHaloDataIncrement = 1000;
     int SizeHaloData = SizeHaloDataIncrement;
-    int i, j, ID, NBin, idummy, NHaloRead;
+    int i, j, ID, IDz, NBin, idummy, NHaloRead;
     double ddummy;
-    double r[3], v[3];
+    double r[3], v[3], zaxis[3], zheight;
     double rmin, rmax;
     char cdummy[1000];
     HALO_DATA *hd;
-    FILE *HaloCatalogueFile = NULL;
+    FILE *HaloCatalogueFile = NULL, *ZAxisCatalogueFile = NULL;;
 
     HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
     assert(HaloCatalogueFile != NULL);
+
+    if (gi->zaxiscataloguespecified) {
+	ZAxisCatalogueFile = fopen(gi->ZAxisCatalogueFileName,"r");
+	assert(ZAxisCatalogueFile != NULL);
+	fgets(cdummy,1000,ZAxisCatalogueFile);
+	}
 
     hd = *hdin;
     hd = realloc(hd,SizeHaloData*sizeof(HALO_DATA));
@@ -2428,37 +2583,97 @@ void read_halocatalogue_ascii_characteristics(GI *gi, HALO_DATA **hdin) {
 	hd[i].ps = realloc(hd[i].ps,(hd[i].NBin+1)*sizeof(PROFILE_STRUCTURE));
 	assert(hd[i].ps != NULL);
 	for (j = 0; j < hd[i].NBin+1; j++) {
-	    hd[i].ps[j].tot = NULL;
-	    hd[i].ps[j].gas = NULL;
-	    hd[i].ps[j].dark = NULL;
-	    hd[i].ps[j].star = NULL;
-	    hd[i].ps[j].totshape = realloc(hd[i].ps[j].totshape,sizeof(PROFILE_SHAPE_PROPERTIES));
-	    assert(hd[i].ps[j].totshape != NULL);
-	    if (gi->gascontained) {
-		hd[i].ps[j].gasshape = realloc(hd[i].ps[j].gasshape,sizeof(PROFILE_SHAPE_PROPERTIES));
-		assert(hd[i].ps[j].gasshape != NULL);
+	    if (gi->profilingmode == 0) {
+		hd[i].ps[j].tot = realloc(hd[i].ps[j].tot,sizeof(PROFILE_TOT_PROPERTIES));
+		assert(hd[i].ps[j].tot != NULL);
+		if (gi->gascontained) {
+		    hd[i].ps[j].gas = realloc(hd[i].ps[j].gas,sizeof(PROFILE_GAS_PROPERTIES));
+		    assert(hd[i].ps[j].gas != NULL);
+		    }
+		else {
+		    hd[i].ps[j].gas = NULL;
+		    }
+		if (gi->darkcontained) {
+		    hd[i].ps[j].dark = realloc(hd[i].ps[j].dark,sizeof(PROFILE_DARK_PROPERTIES));
+		    assert(hd[i].ps[j].dark != NULL);
+		    }
+		else {
+		    hd[i].ps[j].dark = NULL;
+		    }
+		if (gi->starcontained) {
+		    hd[i].ps[j].star = realloc(hd[i].ps[j].star,sizeof(PROFILE_STAR_PROPERTIES));
+		    assert(hd[i].ps[j].star != NULL);
+		    }
+		else {
+		    hd[i].ps[j].star = NULL;
+		    }
 		}
 	    else {
+		hd[i].ps[j].tot = NULL;
+		hd[i].ps[j].gas = NULL;
+		hd[i].ps[j].dark = NULL;
+		hd[i].ps[j].star = NULL;
+		}
+	    if (gi->profilingmode == 1 || gi->profilingmode == 2) {
+		hd[i].ps[j].totshape = realloc(hd[i].ps[j].totshape,sizeof(PROFILE_SHAPE_PROPERTIES));
+		assert(hd[i].ps[j].totshape != NULL);
+		if (gi->gascontained) {
+		    hd[i].ps[j].gasshape = realloc(hd[i].ps[j].gasshape,sizeof(PROFILE_SHAPE_PROPERTIES));
+		    assert(hd[i].ps[j].gasshape != NULL);
+		    }
+		else {
+		    hd[i].ps[j].gasshape = NULL;
+		    }
+		if (gi->darkcontained) {
+		    hd[i].ps[j].darkshape = realloc(hd[i].ps[j].darkshape,sizeof(PROFILE_SHAPE_PROPERTIES));
+		    assert(hd[i].ps[j].darkshape != NULL);
+		    }
+		else {
+		    hd[i].ps[j].darkshape = NULL;
+		    }
+		if (gi->starcontained) {
+		    hd[i].ps[j].starshape = realloc(hd[i].ps[j].starshape,sizeof(PROFILE_SHAPE_PROPERTIES));
+		    assert(hd[i].ps[j].starshape != NULL);
+		    }
+		else {
+		    hd[i].ps[j].starshape = NULL;
+		    }
+		}
+	    else {
+		hd[i].ps[j].totshape = NULL;
 		hd[i].ps[j].gasshape = NULL;
-		}
-	    if (gi->darkcontained) {
-		hd[i].ps[j].darkshape = realloc(hd[i].ps[j].darkshape,sizeof(PROFILE_SHAPE_PROPERTIES));
-		assert(hd[i].ps[j].darkshape != NULL);
-		}
-	    else {
 		hd[i].ps[j].darkshape = NULL;
-		}
-	    if (gi->starcontained) {
-		hd[i].ps[j].starshape = realloc(hd[i].ps[j].starshape,sizeof(PROFILE_SHAPE_PROPERTIES));
-		assert(hd[i].ps[j].starshape != NULL);
-		}
-	    else {
 		hd[i].ps[j].starshape = NULL;
 		}
 	    }
+	hd[i].zaxis[0] = 0;
+	hd[i].zaxis[1] = 0;
+	hd[i].zaxis[2] = 1;
+	hd[i].zheight = hd[i].rmax;
+	if (gi->zaxiscataloguespecified) {
+	    fscanf(ZAxisCatalogueFile,"%i",&idummy); IDz = idummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[0] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[1] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zaxis[2] = ddummy;
+	    fscanf(ZAxisCatalogueFile,"%lg",&ddummy); zheight = ddummy;
+	    assert(ID == IDz);
+	    ddummy = 1.0/sqrt(pow(zaxis[0],2)+pow(zaxis[1],2)+pow(zaxis[2],2));
+	    hd[i].zaxis[0] = zaxis[0]*ddummy;
+	    hd[i].zaxis[1] = zaxis[1]*ddummy;
+	    hd[i].zaxis[2] = zaxis[2]*ddummy;
+	    hd[i].zheight = (zheight != 0)?zheight:hd[i].zheight;
+	    }
+	if (gi->zaxis[0] != 0 || gi->zaxis[1] != 0 ||  gi->zaxis[2] != 0) {
+	    ddummy = 1.0/sqrt(pow(gi->zaxis[0],2)+pow(gi->zaxis[1],2)+pow(gi->zaxis[2],2));
+	    hd[i].zaxis[0] = gi->zaxis[0]*ddummy;
+	    hd[i].zaxis[1] = gi->zaxis[1]*ddummy;
+	    hd[i].zaxis[2] = gi->zaxis[2]*ddummy;
+	    }
+	hd[i].zheight = (gi->zheight != 0)?gi->zheight:hd[i].zheight;
 	initialise_halo_profile(&hd[i]);
 	}
     fclose(HaloCatalogueFile);
+    if (gi->zaxiscataloguespecified) fclose(ZAxisCatalogueFile);
     *hdin = hd;
     gi->NHalo = NHaloRead;
     }
@@ -2657,7 +2872,7 @@ void initialise_halo_profile(HALO_DATA *hd) {
     hd->rvradrangeupper = 0;
     hd->vradmean = 0;
     hd->vraddisp = 0;
-    
+
     for (j = 0; j < 3; j++) {
 	hd->rcentrenew[j] = 0;
 	hd->vcentrenew[j] = 0;
@@ -2920,7 +3135,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     int particleaccepted = 1;
     int ***HeadIndex, *NextIndex;
     double r[3], rell[3], v[3], vproj[3];
-    double erad[3], ephi[3], etheta[3];
+    double eA[3], eB[3], eC[3];
     double d, size, dell;
     double shift[3];
 
@@ -2968,7 +3183,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
     for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,eA,eB,eC,d,size,dell) shared(hd,pgp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    /*
 		    ** Process data
@@ -3001,6 +3216,11 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 					    }
 					}
 				    }
+				if (gi.profilingmode == 0 && gi.binning == 1) {
+				    calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+				    dell = fabs(r[0]*eC[0] + r[1]*eC[1] + r[2]*eC[2]);
+				    if (dell > hd[j].zheight) particleaccepted = 0;
+				    }
 				if (particleaccepted) {
 				    for (k = 0; k < 3; k++) {
 					v[k] = pgp[i].v[k]-hd[j].vcentre[k];
@@ -3009,18 +3229,31 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 					/*
 					** Go through bins from outside inwards => larger bin volume further out
 					*/
+					if (gi.binning == 0) { /* spherical */
+					    dell = d;
+					    }
+					else if (gi.binning == 1) { /* cylindrical */
+					    calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+					    dell = r[0]*eA[0] + r[1]*eA[1] + r[2]*eA[2];
+					    }
 					for (l = hd[j].NBin; l >= 0; l--) {
-					    if (hd[j].ps[l].ri <= d && hd[j].ps[l].ro > d) {
+					    if (hd[j].ps[l].ri <= dell && hd[j].ps[l].ro > dell) {
 						if (gi.velocityprojection == 0) {
 						    vproj[0] = v[0];
 						    vproj[1] = v[1];
 						    vproj[2] = v[2];
 						    }
 						else if (gi.velocityprojection == 1) {
-						    calculate_unit_vectors_spherical(r,erad,ephi,etheta);
-						    vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-						    vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-						    vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+						    calculate_unit_vectors_spherical(r,eA,eB,eC);
+						    vproj[0] = v[0]*eA[0] + v[1]*eA[1] + v[2]*eA[2];
+						    vproj[1] = v[0]*eB[0] + v[1]*eB[1] + v[2]*eB[2];
+						    vproj[2] = v[0]*eC[0] + v[1]*eC[1] + v[2]*eC[2];
+						    }
+						else if (gi.velocityprojection == 2) {
+						    calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+						    vproj[0] = v[0]*eA[0] + v[1]*eA[1] + v[2]*eA[2];
+						    vproj[1] = v[0]*eB[0] + v[1]*eB[1] + v[2]*eB[2];
+						    vproj[2] = v[0]*eC[0] + v[1]*eC[1] + v[2]*eC[2];
 						    }
 						hd[j].ps[l].gas->N += 1;
 						hd[j].ps[l].gas->M += pgp[i].M;
@@ -3142,7 +3375,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     int particleaccepted = 1;
     int ***HeadIndex, *NextIndex;
     double r[3], rell[3], v[3], vproj[3];
-    double erad[3], ephi[3], etheta[3];
+    double eA[3], eB[3], eC[3];
     double d, size, dell;
     double shift[3];
 
@@ -3190,7 +3423,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
     for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,pdp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,eA,eB,eC,d,size,dell) shared(hd,pdp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
 			/*
@@ -3250,6 +3483,11 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 						}
 					    }
 					}
+				    if (gi.profilingmode == 0 && gi.binning == 1) {
+					calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+					dell = fabs(r[0]*eC[0] + r[1]*eC[1] + r[2]*eC[2]);
+					if (dell > hd[j].zheight) particleaccepted = 0;
+					}
 				    if (particleaccepted) {
 					for (k = 0; k < 3; k++) {
 					    v[k] = pdp[i].v[k]-hd[j].vcentre[k];
@@ -3258,20 +3496,34 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 					    /*
 					    ** Go through bins from outside inwards => larger bin volume further out
 					    */
+					    if (gi.binning == 0) { /* spherical */
+						dell = d;
+						}
+					    else if (gi.binning == 1) { /* cylindrical */
+						calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+						dell = r[0]*eA[0] + r[1]*eA[1] + r[2]*eA[2];
+						}
 					    for (l = hd[j].NBin; l >= 0; l--) {
-						if (hd[j].ps[l].ri <= d && hd[j].ps[l].ro > d) {
-						    calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+						if (hd[j].ps[l].ri <= dell && hd[j].ps[l].ro > dell) {
 						    if (gi.velocityprojection == 0) {
 							vproj[0] = v[0];
 							vproj[1] = v[1];
 							vproj[2] = v[2];
 							}
 						    else if (gi.velocityprojection == 1) {
-							vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-							vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-							vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+							calculate_unit_vectors_spherical(r,eA,eB,eC);
+							vproj[0] = v[0]*eA[0] + v[1]*eA[1] + v[2]*eA[2];
+							vproj[1] = v[0]*eB[0] + v[1]*eB[1] + v[2]*eB[2];
+							vproj[2] = v[0]*eC[0] + v[1]*eC[1] + v[2]*eC[2];
 							}
-						    hd[j].ps[l].tot->vradsmooth += pdp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+						    else if (gi.velocityprojection == 2) {
+							calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+							vproj[0] = v[0]*eA[0] + v[1]*eA[1] + v[2]*eA[2];
+							vproj[1] = v[0]*eB[0] + v[1]*eB[1] + v[2]*eB[2];
+							vproj[2] = v[0]*eC[0] + v[1]*eC[1] + v[2]*eC[2];
+							}
+						    calculate_unit_vectors_spherical(r,eA,eB,eC);
+						    hd[j].ps[l].tot->vradsmooth += pdp[i].M*(v[0]*eA[0]+v[1]*eA[1]+v[2]*eA[2]);
 						    hd[j].ps[l].dark->N += 1;
 						    hd[j].ps[l].dark->M += pdp[i].M;
 						    for (k = 0; k < 3; k++) {
@@ -3383,7 +3635,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     int particleaccepted = 1;
     int ***HeadIndex, *NextIndex;
     double r[3], rell[3], v[3], vproj[3];
-    double erad[3], ephi[3], etheta[3];
+    double eA[3], eB[3], eC[3];
     double d, size, dell;
     double shift[3];
 
@@ -3431,7 +3683,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
     for (index[0] = 0; index[0] < gi.NCellData; index[0]++) {
 	for (index[1] = 0; index[1] < gi.NCellData; index[1]++) {
 	    for (index[2] = 0; index[2] < gi.NCellData; index[2]++) {
-#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,erad,ephi,etheta,d,size,dell) shared(hd,psp,gi,index,shift,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(i,j,k,l,particleaccepted,r,rell,v,vproj,eA,eB,eC,d,size,dell) shared(hd,psp,gi,index,shift,HeadIndex,NextIndex)
 		for (j = 0; j < gi.NHalo; j++) {
 		    if (gi.ILoopRead < gi.NLoopRecentre) {
 			/*
@@ -3491,6 +3743,11 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 						}
 					    }
 					}
+				    if (gi.profilingmode == 0 && gi.binning == 1) {
+					calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+					dell = fabs(r[0]*eC[0] + r[1]*eC[1] + r[2]*eC[2]);
+					if (dell > hd[j].zheight) particleaccepted = 0;
+					}
 				    if (particleaccepted) {
 					for (k = 0; k < 3; k++) {
 					    v[k] = psp[i].v[k]-hd[j].vcentre[k];
@@ -3499,20 +3756,34 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 					    /*
 					    ** Go through bins from outside inwards => larger bin volume further out
 					    */
+					    if (gi.binning == 0) { /* spherical */
+						dell = d;
+						}
+					    else if (gi.binning == 1) { /* cylindrical */
+						calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+						dell = r[0]*eA[0] + r[1]*eA[1] + r[2]*eA[2];
+						}
 					    for (l = hd[j].NBin; l >= 0; l--) {
-						if (hd[j].ps[l].ri <= d && hd[j].ps[l].ro > d) {
-						    calculate_unit_vectors_spherical(r,erad,ephi,etheta);
+						if (hd[j].ps[l].ri <= dell && hd[j].ps[l].ro > dell) {
 						    if (gi.velocityprojection == 0) {
 							vproj[0] = v[0];
 							vproj[1] = v[1];
 							vproj[2] = v[2];
 							}
 						    else if (gi.velocityprojection == 1) {
-							vproj[0] = v[0]*erad[0]   + v[1]*erad[1]   + v[2]*erad[2];
-							vproj[1] = v[0]*ephi[0]   + v[1]*ephi[1]   + v[2]*ephi[2];
-							vproj[2] = v[0]*etheta[0] + v[1]*etheta[1] + v[2]*etheta[2];
+							calculate_unit_vectors_spherical(r,eA,eB,eC);
+							vproj[0] = v[0]*eA[0] + v[1]*eA[1] + v[2]*eA[2];
+							vproj[1] = v[0]*eB[0] + v[1]*eB[1] + v[2]*eB[2];
+							vproj[2] = v[0]*eC[0] + v[1]*eC[1] + v[2]*eC[2];
 							}
-						    hd[j].ps[l].tot->vradsmooth += psp[i].M*(v[0]*erad[0]+v[1]*erad[1]+v[2]*erad[2]);
+						    else if (gi.velocityprojection == 2) {
+							calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
+							vproj[0] = v[0]*eA[0] + v[1]*eA[1] + v[2]*eA[2];
+							vproj[1] = v[0]*eB[0] + v[1]*eB[1] + v[2]*eB[2];
+							vproj[2] = v[0]*eC[0] + v[1]*eC[1] + v[2]*eC[2];
+							}
+						    calculate_unit_vectors_spherical(r,eA,eB,eC);
+						    hd[j].ps[l].tot->vradsmooth += psp[i].M*(v[0]*eA[0]+v[1]*eA[1]+v[2]*eA[2]);
 						    hd[j].ps[l].star->N += 1;
 						    hd[j].ps[l].star->M += psp[i].M;
 						    for (k = 0; k < 3; k++) {
@@ -4695,8 +4966,18 @@ void calculate_derived_properties(GI gi, HALO_DATA *hd) {
     vradsmooth = malloc((hd->NBin+1)*sizeof(double));
     assert(vradsmooth != NULL);
     for (j = 0; j < (hd->NBin+1); j++) {
-	hd->ps[j].V = 4*M_PI*(pow(hd->ps[j].ro,3) - pow(hd->ps[j].ri,3))/3.0;
-	hd->ps[j].Venc = 4*M_PI*pow(hd->ps[j].ro,3)/3.0;
+	if (gi.binning == 0) {
+	    hd->ps[j].V = 4*M_PI*(pow(hd->ps[j].ro,3)-pow(hd->ps[j].ri,3))/3.0;
+	    hd->ps[j].Venc = 4*M_PI*pow(hd->ps[j].ro,3)/3.0;
+	    }
+	else if (gi.binning == 1) {
+	    ddummy = sqrt(pow(hd->ps[hd->NBin].ro,2)-pow(hd->ps[j].rm,2));
+	    if (gi.zheight != 0 && gi.zheight < ddummy) ddummy = gi.zheight;
+	    hd->ps[j].V = M_PI*(pow(hd->ps[j].ro,2)-pow(hd->ps[j].ri,2))*2*ddummy;
+	    for (k = 0; k <= j; k++) {
+		hd->ps[j].Venc += hd->ps[k].V;
+		}
+	    }
 	for (k = 0; k <= j; k++) {
 	    hd->ps[j].tot->Nenc += hd->ps[k].tot->N;
 	    hd->ps[j].tot->Menc += hd->ps[k].tot->M;
@@ -5715,7 +5996,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     free(NextIndex);
     }
 
-void write_output_spherical_profile(GI gi, HALO_DATA *hd) {
+void write_output_matter_profile(GI gi, HALO_DATA *hd) {
 
     int i, j, k;
     char outputfilename[256];
@@ -5727,23 +6008,33 @@ void write_output_spherical_profile(GI gi, HALO_DATA *hd) {
     sprintf(outputfilename,"%s.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
-    fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rtruncindicator/35 HostHaloID/36 ExtraHaloID/37\n");
+    if (gi.binning == 0) {
+	fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 rbg/11 Mrbg/12 rcrit/13 Mrcrit/14 rstatic/15 Mrstatic/16 rvcmaxtot/17 Mrvcmaxtot/18 rvcmaxdark/19 Mrvcmaxdark/20 rtrunc/21 Mrtrunc/22 rhobgtot/23 rhobggas/24 rhobgdark/25 rhobgstar/26 rvcmaxtottrunc/27 Mrvcmaxtottrunc/28 rvcmaxdarktrunc/29 Mrvcmaxdarktrunc/30 vradmean/31 vraddisp/32 rvradrangelower/33 rvradrangeupper/34 rtruncindicator/35 HostHaloID/36 ExtraHaloID/37\n");
+	}
+    else if (gi.binning == 1) {
+	fprintf(outputfile,"#ID/1 rx/2 ry/3 rz/4 vx/5 vy/6 vz/7 rmin/8 rmax/9 NBin/10 zaxis_x/11 zaxis_y/12 zaxis_z/13 zheight/14\n");
+	}
     for (i = 0; i < gi.NHalo; i++) {
 	fprintf(outputfile,"%d",hd[i].ID);
 	fprintf(outputfile," %.6e %.6e %.6e",hd[i].rcentre[0],hd[i].rcentre[1],hd[i].rcentre[2]);
 	fprintf(outputfile," %.6e %.6e %.6e",hd[i].vcentre[0],hd[i].vcentre[1],hd[i].vcentre[2]);
 	fprintf(outputfile," %.6e %.6e",hd[i].rmin,hd[i].rmax);
 	fprintf(outputfile," %d",hd[i].NBin+1);
-	fprintf(outputfile," %.6e %.6e",hd[i].rbg,hd[i].Mrbg);
-	fprintf(outputfile," %.6e %.6e",hd[i].rcrit,hd[i].Mrcrit);
-	fprintf(outputfile," %.6e %.6e",hd[i].rstatic,hd[i].Mrstatic);
-	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark);
-	fprintf(outputfile," %.6e %.6e",hd[i].rtrunc,hd[i].Mrtrunc);
-	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar);
-	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtottrunc,hd[i].Mrvcmaxtottrunc,hd[i].rvcmaxdarktrunc,hd[i].Mrvcmaxdarktrunc);
-	fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper);
-	fprintf(outputfile," %.6e",hd[i].rtruncindicator);
-	fprintf(outputfile," %d %d",hd[i].HostHaloID,hd[i].ExtraHaloID);
+	if (gi.binning == 0) {
+	    fprintf(outputfile," %.6e %.6e",hd[i].rbg,hd[i].Mrbg);
+	    fprintf(outputfile," %.6e %.6e",hd[i].rcrit,hd[i].Mrcrit);
+	    fprintf(outputfile," %.6e %.6e",hd[i].rstatic,hd[i].Mrstatic);
+	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtot,hd[i].Mrvcmaxtot,hd[i].rvcmaxdark,hd[i].Mrvcmaxdark);
+	    fprintf(outputfile," %.6e %.6e",hd[i].rtrunc,hd[i].Mrtrunc);
+	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rhobgtot,hd[i].rhobggas,hd[i].rhobgdark,hd[i].rhobgstar);
+	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].rvcmaxtottrunc,hd[i].Mrvcmaxtottrunc,hd[i].rvcmaxdarktrunc,hd[i].Mrvcmaxdarktrunc);
+	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].vradmean,hd[i].vraddisp,hd[i].rvradrangelower,hd[i].rvradrangeupper);
+	    fprintf(outputfile," %.6e",hd[i].rtruncindicator);
+	    fprintf(outputfile," %d %d",hd[i].HostHaloID,hd[i].ExtraHaloID);
+	    }
+	if (gi.binning == 1) {
+	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].zaxis[0],hd[i].zaxis[1],hd[i].zaxis[2],hd[i].zheight);
+	    }
 	fprintf(outputfile,"\n");
 	}
     fclose(outputfile);
