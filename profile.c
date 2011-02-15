@@ -989,6 +989,7 @@ int main(int argc, char **argv) {
     if (lengthtype == 1) {
 	gi.rmin /= gi.ascale;
 	gi.rmax /= gi.ascale;
+	gi.zheight /= gi.ascale;
 	}
 
     if (gi.cosmous.LBox == 0) gi.cosmous.LBox = LBox;
@@ -996,6 +997,11 @@ int main(int argc, char **argv) {
     if (gi.cosmous.rhocrit0 == 0) gi.cosmous.rhocrit0 = PhysicalConstants.rho_crit_Cosmology*pow(gi.cp.h0_100,2);
 
     calculate_units_transformation(gi.cosmous,gi.us,&cosmo2internal_ct);
+    /*
+    ** vraddispmin is a peculiar velocity in km s^{-1}
+    ** Internal velocity in Tipsy file format is the comoving velocity \dot{x}
+    ** Internal velocity in ART file format is the canonical momentum a^2*\dot{x}
+    */
     if (dataformat == 0) cosmo2internal_ct.V_cssf = 1/gi.ascale;
     else if (dataformat == 1) cosmo2internal_ct.V_cssf = gi.ascale;
     gi.vraddispmin *= ConversionFactors.km_per_s_2_kpc_per_Gyr;
@@ -2022,10 +2028,11 @@ int main(int argc, char **argv) {
         fprintf(stderr,"NLoopProcessData        : %d\n",gi.NLoopProcessData);
         fprintf(stderr,"NLoopRead               : %d\n",gi.NLoopRead);
         fprintf(stderr,"OutputFrequencySI       : %d\n",gi.OutputFrequencyShapeIteration);
-	fprintf(stderr,"zaxis_x                 : %.6e\n",gi.zaxis[0]);
-	fprintf(stderr,"zaxis_y                 : %.6e\n",gi.zaxis[1]);
-	fprintf(stderr,"zaxis_z                 : %.6e\n",gi.zaxis[2]);
-	fprintf(stderr,"zheight                 : %.6e\n",gi.zheight);
+	fprintf(stderr,"zaxis_x                 : %.6e LU\n",gi.zaxis[0]);
+	fprintf(stderr,"zaxis_y                 : %.6e LU\n",gi.zaxis[1]);
+	fprintf(stderr,"zaxis_z                 : %.6e LU\n",gi.zaxis[2]);
+	fprintf(stderr,"zheight                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		gi.zheight,gi.zheight/cosmo2internal_ct.L_usf,gi.ascale*gi.zheight/cosmo2internal_ct.L_usf);
 	fprintf(stderr,"frecentrermin           : %.6e\n",gi.frecentrermin);
 	fprintf(stderr,"frecentredist           : %.6e\n",gi.frecentredist);
 	fprintf(stderr,"frhobg                  : %.6e\n",gi.frhobg);
@@ -2072,8 +2079,8 @@ void usage(void) {
     fprintf(stderr,"-halocatalogueformat <value>         : 0 = generic / 1 = 6DFOF / 2 = characteristics (default: 0)\n");
     fprintf(stderr,"-shapetensorform <value>             : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
     fprintf(stderr,"-excludeparticles <value>            : 0 = don't exclude any particles / 1 = exclude particles in specified halo catalogue (default: 0)\n");
-    fprintf(stderr,"-ltphysical                          : rmin and rmax values are interpreted as physical lengths (default)\n");
-    fprintf(stderr,"-ltcomoving                          : rmin and rmax values are interpreted as comoving lengths\n");
+    fprintf(stderr,"-ltphysical                          : rmin, rmax and zheight values are interpreted as physical lengths (default)\n");
+    fprintf(stderr,"-ltcomoving                          : rmin, rmax and zheight values are interpreted as comoving lengths\n");
     fprintf(stderr,"-rmin <value>                        : minimum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-rmax <value>                        : maximum grid radius [LU] - overwrites values form halocatalogue (default: not set)\n");
     fprintf(stderr,"-NBin <value>                        : number of bins between rmin and rmax - overwrites values form halocatalogue (default: not set)\n");
@@ -2085,10 +2092,10 @@ void usage(void) {
     fprintf(stderr,"-vpaxes                              : set this flag for velocity projection along coordinate axes (default)\n");
     fprintf(stderr,"-vpspherical                         : set this flag for velocity projection in spherical coordinates\n");
     fprintf(stderr,"-vpcylindrical                       : set this flag for velocity projection in cylindrical coordinates\n");
-    fprintf(stderr,"-zaxis_x                             : x-component of global z-axis for cylindrical coordinates (default: not set)\n");
-    fprintf(stderr,"-zaxis_y                             : y-component of global z-axis for cylindrical coordinates (default: not set)\n");
-    fprintf(stderr,"-zaxis_z                             : z-component of global z-axis for cylindrical coordinates (default: not set)\n");
-    fprintf(stderr,"-zheight                             : height above mid-plane for inclusion for cylindrical binning (default: not set)\n");
+    fprintf(stderr,"-zaxis_x                             : x-component of global z-axis for cylindrical coordinates [LU] (default: not set)\n");
+    fprintf(stderr,"-zaxis_y                             : y-component of global z-axis for cylindrical coordinates [LU] (default: not set)\n");
+    fprintf(stderr,"-zaxis_z                             : z-component of global z-axis for cylindrical coordinates [LU] (default: not set)\n");
+    fprintf(stderr,"-zheight                             : height above mid-plane for inclusion for cylindrical binning [LU] (default: not set)\n");
     fprintf(stderr,"-binfactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5)\n");
     fprintf(stderr,"-rmaxfromhalocatalogue               : set this flag for rmax determined from 6DFOF file\n");
     fprintf(stderr,"-OmegaM0 <value>                     : OmegaM0 value (default: 0) [only necessary for Tipsy format]\n");
@@ -2222,7 +2229,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fincludestorageradius = 1;
     gi->slopertruncindicator = -0.5;
     gi->Deltabgmaxscale = 50;
-    gi->vraddispmin = 2;
+    gi->vraddispmin = 2; /* km s^{-1} */
     gi->Nsigmavrad = 1.5;
     gi->Nsigmaextreme = 5;
     gi->shapeiterationtolerance = 1e-5;
