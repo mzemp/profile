@@ -3123,8 +3123,8 @@ void add_particle_to_shape_tensor(GI gi, PROFILE_SHAPE_PROPERTIES *shape, double
 
     switch(gi.shapetensorform) {
     case 0: fst = 1; break;
-    case 1: fst = 1/d; break;
-    case 2: fst = 1/dell; break;
+    case 1: fst = 1/pow(d,2); break;
+    case 2: fst = 1/pow(dell,2); break;
     default: fst = 1; }
     shape->N++;
     shape->M += M;
