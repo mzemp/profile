@@ -2071,8 +2071,9 @@ void usage(void) {
     fprintf(stderr,"\n");
     fprintf(stderr,"You can specify the following arguments:\n");
     fprintf(stderr,"\n");
-    fprintf(stderr,"-spp                                 : set this flag if input files have single precision positions (default)\n");
-    fprintf(stderr,"-dpp                                 : set this flag if input files have double precision positions\n");
+    fprintf(stderr,"-spp                                 : set this flag if Tipsy XDR input files have single precision positions (default)\n");
+    fprintf(stderr,"-dpp                                 : set this flag if Tipsy XDR input files have double precision positions\n");
+    fprintf(stderr,"-pfm <value>                         : set this flag for ART native binary particle file mode: 0 everything double precision; 1 positions and velocities double precision, times single precision; 2 everything single precision (default: 0)\n");
     fprintf(stderr,"-profilingmode <value>               : 0 = spherical profiles / 1 = shape enclosed / 2 = shape shell (default: 0)\n");
     fprintf(stderr,"-dataprocessingmode <value>          : 0 = read data again in every loop / 1 = store data in memory (default: 0)\n");
     fprintf(stderr,"-dataformat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
