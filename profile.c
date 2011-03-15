@@ -1853,6 +1853,7 @@ int main(int argc, char **argv) {
 	    timeendloop = time.tv_sec;
 	    timediff = timeendloop-timestartloop;
 	    fprintf(stderr,"Done with iteration %ld. It took %d s = %d h %d m %d s.\n\n",i+1,timediff,timediff/3600,(timediff/60)%60,timediff%60);
+	    if (convergencefraction == 1) break;
 	    }
 	}
 
