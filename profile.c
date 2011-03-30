@@ -3244,6 +3244,7 @@ void put_pgp_in_bins(GI gi, HALO_DATA *hd, PROFILE_GAS_PARTICLE *pgp) {
 					else if (gi.binning == 1) { /* cylindrical */
 					    calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
 					    dell = r[0]*eA[0] + r[1]*eA[1] + r[2]*eA[2];
+					    assert(!(dell < 0));
 					    }
 					for (l = hd[j].NBin; l >= 0; l--) {
 					    if (hd[j].ps[l].ri <= dell && hd[j].ps[l].ro > dell) {
@@ -3511,6 +3512,7 @@ void put_pdp_in_bins(GI gi, HALO_DATA *hd, PROFILE_DARK_PARTICLE *pdp) {
 					    else if (gi.binning == 1) { /* cylindrical */
 						calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
 						dell = r[0]*eA[0] + r[1]*eA[1] + r[2]*eA[2];
+						assert(!(dell < 0));
 						}
 					    for (l = hd[j].NBin; l >= 0; l--) {
 						if (hd[j].ps[l].ri <= dell && hd[j].ps[l].ro > dell) {
@@ -3771,6 +3773,7 @@ void put_psp_in_bins(GI gi, HALO_DATA *hd, PROFILE_STAR_PARTICLE *psp) {
 					    else if (gi.binning == 1) { /* cylindrical */
 						calculate_unit_vectors_cylindrical(r,hd[j].zaxis,eA,eB,eC);
 						dell = r[0]*eA[0] + r[1]*eA[1] + r[2]*eA[2];
+						assert(!(dell < 0));
 						}
 					    for (l = hd[j].NBin; l >= 0; l--) {
 						if (hd[j].ps[l].ri <= dell && hd[j].ps[l].ro > dell) {
