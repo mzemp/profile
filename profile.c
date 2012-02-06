@@ -1,7 +1,7 @@
 /* 
 ** profile.c
 **
-** Program written in order to calculate profile and characteristic scales of haloes
+** Program written in order to calculate profile, characteristic scales and shapes of haloes
 **
 ** written by Marcel Zemp
 */
@@ -40,6 +40,8 @@ typedef struct profile_bin_properties {
     double MMetals;
     double tform;
 
+    /* Stuff below here will go away */
+
     long int Nenc;
     double Menc;
     double Mencremove;
@@ -57,7 +59,7 @@ typedef struct profile_bin_properties {
     double Menc_HeIII;
     double Menc_H2;
     double MencMetals;
-
+    
     } PROFILE_BIN_PROPERTIES;
 
 typedef struct profile_shape_properties {
@@ -65,9 +67,6 @@ typedef struct profile_shape_properties {
     int NLoopConverged;
     long int N;
     double M;
-    double propertymin;
-    double propertymax;
-    double propertymean;
     double st[6];
     double a[3];
     double b[3];
@@ -76,8 +75,11 @@ typedef struct profile_shape_properties {
     double c_a;
     double b_a_old;
     double c_a_old;
-    double dmin;
-    double dmax;
+    /* double dmin; */
+    /* double dmax; */
+    /* double propertymin; */
+    /* double propertymax; */
+    /* double propertymean; */
     } PROFILE_SHAPE_PROPERTIES;
 
 typedef struct profile_bin_structure {
@@ -135,6 +137,10 @@ typedef struct profile_particle {
     double r[3];
     double v[3];
     double M;
+    double MMetalsSNII;
+    double MMetalsSNIa;
+
+    /* Stuff below here will go away */
 
     double metallicity;
     double metallicitySNII;
@@ -232,7 +238,6 @@ int main(int argc, char **argv) {
     int L = -1;
     int Icurrentblockgas, Icurrentblockdark, Icurrentblockstar;
     int positionprecision, verboselevel;
-
     int LengthType;
     int Lmaxgasanalysis;
     int timestart, timeend, timestartsub, timeendsub, timestartloop, timeendloop, timediff;
@@ -2711,15 +2716,15 @@ void initialise_halo_profile(GI *gi, HALO_DATA *hd) {
 		    shape->NLoopConverged = 0;
 		    shape->N = 0;
 		    shape->M = 0;
-		    shape->propertymin = 0;
-		    shape->propertymax = 0;
-		    shape->propertymean = 0;
 		    shape->b_a = 0;
 		    shape->c_a = 0;
 		    shape->b_a_old = 0;
 		    shape->c_a_old = 0;
-		    shape->dmin = 0;
-		    shape->dmax = 0;
+		    /* shape->dmin = 0; */
+		    /* shape->dmax = 0; */
+		    /* shape->propertymin = 0; */
+		    /* shape->propertymax = 0; */
+		    /* shape->propertymean = 0; */
 		    for (d = 0; d < 3; d++) {
 			shape->a[d] = ex[d];
 			shape->b[d] = ey[d];
@@ -4625,9 +4630,10 @@ void write_output_matter_profile(GI gi, HALO_DATA *hd) {
 	    }
 	fprintf(outputfile,"\n");
 	for (i = 0; i < gi.NHalo; i++) {
-	    for (n[0] = 0; n[0] < hd->NBin[0]; n[0]++) {
+	    for (n[0] = 0; n[0] < hd[i].NBin[0]; n[0]++) {
 		n[1] = 0;
 		n[2] = 0;
+		/* fprintf(stderr,"i: %d n0: %d n1: %d n2: %d ID: %d NBin: %d %d %d\n",i,n[0],n[1],n[2],hd[i].ID,hd[i].NBin[0],hd[i].NBin[1],hd[i].NBin[2]); */
 		bin = &hd[i].pbs[n[0]][n[1]][n[2]].bin[j];
 		fprintf(outputfile,"%d",hd[i].ID);
 		fprintf(outputfile," %.6e %.6e %.6e",hd[i].pbs[n[0]][n[1]][n[2]].ri[0],hd[i].pbs[n[0]][n[1]][n[2]].rm[0],hd[i].pbs[n[0]][n[1]][n[2]].ro[0]);
@@ -4656,6 +4662,7 @@ void write_output_matter_profile(GI gi, HALO_DATA *hd) {
 		fprintf(outputfile,"\n");
 		}
 	    }
+	fclose(outputfile);
 	}
     }
 
@@ -4694,7 +4701,7 @@ void write_output_shape_profile(GI gi, HALO_DATA *hd, int ILoop) {
 	assert(outputfile != NULL);
 	fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b_a/7 c_a/8 a_1/9 a_2/10 a_3/11 b_1/12 b_2/13 b_3/14 c_1/15 c_2/16 c_3/17 re_b_a/18 re_c_a/19 NLoopConverged/20\n");
 	for (i = 0; i < gi.NHalo; i++) {
-	    for (n[0] = 0; n[0] < hd->NBin[0]; n[0]++) {
+	    for (n[0] = 0; n[0] < hd[i].NBin[0]; n[0]++) {
 		n[1] = 0;
 		n[2] = 0;
 		fprintf(outputfile,"%d",hd[i].ID);
