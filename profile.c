@@ -139,7 +139,10 @@ typedef struct general_info {
 
     int DataFormat;
     int HaloCatalogueFormat;
+    int HaloCatalogueNDim;
+    int HaloCatalogueBinningCoordinateType;
     int ExcludeHaloCatalogueFormat;
+    int ExcludeHaloCatalogueNDim;
     int ProfilingMode;
     int DataProcessingMode;
     int CentreType;
@@ -175,7 +178,6 @@ typedef struct general_info {
     double fcheckrbgcrit, fcheckrvcmax, fcheckrstatic, fcheckrtruncindicator;
     double fexclude, slopertruncindicator;
     double fincludeshapeproperty, fincludeshaperadius;
-    double fincludestorageradius;
     double fhaloexcludesize, fhaloexcludedistance, fhaloduplicate;
     double Deltabgmaxscale;
     double shapeiterationtolerance;
@@ -223,6 +225,7 @@ int main(int argc, char **argv) {
     int PositionPrecision, VerboseLevel;
     int LengthType;
     int LmaxGasAnalysis;
+    int NThreads;
     int timestart, timeend, timestartsub, timeendsub, timestartloop, timeendloop, timediff;
     long int d, i, j, k;
     long int mothercellindex, childcellindex;
@@ -270,6 +273,14 @@ int main(int argc, char **argv) {
     timestart = time.tv_sec;
 
     /*
+    ** Get number of threads
+    */
+
+    NThreads = omp_get_max_threads();
+    fprintf(stderr,"Using in maximum %d OpenMP threads.\n\n",NThreads);
+
+
+    /*
     ** Set some default values
     */
 
@@ -313,6 +324,30 @@ int main(int argc, char **argv) {
             i++;
             if (i >= argc) usage();
 	    gi.HaloCatalogueFormat = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-HaloCatalogueNDim") == 0) {
+            i++;
+            if (i >= argc) usage();
+	    gi.HaloCatalogueNDim = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-HaloCatalogueBinningCoordinateType") == 0) {
+            i++;
+            if (i >= argc) usage();
+	    gi.HaloCatalogueBinningCoordinateType = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-ExcludeHaloCatalogueFormat") == 0) {
+            i++;
+            if (i >= argc) usage();
+	    gi.HaloCatalogueFormat = atoi(argv[i]);
+            i++;
+            }
+        else if (strcmp(argv[i],"-ExcludeHaloCatalogueNDim") == 0) {
+            i++;
+            if (i >= argc) usage();
+	    gi.ExcludeHaloCatalogueNDim = atoi(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-ProfilingMode") == 0) {
@@ -405,6 +440,15 @@ int main(int argc, char **argv) {
 	    i++;
 	    if (i >= argc) usage();
 	    gi.NBinPerDex[d-1] = atof(argv[i]);
+	    i++;
+	    }
+	else if (strcmp(argv[i],"-BinningGridType") == 0) {
+	    i++;
+            if (i >= argc) usage();
+	    d = atoi(argv[i]);
+	    i++;
+	    if (i >= argc) usage();
+	    gi.BinningGridType[d-1] = atoi(argv[i]);
 	    i++;
 	    }
         else if (strcmp(argv[i],"-CentreType") == 0) {
@@ -672,7 +716,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i],"-LmaxGasAnalysis") == 0) {
             i++;
             if (i >= argc) usage();
-            LmaxGasAnalysis = (int) atof(argv[i]);
+            LmaxGasAnalysis = atoi(argv[i]);
             i++;
             }
 	else if (strcmp(argv[i],"-GRAVITY") == 0) {
@@ -862,9 +906,13 @@ int main(int argc, char **argv) {
     assert(gi.NCellData > 0);
     assert(gi.NCellHalo > 0);
     assert(gi.ProfilingMode < 2);
+    if (gi.ProfilingMode == 1) assert(gi.NDimProfile == 1);
     assert(gi.DataProcessingMode < 2);
     assert(gi.NDimProfile > 0);
     assert(gi.NDimProfile < 3);
+    assert(gi.HaloCatalogueNDim < 3);
+    assert(gi.ExcludeHaloCatalogueNDim < 3);
+    if (gi.HaloCatalogueFormat == 1) assert(gi.HaloCatalogueNDim == 1);
 
     /*
     ** Prepare data arrays
@@ -1913,8 +1961,8 @@ int main(int argc, char **argv) {
 	if (gi.HaloCatalogueFormat == 1) {
 	    fprintf(stderr,"6DFOF specific parameters:\n\n");
 	    fprintf(stderr,"BinFactor             : %.6e\n",gi.BinFactor);
-	    if (gi.CentreType == 0) fprintf(stderr,"CentreType            : COM\n");
-	    else if (gi.CentreType == 1) fprintf(stderr,"CentreType            : Potmin or Denmax\n");
+	    if (gi.CentreType == 0) fprintf(stderr,"CentreType            : centre-of-mass\n");
+	    else if (gi.CentreType == 1) fprintf(stderr,"CentreType            : potmin or denmax\n");
 	    fprintf(stderr,"rmaxFromHaloCatalogue : %s\n",(gi.rmaxFromHaloCatalogue == 0)?"no":"yes");
 	    fprintf(stderr,"\n");
 	    }
@@ -2014,62 +2062,70 @@ int main(int argc, char **argv) {
 	case 0: strcpy(cdummy,"Tipsy"); break;
 	case 1: strcpy(cdummy,"ART"); break;
 	default: strcpy(cdummy,"not supported"); }
-        fprintf(stderr,"Data format:                : %s\n",cdummy);
-	fprintf(stderr,"Contains anything           : %s\n",(gi.SpeciesContained[TOT])?"yes":"no");
-	fprintf(stderr,"Contains gas                : %s\n",(gi.SpeciesContained[GAS])?"yes":"no");
-	fprintf(stderr,"Contains dark matter        : %s\n",(gi.SpeciesContained[DARK])?"yes":"no");
-	fprintf(stderr,"Contains stars              : %s\n",(gi.SpeciesContained[STAR])?"yes":"no");
-	fprintf(stderr,"Contains baryons            : %s\n",(gi.SpeciesContained[BARYON])?"yes":"no");
-	fprintf(stderr,"Do metal species            : %s\n",(gi.DoMetalSpecies)?"yes":"no");
-	fprintf(stderr,"Do chemical species         : %s\n",(gi.DoChemicalSpecies)?"yes":"no");
-	fprintf(stderr,"Exclude particles           : %s\n",(gi.ExcludeParticles)?"yes":"no");
-	fprintf(stderr,"Number of dimensions        : %d\n",gi.NDimProfile);
-	fprintf(stderr,"Number of read species      : %d\n",gi.NSpeciesRead);
-	fprintf(stderr,"Number of profiled species  : %d\n",gi.NSpeciesProfile);
+        fprintf(stderr,"Data format:                      : %s\n",cdummy);
+	fprintf(stderr,"Contains anything                 : %s\n",(gi.SpeciesContained[TOT])?"yes":"no");
+	fprintf(stderr,"Contains gas                      : %s\n",(gi.SpeciesContained[GAS])?"yes":"no");
+	fprintf(stderr,"Contains dark matter              : %s\n",(gi.SpeciesContained[DARK])?"yes":"no");
+	fprintf(stderr,"Contains stars                    : %s\n",(gi.SpeciesContained[STAR])?"yes":"no");
+	fprintf(stderr,"Contains baryons                  : %s\n",(gi.SpeciesContained[BARYON])?"yes":"no");
+	fprintf(stderr,"Do metal species                  : %s\n",(gi.DoMetalSpecies)?"yes":"no");
+	fprintf(stderr,"Do chemical species               : %s\n",(gi.DoChemicalSpecies)?"yes":"no");
+	fprintf(stderr,"Exclude particles                 : %s\n",(gi.ExcludeParticles)?"yes":"no");
+	fprintf(stderr,"Number of dimensions              : %d\n",gi.NDimProfile);
+	fprintf(stderr,"Number of read species            : %d\n",gi.NSpeciesRead);
+	fprintf(stderr,"Number of profiled species        : %d\n",gi.NSpeciesProfile);
 	for (i = 0; i < gi.NSpeciesRead; i++) {
 	    switch(i) {
 	    case GAS: strcpy(cdummy,"gas"); break;
 	    case DARK: strcpy(cdummy,"dark matter"); break;
 	    case STAR: strcpy(cdummy,"stars"); break;
 	    default: strcpy(cdummy,"not supported"); }
-	    fprintf(stderr,"Number of subspecies        : %d (%s)\n",gi.NSubSpecies[i],cdummy);
+	    fprintf(stderr,"Number of subspecies              : %d (%s)\n",gi.NSubSpecies[i],cdummy);
 	    }
 	switch(gi.BinningCoordinateType) {
 	case 0: strcpy(cdummy,"spherical"); break;
 	case 1: strcpy(cdummy,"cylindrical"); break;
 	default: strcpy(cdummy,"not supported"); }
-        fprintf(stderr,"Binning                     : %s\n",cdummy);
+        fprintf(stderr,"Binning                           : %s\n",cdummy);
 	switch(gi.VelocityProjectionType) {
 	case 0: strcpy(cdummy,"coordinate axes"); break;
 	case 1: strcpy(cdummy,"spherical"); break;
 	case 2: strcpy(cdummy,"cylindrical"); break;
 	default: strcpy(cdummy,"not supported"); }
-        fprintf(stderr,"Velocity projection         : %s\n",cdummy);
+        fprintf(stderr,"Velocity projection               : %s\n",cdummy);
 	switch(gi.ProfilingMode) {
 	case 0: strcpy(cdummy,"profiles"); break;
 	case 1: strcpy(cdummy,"shape determination"); break;
 	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Profiling mode              : %s\n",cdummy);
+	fprintf(stderr,"Profiling mode                    : %s\n",cdummy);
 	switch(gi.DataProcessingMode) {
 	case 0: strcpy(cdummy,"read data again in every loop"); break;
 	case 1: strcpy(cdummy,"store data in memory"); break;
 	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Data processing mode        : %s\n",cdummy);
+	fprintf(stderr,"Data processing mode              : %s\n",cdummy);
 	switch(gi.HaloCatalogueFormat) {
 	case 0: strcpy(cdummy,"generic"); break;
 	case 1: strcpy(cdummy,"6DFOF"); break;
 	case 2: strcpy(cdummy,"characteristics"); break;
 	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Halocatalogue format        : %s\n",cdummy);
-        fprintf(stderr,"NHalo                       : %d\n",gi.NHalo);
+	fprintf(stderr,"Halocatalogue format              : %s\n",cdummy);
+	switch(gi.HaloCatalogueBinningCoordinateType) {
+	case 0: strcpy(cdummy,"spherical"); break;
+	case 1: strcpy(cdummy,"cylindrical"); break;
+	default: strcpy(cdummy,"not supported"); }
+	fprintf(stderr,"Halocatalogue binning type        : %s\n",cdummy);
+	fprintf(stderr,"Halocatalogue dimension           : %d\n",gi.HaloCatalogueNDim);
+        fprintf(stderr,"NHalo                             : %d\n",gi.NHalo);
 	if (gi.ExcludeParticles) {
 	    switch(gi.ExcludeHaloCatalogueFormat) {
 	    case 0: strcpy(cdummy,"generic"); break;
 	    case 1: strcpy(cdummy,"6DFOF"); break;
 	    case 2: strcpy(cdummy,"characteristics"); break;
 	    default: strcpy(cdummy,"not supported"); }
-	    fprintf(stderr,"ExcludeHalocatalogue format : %s\n",cdummy);
-	    fprintf(stderr,"NHaloExcludeGlobal          : %d\n",gi.NHaloExcludeGlobal);
+	    fprintf(stderr,"ExcludeHalocatalogue format       : %s\n",cdummy);
+	    fprintf(stderr,"ExcludeHalocatalogue binning type : spherical\n");
+	    fprintf(stderr,"ExcludeHalocatalogue dimension    : %d\n",gi.ExcludeHaloCatalogueNDim);
+	    fprintf(stderr,"NHaloExcludeGlobal                : %d\n",gi.NHaloExcludeGlobal);
 	    }
 	fprintf(stderr,"\n");
 
@@ -2108,14 +2164,28 @@ int main(int argc, char **argv) {
 	    }
 	fprintf(stderr,"\n");
 
+	fprintf(stderr,"Global binning grid parameters:\n\n");
 	for (d = 0; d < gi.NDimProfile; d++) {
-	    fprintf(stderr,"Dimension %ld\n",d+1);
-	    fprintf(stderr,"rmin                    : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
-		gi.rmin[d],gi.rmin[d]/cosmo2internal_ct.L_usf,gi.ascale*gi.rmin[d]/cosmo2internal_ct.L_usf);
-	    fprintf(stderr,"rmax                    : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
-		gi.rmax[d],gi.rmax[d]/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax[d]/cosmo2internal_ct.L_usf);
-	    fprintf(stderr,"NBin                    : %d\n",gi.NBin[d]);
-	    fprintf(stderr,"NBinPerDex              : %g\n",gi.NBinPerDex[d]);
+	    fprintf(stderr,"Dimension %ld:\n",d+1);
+	    if (gi.rmin[d] >= 0) {
+		fprintf(stderr,"rmin              : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		    gi.rmin[d],gi.rmin[d]/cosmo2internal_ct.L_usf,gi.ascale*gi.rmin[d]/cosmo2internal_ct.L_usf);
+		}
+	    else fprintf(stderr,"rmin              : not set\n");
+	    if (gi.rmax[d] >= 0) {
+		fprintf(stderr,"rmax              : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		    gi.rmax[d],gi.rmax[d]/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax[d]/cosmo2internal_ct.L_usf);
+		}
+	    else fprintf(stderr,"rmax              : not set\n");
+	    if (gi.NBin[d] > 0) fprintf(stderr,"NBin              : %d\n",gi.NBin[d]);
+	    else fprintf(stderr,"NBin              : not set\n");
+	    if (gi.NBinPerDex[d] > 0) fprintf(stderr,"NBinPerDex        : %g\n",gi.NBinPerDex[d]);
+	    else fprintf(stderr,"NBinPerDex        : not set\n");
+	    switch(gi.BinningGridType[d]) {
+	    case 0: strcpy(cdummy,"logarithmic"); break;
+	    case 1: strcpy(cdummy,"linear"); break;
+	    default: strcpy(cdummy,"not supported"); }
+	    fprintf(stderr,"Binning grid type : %s\n",cdummy);
 	    }
 	fprintf(stderr,"\n");
 
@@ -2149,7 +2219,6 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"fhaloexcludesize        : %.6e\n",gi.fhaloexcludesize);
 	fprintf(stderr,"fhaloexcludedistance    : %.6e\n",gi.fhaloexcludedistance);
 	fprintf(stderr,"fhaloduplicate          : %.6e\n",gi.fhaloduplicate);
-	fprintf(stderr,"fincludestorageradius   : %.6e\n",gi.fincludestorageradius);
 	fprintf(stderr,"slopertruncindicator    : %.6e\n",gi.slopertruncindicator);
 	fprintf(stderr,"shapeiterationtolerance : %.6e\n",gi.shapeiterationtolerance);
 	/* fprintf(stderr,"fincludeshapeproperty   : %.6e\n",gi.fincludeshapeproperty); */
@@ -2178,16 +2247,18 @@ void usage(void) {
     fprintf(stderr,"-DataProcessingMode <value>          : 0 = read data again in every loop / 1 = store data in memory (default: 0)\n");
     fprintf(stderr,"-DataFormat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
     fprintf(stderr,"-HaloCatalogueFormat <value>         : 0 = generic / 1 = 6DFOF / 2 = characteristics (default: 0)\n");
+    fprintf(stderr,"-HaloCatalogueNDim <value>            : dimension of halo catalouge (default: 1)\n");
     fprintf(stderr,"-ShapeDeterminationVolume <value>    : 0 = differential volume / 1 enclosed volume (default: 0)\n");
     fprintf(stderr,"-ShapeTensorForm <value>             : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
     fprintf(stderr,"-DoMetalSpecies                      : set this flag for doing metal species\n");
     fprintf(stderr,"-DoChemicalSpecies                   : set this flag for doing chemical species\n");
     fprintf(stderr,"-ExcludeParticles <value>            : 0 = don't exclude any particles / 1 = exclude particles in specified halo catalogue (default: 0)\n");
     fprintf(stderr,"-LengthType <value>                  : 0 = comoving / 1 = physical (interpretation of rmin, rmax and zheight values) (default: 0)\n");
-    fprintf(stderr,"-rmin <d> <value>                    : d = dimension (1/2/3) / minimum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
-    fprintf(stderr,"-rmax <d> <value>                    : d = dimension (1/2/3) / maximum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
-    fprintf(stderr,"-NBin <d> <value>                    : d = dimension (1/2/3) / number of bins between rmin and rmax for dimension d - overwrites values form halo catalogue (default: not set)\n");
-    fprintf(stderr,"-NBinPerDex <d> <value>              : d = dimension (1/2/3) / number of bins per decade between rmin and rmax for dimension d - overwrites values form halo catalogue (default: not set)\n");
+    fprintf(stderr,"-rmin <d> <value>                    : d = dimension (1/2/3) / global minimum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
+    fprintf(stderr,"-rmax <d> <value>                    : d = dimension (1/2/3) / global maximum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
+    fprintf(stderr,"-NBin <d> <value>                    : d = dimension (1/2/3) / global number of bins between rmin and rmax for dimension d - overwrites values form halo catalogue (default: not set)\n");
+    fprintf(stderr,"-NBinPerDex <d> <value>              : d = dimension (1/2/3) / global number of bins per decade between rmin and rmax for dimension d (default: not set)\n");
+    fprintf(stderr,"-BinningGridType <d> <value>         : d = dimension (1/2/3) / global binning grid type: 0 = logarithmic / 1 = linear (default: 0)\n");
     fprintf(stderr,"-CentreType <value>                  : 0 = centre-of-mass centres / 1 = potmin or denmax centres (only for 6DFOF halocatalogue) (default: 0)\n");
     fprintf(stderr,"-BinningCoordinateType <value>       : 0 = spherical coordinates / 1 = cylindrical coordinates (default: 0)\n");
     fprintf(stderr,"-VelocityProjectionType <value>      : 0 = coordinate axes / 1 = spherical coordinates / 2 = cylindrical coordinates (default: 0)\n");
@@ -2263,7 +2334,10 @@ void set_default_values_general_info(GI *gi) {
     */
     gi->DataFormat = 0; /* Tipsy */
     gi->HaloCatalogueFormat = 0; /* generic */
+    gi->HaloCatalogueNDim = 1; /* 1-dimensional profiles */
+    gi->HaloCatalogueBinningCoordinateType = 0; /* spherical */
     gi->ExcludeHaloCatalogueFormat = 2; /* characteristics */
+    gi->ExcludeHaloCatalogueNDim = 1; /* 1-dimensional profiles */
     gi->ProfilingMode = 0; /* normal profile */
     gi->DataProcessingMode = 0; /* looping */
     gi->ShapeDeterminationVolume = 0; /* differential volume */
@@ -2285,11 +2359,11 @@ void set_default_values_general_info(GI *gi) {
     */
     gi->BinningCoordinateType = 0; /* spherical */
     for (d = 0; d < 3; d++) {
-	gi->BinningGridType[d] = 0; /* logarithmic */
+	gi->rmin[d] = -1;
+	gi->rmax[d] = -1;
 	gi->NBin[d] = 0;
 	gi->NBinPerDex[d] = 0;
-	gi->rmin[d] = 0;
-	gi->rmax[d] = 0;
+	gi->BinningGridType[d] = 0; /* logarithmic */
 	}
 
     gi->zAxis[0] = 0;
@@ -2333,7 +2407,6 @@ void set_default_values_general_info(GI *gi) {
     gi->fhaloduplicate = 0;
     gi->fincludeshapeproperty = 1.1;
     gi->fincludeshaperadius = 2;
-    gi->fincludestorageradius = 1;
     gi->slopertruncindicator = -0.5;
     gi->Deltabgmaxscale = 50;
     gi->shapeiterationtolerance = 1e-5;
@@ -2396,6 +2469,7 @@ void read_halocatalogue_ascii(GI *gi, HALO_DATA **hdin) {
     HALO_DATA *hd;
     FILE *HaloCatalogueFile = NULL, *zAxisCatalogueFile = NULL;
 
+
     HaloCatalogueFile = fopen(gi->HaloCatalogueFileName,"r");
     assert(HaloCatalogueFile != NULL);
 
@@ -2414,11 +2488,16 @@ void read_halocatalogue_ascii(GI *gi, HALO_DATA **hdin) {
     if (gi->HaloCatalogueFormat == 2) fgets(cdummy,1000,HaloCatalogueFile);
     NHaloRead = 0;
     while (1) {
+	/*
+	** Set some default values
+	*/
 	for (d = 0; d < 3; d++) {
 	    rmin[d] = 0;
 	    rmax[d] = 0;
 	    NBin[d] = 1; /* at least one bin */
+	    zAxis[d] = 0;
 	    }
+	zHeight = 0;
 	/*
 	** Read halo catalogues
 	*/
@@ -2433,10 +2512,16 @@ void read_halocatalogue_ascii(GI *gi, HALO_DATA **hdin) {
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); v[0] = ddummy;
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); v[1] = ddummy;
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); v[2] = ddummy;
-	    for (d = 0; d < gi->NDimProfile; d++) {
+	    for (d = 0; d < gi->HaloCatalogueNDim; d++) {
 		fscanf(HaloCatalogueFile,"%lg",&ddummy); rmin[d] = ddummy;
 		fscanf(HaloCatalogueFile,"%lg",&ddummy); rmax[d] = ddummy;
-		fscanf(HaloCatalogueFile,"%i",&idummy); NBin[d] = idummy;
+		fscanf(HaloCatalogueFile,"%i",&idummy); NBin[d] = idummy; /* NBin between rmin and rmax => no correction for logarithmic bins */
+		}
+	    if (gi->HaloCatalogueBinningCoordinateType == 1) {
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); zAxis[0] = ddummy;
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); zAxis[1] = ddummy;
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); zAxis[2] = ddummy;
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); zHeight = ddummy;
 		}
 	    if (feof(HaloCatalogueFile)) break;
 	    }
@@ -2492,21 +2577,53 @@ void read_halocatalogue_ascii(GI *gi, HALO_DATA **hdin) {
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); v[0] = ddummy;
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); v[1] = ddummy;
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); v[2] = ddummy;
-	    for (d = 0; d < gi->NDimProfile; d++) {
+	    for (d = 0; d < gi->HaloCatalogueNDim; d++) {
 		fscanf(HaloCatalogueFile,"%lg",&ddummy); rmin[d] = ddummy;
 		fscanf(HaloCatalogueFile,"%lg",&ddummy); rmax[d] = ddummy;
 		fscanf(HaloCatalogueFile,"%i",&idummy); NBin[d] = idummy;
+		if (gi->BinningGridType[d] == 0) {
+		    /*
+		    ** Correct for logarithmic binning: innermost bin is already counted here.
+		    ** HaloCatalogue needs to have same binning type as the profiling done now.
+		    ** No way to check this at the moment.
+		    */
+		    NBin[d] -= 1;
+		    }
 		}
-	    /*
-	    ** CHECK 27 is the old characteristics value
-	    */ 
-
-	    for (j = 0; j < 27; j++) fscanf(HaloCatalogueFile,"%lg",&ddummy);
+	    if (gi->HaloCatalogueBinningCoordinateType == 0) {
+		fgets(cdummy,1000,HaloCatalogueFile);
+		}
+	    else if (gi->HaloCatalogueBinningCoordinateType == 1) {
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); zAxis[0] = ddummy;
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); zAxis[1] = ddummy;
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); zAxis[2] = ddummy;
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); zHeight = ddummy;
+		}
 	    if (feof(HaloCatalogueFile)) break;
 	    }
 	else {
 	    fprintf(stderr,"Not supported halo catalogue format!\n");
 	    exit(1);
+	    }
+	if (gi->BinningCoordinateType == 1) {
+	    /*
+	    ** Use z-axis catalogue values if specified
+	    */
+	    if (gi->zAxisCatalogueSpecified) {
+		fscanf(zAxisCatalogueFile,"%i",&idummy); IDz = idummy;
+		fscanf(zAxisCatalogueFile,"%lg",&ddummy); zAxis[0] = ddummy;
+		fscanf(zAxisCatalogueFile,"%lg",&ddummy); zAxis[1] = ddummy;
+		fscanf(zAxisCatalogueFile,"%lg",&ddummy); zAxis[2] = ddummy;
+		fscanf(zAxisCatalogueFile,"%lg",&ddummy); zHeight = ddummy;
+		assert(ID == IDz);
+		}
+	    /*
+	    ** Use global values if specified
+	    */
+	    if (gi->zAxis[0] != 0 || gi->zAxis[1] != 0 ||  gi->zAxis[2] != 0) {
+		for (d = 0; d < 3; d++) zAxis[d] = gi->zAxis[d];
+		}
+	    if (gi->zHeight > 0) zHeight = gi->zHeight;
 	    }
 	NHaloRead++;
 	if (SizeHaloData < NHaloRead){
@@ -2526,10 +2643,16 @@ void read_halocatalogue_ascii(GI *gi, HALO_DATA **hdin) {
 	/*
 	** Set-up bin structure
 	*/
+	if (gi->BinningCoordinateType == 1) {
+	    ddummy = 1.0/sqrt(pow(zAxis[0],2)+pow(zAxis[1],2)+pow(zAxis[2],2));
+	    assert(ddummy > 0 && !isnan(ddummy) && !isinf(ddummy));
+	    for (d = 0; d < 3; d++) hd[i].zAxis[d] = zAxis[d]*ddummy;
+	    if (zHeight > 0) rmax[1] = zHeight;
+	    }
 	for (d = 0; d < 3; d++) {
-	    hd[i].rmin[d] = (gi->rmin[d] != 0)?gi->rmin[d]:rmin[d];
-	    hd[i].rmax[d] = (gi->rmax[d] != 0)?gi->rmax[d]:rmax[d];
-	    hd[i].NBin[d] = (gi->NBin[d] != 0)?gi->NBin[d]:NBin[d];
+	    hd[i].rmin[d] = (gi->rmin[d] >= 0)?gi->rmin[d]:rmin[d];
+	    hd[i].rmax[d] = (gi->rmax[d] >= 0)?gi->rmax[d]:rmax[d];
+	    hd[i].NBin[d] = (gi->NBin[d] > 0)?gi->NBin[d]:NBin[d];
 	    assert(hd[i].rmax[d] >= hd[i].rmin[d]);
 	    assert(hd[i].NBin[d] > 0);
 	    if (gi->BinningGridType[d] == 0 && d < gi->NDimProfile) {
@@ -2549,7 +2672,14 @@ void read_halocatalogue_ascii(GI *gi, HALO_DATA **hdin) {
 		    hd[i].NBin[d] += 1; /* account for inner bin from 0-rmin */
 		    }
 		}
+	    if (gi->NDimProfile == 2 && gi->BinningCoordinateType == 1 && d == 1) {
+		/*
+		** 2-dimensional binning in cylindrical coordinates
+		*/
+		hd[i].NBin[d] *= 2;
+		}
 	    }
+	if (gi->BinningCoordinateType == 1) hd[i].zHeight = hd[i].rmax[1];
 	/*
 	** Allocate bins
 	*/
@@ -2573,30 +2703,9 @@ void read_halocatalogue_ascii(GI *gi, HALO_DATA **hdin) {
 		    }
 		}
 	    }
-	hd[i].zAxis[0] = 0;
-	hd[i].zAxis[1] = 0;
-	hd[i].zAxis[2] = 1;
-	hd[i].zHeight = hd[i].rmax[0];
-	if (gi->zAxisCatalogueSpecified) {
-	    fscanf(zAxisCatalogueFile,"%i",&idummy); IDz = idummy;
-	    fscanf(zAxisCatalogueFile,"%lg",&ddummy); zAxis[0] = ddummy;
-	    fscanf(zAxisCatalogueFile,"%lg",&ddummy); zAxis[1] = ddummy;
-	    fscanf(zAxisCatalogueFile,"%lg",&ddummy); zAxis[2] = ddummy;
-	    fscanf(zAxisCatalogueFile,"%lg",&ddummy); zHeight = ddummy;
-	    assert(ID == IDz);
-	    ddummy = 1.0/sqrt(pow(zAxis[0],2)+pow(zAxis[1],2)+pow(zAxis[2],2));
-	    hd[i].zAxis[0] = zAxis[0]*ddummy;
-	    hd[i].zAxis[1] = zAxis[1]*ddummy;
-	    hd[i].zAxis[2] = zAxis[2]*ddummy;
-	    hd[i].zHeight = (zHeight != 0)?zHeight:hd[i].zHeight;
-	    }
-	if (gi->zAxis[0] != 0 || gi->zAxis[1] != 0 ||  gi->zAxis[2] != 0) {
-	    ddummy = 1.0/sqrt(pow(gi->zAxis[0],2)+pow(gi->zAxis[1],2)+pow(gi->zAxis[2],2));
-	    hd[i].zAxis[0] = gi->zAxis[0]*ddummy;
-	    hd[i].zAxis[1] = gi->zAxis[1]*ddummy;
-	    hd[i].zAxis[2] = gi->zAxis[2]*ddummy;
-	    }
-	hd[i].zHeight = (gi->zHeight != 0)?gi->zHeight:hd[i].zHeight;
+	/*
+	** Initialise halo profile
+	*/
 	initialise_halo_profile(gi,&hd[i]);
 	}
     fclose(HaloCatalogueFile);
@@ -2615,7 +2724,7 @@ int read_halocatalogue_ascii_excludehalo(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUD
     double ddummy;
     double r[3], rcheck[3];
     double dsph;
-    double rcrit, rtrunc, sizeorig, size;
+    double rbg, rcrit, rtrunc, sizeorig, size;
     double *SizeArray = NULL;
     char cdummy[1000];
     HALO_DATA_EXCLUDE *hdeg;
@@ -2652,22 +2761,30 @@ int read_halocatalogue_ascii_excludehalo(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUD
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); /* v[0] = ddummy; */
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); /* v[1] = ddummy; */
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); /* v[2] = ddummy; */
-	    fscanf(HaloCatalogueFile,"%lg",&ddummy); /* rmin = ddummy; */
-	    fscanf(HaloCatalogueFile,"%lg",&ddummy); /* rmax = ddummy; */
-	    fscanf(HaloCatalogueFile,"%i",&idummy); /* NBin = idummy; */
-	    fscanf(HaloCatalogueFile,"%lg",&ddummy); /* rbg = ddummy; */
+	    for (d = 0; d < gi->ExcludeHaloCatalogueNDim; d++) {
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); /* rmin[d] = ddummy; */
+		fscanf(HaloCatalogueFile,"%lg",&ddummy); /* rmax[d] = ddummy; */
+		fscanf(HaloCatalogueFile,"%i",&idummy); /* NBin[d] = idummy; */
+		}
+	    fscanf(HaloCatalogueFile,"%lg",&ddummy); rbg = ddummy;
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy);
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); rcrit = ddummy;
-	    for (j = 0; j < 7; j++) fscanf(HaloCatalogueFile,"%lg",&ddummy);
+	    fscanf(HaloCatalogueFile,"%lg",&ddummy);
 	    fscanf(HaloCatalogueFile,"%lg",&ddummy); rtrunc = ddummy;
-	    for (j = 0; j < 16; j++) fscanf(HaloCatalogueFile,"%lg",&ddummy);
+	    for (j = 0; j < 17; j++) fscanf(HaloCatalogueFile,"%lg",&ddummy);
 	    if (feof(HaloCatalogueFile)) break;
 	    /*
-	    ** Calculate size
+	    ** Calculate size 
+	    */
+
+	    /*
+	    **CHECK do check first then modify this
 	    */
 	    if (rcrit == 0 && rtrunc > 0) sizeorig = rtrunc;
 	    else if (rcrit > 0 && rtrunc > 0 && rtrunc < rcrit) sizeorig = rtrunc;
 	    else sizeorig = gi->fhaloexcludesize*rcrit;
+
+
 	    }
 	else {
 	    fprintf(stderr,"Not supported halo catalogue format!\n");
@@ -2734,6 +2851,9 @@ int read_halocatalogue_ascii_excludehalo(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUD
 	    ** Halo is not allowed to be in the halo data list
 	    */
 	    if (ContainedInHaloDataList) MoveToGlobalList = 0;
+	    /*
+	    ** Move to global exclusion list
+	    */
 	    if (MoveToGlobalList) {
 		for (j = 0; j < NIndexArray; j++) {
 		    i = IndexArray[j];
@@ -2806,12 +2926,22 @@ void initialise_halo_profile(GI *gi, HALO_DATA *hd) {
     /*
     ** Calculate bin spacings
     */
-    for (d = 0; d < 3; d++) {
-	if (gi->BinningGridType[d] == 0) {
-	    dr[d] = (log(hd->rmax[d])-log(hd->rmin[d]))/(hd->NBin[d]-1);
+    for (d = 0; d < gi->NDimProfile; d++) {
+	if (gi->NDimProfile == 2 && gi->BinningCoordinateType == 1 && d == 1) {
+	    if (gi->BinningGridType[d] == 0) {
+		dr[d] = (log(hd->rmax[d])-log(hd->rmin[d]))/(hd->NBin[d]/2-1);
+		}
+	    else if (gi->BinningGridType[d] == 1) {
+		dr[d] = (hd->rmax[d]-hd->rmin[d])/(hd->NBin[d]/2);
+		}
 	    }
-	else if (gi->BinningGridType[d] == 1) {
-	    dr[d] = (hd->rmax[d]-hd->rmin[d])/hd->NBin[d];
+	else {
+	    if (gi->BinningGridType[d] == 0) {
+		dr[d] = (log(hd->rmax[d])-log(hd->rmin[d]))/(hd->NBin[d]-1);
+		}
+	    else if (gi->BinningGridType[d] == 1) {
+		dr[d] = (hd->rmax[d]-hd->rmin[d])/hd->NBin[d];
+		}
 	    }
 	}
     /*
@@ -2825,22 +2955,30 @@ void initialise_halo_profile(GI *gi, HALO_DATA *hd) {
 		** Calculate coordinates of bins
 		*/
 		for (d = 0; d < gi->NDimProfile; d++) {
-		    if (gi->BinningGridType[d] == 0) {
-			if (n[d] == 0) {
-			    pbs->ri[d] = 0;
-			    pbs->rm[d] = exp(log(hd->rmin[d])-0.5*dr[d]);
-			    pbs->ro[d] = hd->rmin[d];
-			    }
-			else {
-			    pbs->ri[d] = exp(log(hd->rmin[d]) + (n[d]-1)*dr[d]);
-			    pbs->rm[d] = exp(log(hd->rmin[d]) + (n[d]-0.5)*dr[d]);
-			    pbs->ro[d] = exp(log(hd->rmin[d]) + n[d]*dr[d]);
-			    }
+		    if (gi->NDimProfile == 2 && gi->BinningCoordinateType == 1 && d == 1 && n[1] >= hd->NBin[1]/2) {
+			l = hd->NBin[1]/2;
+			pbs->ri[d] = (-1)*hd->pbs[n[0]][n[1]-l][n[2]].ro[d];
+			pbs->rm[d] = (-1)*hd->pbs[n[0]][n[1]-l][n[2]].rm[d];
+			pbs->ro[d] = (-1)*hd->pbs[n[0]][n[1]-l][n[2]].ri[d];
 			}
-		    else if (gi->BinningGridType[d] == 1) {
-			pbs->ri[d] = hd->rmin[d] + n[d]*dr[d];
-			pbs->rm[d] = hd->rmin[d] + (n[d]+0.5)*dr[d];
-			pbs->ro[d] = hd->rmin[d] + (n[d]+1)*dr[d];
+		    else {
+			if (gi->BinningGridType[d] == 0) {
+			    if (n[d] == 0) {
+				pbs->ri[d] = 0;
+				pbs->rm[d] = exp(log(hd->rmin[d])-0.5*dr[d]);
+				pbs->ro[d] = hd->rmin[d];
+				}
+			    else {
+				pbs->ri[d] = exp(log(hd->rmin[d]) + (n[d]-1)*dr[d]);
+				pbs->rm[d] = exp(log(hd->rmin[d]) + (n[d]-0.5)*dr[d]);
+				pbs->ro[d] = exp(log(hd->rmin[d]) + n[d]*dr[d]);
+				}
+			    }
+			else if (gi->BinningGridType[d] == 1) {
+			    pbs->ri[d] = hd->rmin[d] + n[d]*dr[d];
+			    pbs->rm[d] = hd->rmin[d] + (n[d]+0.5)*dr[d];
+			    pbs->ro[d] = hd->rmin[d] + (n[d]+1)*dr[d];
+			    }
 			}
 		    }
 		/*
@@ -2893,9 +3031,9 @@ void initialise_halo_profile(GI *gi, HALO_DATA *hd) {
 			    }
 			} /* if SpeciesContained */
 		    } /* for NSpeciesProfile */
-		}
-	    }
-	}
+		} /* for n[2] */
+	    } /* for n[1] */
+	} /* for n[0] */
     }
 
 void reset_halo_profile_shape(GI gi, HALO_DATA *hd) {
@@ -3033,8 +3171,12 @@ void put_particles_in_bins(GI gi, HALO_DATA *hd, const int MatterType, PROFILE_P
 			/*
 			** Process data
 			*/
-			if (gi.ProfilingMode == 3) size = gi.fincludeshaperadius*hd[i].rmax[0];
-			else size = hd[i].rmax[0];
+			size = hd[i].rmax[0];
+			/*
+			** CHECK
+			*/
+			/* if (gi.ProfilingMode == 0 && gi.BinningCoordinateType == 1) size = sqrt(pow(hd[i].rmax[0],2)+pow(hd[i].zHeight,2)); */
+			/* if (gi.ProfilingMode == 3) size = gi.fincludeshaperadius*hd[i].rmax[0]; */
 			if (intersect(gi.us.LBox,gi.NCellData,hd[i],index,shift,size)) {
 			    j = HeadIndex[index[0]][index[1]][index[2]];
 			    while (j >= 0) {
@@ -3061,19 +3203,14 @@ void put_particles_in_bins(GI gi, HALO_DATA *hd, const int MatterType, PROFILE_P
 						}
 					    }
 					}
-
-
 				    /*
-				    ** CHECK
+				    ** Check if it is outside the cylindrical disc
 				    */
-				    /* if (gi.ProfilingMode == 0 && gi.BinningCoordinateType == 1) { */
-				    /* 	calculate_unit_vectors_cylindrical(r,hd[i].zAxis,eA,eB,eC); */
-				    /* 	dell = fabs(r[0]*eC[0] + r[1]*eC[1] + r[2]*eC[2]); */
-				    /* 	if (dell > hd[i].zHeight) ParticleAccepted = 0; */
-				    /* 	} */
-
-
-
+				    if (gi.ProfilingMode == 0 && gi.BinningCoordinateType == 1) {
+				    	calculate_unit_vectors_cylindrical(r,hd[i].zAxis,eA,eB,eC);
+				    	dell = fabs(r[0]*eC[0] + r[1]*eC[1] + r[2]*eC[2]);
+				    	if (dell > hd[i].zHeight) ParticleAccepted = 0;
+				    	}
 				    if (ParticleAccepted) {
 					for (d = 0; d < 3; d++) {
 					    v[d] = pp[j].v[d]-hd[i].vcentre[d];
@@ -3388,7 +3525,11 @@ void put_particles_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUDE *hdeg, co
 		    /*
 		    ** Process data
 		    */
-		    size = gi->fincludestorageradius*hd[i].rmax[0];
+		    size = hd[i].rmax[0];
+		    /*
+		    ** CHECK
+		    */
+		    /* if (gi->ProfilingMode == 0 && gi->BinningCoordinateType == 1) size = sqrt(pow(hd[i].rmax[0],2)+pow(hd[i].zHeight,2)); */
 		    if (intersect(gi->us.LBox,gi->NCellData,hd[i],index,shift,size)) {
 			j = HeadIndex[index[0]][index[1]][index[2]];
 			while (j >= 0) {
@@ -3429,27 +3570,7 @@ void put_particles_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUDE *hdeg, co
 					    assert(pp_storage[l].M != NULL);
 					    }
 					}
-
-
-
-				    /* if (gi->NParticleInStorage[MatterType] == 1000) { */
-				    /* 	printf("Source\n"); */
-				    /* 	printf("j %d r %g %g %g v %g %g %g M %g\n",j,pp[j].r[0],pp[j].r[1],pp[j].r[2],pp[j].v[0],pp[j].v[1],pp[j].v[2],pp[j].M[0]); */
-				    /* 	} */
-
-
 				    copy_pp(gi,MatterType,&pp[j],&pp_storage[gi->NParticleInStorage[MatterType]-1]);
-
-
-				    /* if (gi->NParticleInStorage[MatterType] == 1000) { */
-				    /* 	printf("Copy\n"); */
-				    /* 	l = gi->NParticleInStorage[MatterType]-1; */
-				    /* 	printf("l %d r %g %g %g v %g %g %g M %g\n",l,pp_storage[l].r[0],pp_storage[l].r[1],pp_storage[l].r[2],pp_storage[l].v[0],pp_storage[l].v[1],pp_storage[l].v[2],pp_storage[l].M[0]); */
-				    /* 	} */
-
-
-				    /* pp_storage[gi->NParticleInStorage[MatterType]-1] = pp[j]; */
-
 				    AlreadyStored[j] = 1;
 				    }
 				}
@@ -4403,6 +4524,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 void write_output_matter_profile(GI gi, HALO_DATA *hd) {
 
     int d, n[3], i, j, k;
+    int NBinMax[3] = {0,0,0};
     char outputfilename[256];
     FILE *outputfile;
     PROFILE_BIN_PROPERTIES *bin;
@@ -4410,7 +4532,9 @@ void write_output_matter_profile(GI gi, HALO_DATA *hd) {
     /*
     ** Characteristics
     */
-    sprintf(outputfilename,"%s.characteristics",gi.OutputName);
+    if (gi.BinningCoordinateType == 0 && gi.NDimProfile == 1) sprintf(outputfilename,"%s.profile.sph.d1.characteristics",gi.OutputName);
+    else if (gi.BinningCoordinateType == 1 && gi.NDimProfile == 1) sprintf(outputfilename,"%s.profile.cyl.d1.characteristics",gi.OutputName);
+    else if (gi.BinningCoordinateType == 1 && gi.NDimProfile == 2) sprintf(outputfilename,"%s.profile.cyl.d2.characteristics",gi.OutputName);
     outputfile = fopen(outputfilename,"w");
     assert(outputfile != NULL);
     fprintf(outputfile,"#ID/1 r_x/2 r_y/3 r_z/4 v_x/5 v_y/6 v_z/7");
@@ -4444,7 +4568,7 @@ void write_output_matter_profile(GI gi, HALO_DATA *hd) {
 	    fprintf(outputfile," %.6e",hd[i].rtruncindicator);
 	    fprintf(outputfile," %d %d",hd[i].HostHaloID,hd[i].ExtraHaloID);
 	    }
-	if (gi.BinningCoordinateType == 1) {
+	else if (gi.BinningCoordinateType == 1) {
 	    fprintf(outputfile," %.6e %.6e %.6e %.6e",hd[i].zAxis[0],hd[i].zAxis[1],hd[i].zAxis[2],hd[i].zHeight);
 	    }
 	fprintf(outputfile,"\n");
@@ -4455,36 +4579,75 @@ void write_output_matter_profile(GI gi, HALO_DATA *hd) {
     */
     for (j = 0; j < gi.NSpeciesProfile; j++) {
 	if (gi.SpeciesContained[j]) {
-	    sprintf(outputfilename,"%s.profiles.%s",gi.OutputName,gi.MatterTypeName[j]);
-	    outputfile = fopen(outputfilename,"w");
-	    assert(outputfile != NULL);
-	    fprintf(outputfile,"#ID/1"); 
-	    k = 2;
-	    for (d = 0; d < gi.NDimProfile; d++) {
-		fprintf(outputfile," ri_%d/%d rm_%d/%d ro_%d/%d",d+1,k,d+1,k+1,d+1,k+2); k += 3;
-		}
-	    fprintf(outputfile," M/%d N/%d",k,k+1); k += 2;
-	    fprintf(outputfile," v_1/%d v_2/%d v_3/%d",k,k+1,k+2); k += 3;
-	    fprintf(outputfile," vdt_11/%d vdt_22/%d vdt_33/%d vdt_12/%d vdt_13/%d vdt_23/%d",k,k+1,k+2,k+3,k+4,k+5); k += 6;
-	    fprintf(outputfile," L_x/%d L_y/%d L_z/%d",k,k+1,k+2);
-	    fprintf(outputfile,"\n");
-	    for (i = 0; i < gi.NHalo; i++) {
-		for (n[0] = 0; n[0] < hd[i].NBin[0]; n[0]++) {
-		    n[1] = 0;
-		    n[2] = 0;
-		    bin = &hd[i].pbs[n[0]][n[1]][n[2]].bin[j];
-		    fprintf(outputfile,"%d",hd[i].ID);
-		    for (d = 0; d < gi.NDimProfile; d++) {
-			fprintf(outputfile," %.6e %.6e %.6e",hd[i].pbs[n[0]][n[1]][n[2]].ri[d],hd[i].pbs[n[0]][n[1]][n[2]].rm[d],hd[i].pbs[n[0]][n[1]][n[2]].ro[d]);
-			}
-		    fprintf(outputfile," %.6e %ld",bin->M,bin->N);
-		    for (d = 0; d < 3; d++) fprintf(outputfile," %.6e",bin->v[d]);
-		    for (d = 0; d < 6; d++) fprintf(outputfile," %.6e",bin->vdt[d]);
-		    for (d = 0; d < 3; d++) fprintf(outputfile," %.6e",bin->L[d]);
-		    fprintf(outputfile,"\n");
+	    n[2] = 0;
+	    for (i = 0; i < gi.NHalo; i++) NBinMax[1] = (hd[i].NBin[1]>NBinMax[1])?hd[i].NBin[1]:NBinMax[1];
+	    for (n[1] = 0; n[1] < NBinMax[1]; n[1]++) {
+		if (gi.BinningCoordinateType == 0 && gi.NDimProfile == 1) {
+		    assert(n[1] == 0);
+		    sprintf(outputfilename,"%s.profile.sph.d1.pro.%s",gi.OutputName,gi.MatterTypeName[j]);
 		    }
-		}
-	    fclose(outputfile);
+		else if (gi.BinningCoordinateType == 1 && gi.NDimProfile == 1) {
+		    assert(n[1] == 0);
+		    sprintf(outputfilename,"%s.profile.cyl.d1.pro.%s",gi.OutputName,gi.MatterTypeName[j]);
+		    }
+		else if (gi.BinningCoordinateType == 1 && gi.NDimProfile == 2) {
+		    if (n[1] < NBinMax[1]/2) {
+			d = n[1]+1;
+			sprintf(outputfilename,"%s.profile.cyl.d2.p%03d.pro.%s",gi.OutputName,d,gi.MatterTypeName[j]);
+			}
+		    else {
+			d = n[1]+1-NBinMax[1]/2;
+			sprintf(outputfilename,"%s.profile.cyl.d2.m%03d.pro.%s",gi.OutputName,d,gi.MatterTypeName[j]);
+			}
+		    }
+		else {
+		    sprintf(outputfilename,"garbage");
+		    }
+		outputfile = fopen(outputfilename,"w");
+		assert(outputfile != NULL);
+		fprintf(outputfile,"#ID/1"); 
+		k = 2;
+		for (d = 0; d < gi.NDimProfile; d++) {
+		    fprintf(outputfile," ri_%d/%d rm_%d/%d ro_%d/%d",d+1,k,d+1,k+1,d+1,k+2); k += 3;
+		    }
+		fprintf(outputfile," M/%d N/%d",k,k+1); k += 2;
+		fprintf(outputfile," v_1/%d v_2/%d v_3/%d",k,k+1,k+2); k += 3;
+		fprintf(outputfile," vdt_11/%d vdt_22/%d vdt_33/%d vdt_12/%d vdt_13/%d vdt_23/%d",k,k+1,k+2,k+3,k+4,k+5); k += 6;
+		fprintf(outputfile," L_x/%d L_y/%d L_z/%d",k,k+1,k+2);
+		fprintf(outputfile,"\n");
+		for (i = 0; i < gi.NHalo; i++) {
+		    for (n[0] = 0; n[0] < hd[i].NBin[0]; n[0]++) {
+			if (hd[i].NBin[1] <= n[1]) {
+			    /*
+			    ** If no bins then just output 0
+			    ** Necessary to keep the file structure intact
+			    */
+			    fprintf(outputfile,"%d",0);
+			    for (d = 0; d < gi.NDimProfile; d++) {
+				fprintf(outputfile," %.6e %.6e %.6e",0.0,0.0,0.0);
+				}
+			    fprintf(outputfile," %.6e %d",0.0,0);
+			    for (d = 0; d < 3; d++) fprintf(outputfile," %.6e",0.0);
+			    for (d = 0; d < 6; d++) fprintf(outputfile," %.6e",0.0);
+			    for (d = 0; d < 3; d++) fprintf(outputfile," %.6e",0.0);
+			    fprintf(outputfile,"\n");
+			    }
+			else {
+			    bin = &hd[i].pbs[n[0]][n[1]][n[2]].bin[j];
+			    fprintf(outputfile,"%d",hd[i].ID);
+			    for (d = 0; d < gi.NDimProfile; d++) {
+				fprintf(outputfile," %.6e %.6e %.6e",hd[i].pbs[n[0]][n[1]][n[2]].ri[d],hd[i].pbs[n[0]][n[1]][n[2]].rm[d],hd[i].pbs[n[0]][n[1]][n[2]].ro[d]);
+				}
+			    fprintf(outputfile," %.6e %ld",bin->M,bin->N);
+			    for (d = 0; d < 3; d++) fprintf(outputfile," %.6e",bin->v[d]);
+			    for (d = 0; d < 6; d++) fprintf(outputfile," %.6e",bin->vdt[d]);
+			    for (d = 0; d < 3; d++) fprintf(outputfile," %.6e",bin->L[d]);
+			    fprintf(outputfile,"\n");
+			    }
+			} /* for n[0] */
+		    } /* for NHalo */
+		fclose(outputfile);
+		} /* for n[1] */
 	    } /* if SpeciesContained */
 	} /* for NSpeciesProfile */
     }
@@ -4516,14 +4679,14 @@ void write_output_shape_profile(GI gi, HALO_DATA *hd, int ILoop) {
     */
     for (j = 0; j < gi.NSpeciesProfile; j++) {
 	if (gi.SpeciesContained[j]) {
-	    sprintf(outputfilename,"%s.shape.%03d.profiles.%s",gi.OutputName,ILoop,gi.MatterTypeName[j]);
+	    n[2] = 0;
+	    n[1] = 0;
+	    sprintf(outputfilename,"%s.shape.%03d.pro.%s",gi.OutputName,ILoop,gi.MatterTypeName[j]);
 	    outputfile = fopen(outputfilename,"w");
 	    assert(outputfile != NULL);
 	    fprintf(outputfile,"#ID/1 ri/2 rm/3 ro/4 M/5 N/6 b:a/7 c:a/8 a_x/9 a_y/10 a_z/11 b_x/12 b_y/13 b_z/14 c_x/15 c_y/16 c_z/17 re_b:a/18 re_c:a/19 NLoopConverged/20\n");
 	    for (i = 0; i < gi.NHalo; i++) {
 		for (n[0] = 0; n[0] < hd[i].NBin[0]; n[0]++) {
-		    n[1] = 0;
-		    n[2] = 0;
 		    fprintf(outputfile,"%d",hd[i].ID);
 		    fprintf(outputfile," %.6e %.6e %.6e",hd[i].pbs[n[0]][n[1]][n[2]].ri[0],hd[i].pbs[n[0]][n[1]][n[2]].rm[0],hd[i].pbs[n[0]][n[1]][n[2]].ro[0]);
 		    fprintf(outputfile," %.6e %ld",hd[i].pbs[n[0]][n[1]][n[2]].shape[j].M,hd[i].pbs[n[0]][n[1]][n[2]].shape[j].N);
