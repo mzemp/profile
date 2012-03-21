@@ -2149,7 +2149,7 @@ int main(int argc, char **argv) {
 		gi.rhoenccrit,gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 		gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
 	    }
-	if (gi.ProfilingMode == 1) {
+	else if (gi.ProfilingMode == 1) {
 	    switch(gi.ShapeDeterminationVolume) {
 	    case 0: strcpy(cdummy,"differential volume"); break;
 	    case 1: strcpy(cdummy,"enclosed volume"); break;
@@ -2189,23 +2189,25 @@ int main(int argc, char **argv) {
 	    }
 	fprintf(stderr,"\n");
 
-        fprintf(stderr,"NParticlePerBlockGas    : %d\n",gi.NParticlePerBlock[GAS]);
-        fprintf(stderr,"NParticlePerBlockDark   : %d\n",gi.NParticlePerBlock[DARK]);
-        fprintf(stderr,"NParticlePerBlockStar   : %d\n",gi.NParticlePerBlock[STAR]);
-        fprintf(stderr,"NCellData               : %d\n",gi.NCellData);
-        fprintf(stderr,"NCellHalo               : %d\n",gi.NCellHalo);
-        fprintf(stderr,"NLoopRecentre           : %d\n",gi.NLoopRecentre);
-        fprintf(stderr,"NLoopShapeIterationMax  : %d\n",gi.NLoopShapeIterationMax);
-        fprintf(stderr,"NLoopProcessData        : %d\n",gi.NLoopProcessData);
-        fprintf(stderr,"NLoopRead               : %d\n",gi.NLoopRead);
-        fprintf(stderr,"OutputFrequencySI       : %d\n",gi.OutputFrequencyShapeIteration);
-	fprintf(stderr,"\n");
-
-	fprintf(stderr,"zAxis_x                 : %.6e LU\n",gi.zAxis[0]);
-	fprintf(stderr,"zAxis_y                 : %.6e LU\n",gi.zAxis[1]);
-	fprintf(stderr,"zAxis_z                 : %.6e LU\n",gi.zAxis[2]);
-	fprintf(stderr,"zHeight                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+	if (gi.BinningCoordinateType == 1) {
+	    fprintf(stderr,"zAxis_x : %.6e LU\n",gi.zAxis[0]);
+	    fprintf(stderr,"zAxis_y : %.6e LU\n",gi.zAxis[1]);
+	    fprintf(stderr,"zAxis_z : %.6e LU\n",gi.zAxis[2]);
+	    fprintf(stderr,"zHeight : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		gi.zHeight,gi.zHeight/cosmo2internal_ct.L_usf,gi.ascale*gi.zHeight/cosmo2internal_ct.L_usf);
+	    fprintf(stderr,"\n");
+	    }
+
+        fprintf(stderr,"NParticlePerBlockGas   : %d\n",gi.NParticlePerBlock[GAS]);
+        fprintf(stderr,"NParticlePerBlockDark  : %d\n",gi.NParticlePerBlock[DARK]);
+        fprintf(stderr,"NParticlePerBlockStar  : %d\n",gi.NParticlePerBlock[STAR]);
+        fprintf(stderr,"NCellData              : %d\n",gi.NCellData);
+        fprintf(stderr,"NCellHalo              : %d\n",gi.NCellHalo);
+        fprintf(stderr,"NLoopRecentre          : %d\n",gi.NLoopRecentre);
+        fprintf(stderr,"NLoopShapeIterationMax : %d\n",gi.NLoopShapeIterationMax);
+        fprintf(stderr,"NLoopProcessData       : %d\n",gi.NLoopProcessData);
+        fprintf(stderr,"NLoopRead              : %d\n",gi.NLoopRead);
+        fprintf(stderr,"OutputFrequencySI      : %d\n",gi.OutputFrequencyShapeIteration);
 	fprintf(stderr,"\n");
 
 	fprintf(stderr,"frecentrermin           : %.6e\n",gi.frecentrermin);
@@ -2776,15 +2778,12 @@ int read_halocatalogue_ascii_excludehalo(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUD
 	    /*
 	    ** Calculate size 
 	    */
-
-	    /*
-	    **CHECK do check first then modify this
-	    */
-	    if (rcrit == 0 && rtrunc > 0) sizeorig = rtrunc;
-	    else if (rcrit > 0 && rtrunc > 0 && rtrunc < rcrit) sizeorig = rtrunc;
-	    else sizeorig = gi->fhaloexcludesize*rcrit;
-
-
+	    sizeorig = 1e100;
+	    if (rbg > 0 && rbg < sizeorig) sizeorig = rbg;
+	    if (rcrit > 0 && rcrit < sizeorig) sizeorig = rcrit;
+	    if (rtrunc > 0 && rtrunc < sizeorig) sizeorig = rtrunc;
+	    if (sizeorig == 1e100) sizeorig = 0;
+	    else sizeorig *= gi->fhaloexcludesize;
 	    }
 	else {
 	    fprintf(stderr,"Not supported halo catalogue format!\n");
@@ -3172,10 +3171,7 @@ void put_particles_in_bins(GI gi, HALO_DATA *hd, const int MatterType, PROFILE_P
 			** Process data
 			*/
 			size = hd[i].rmax[0];
-			/*
-			** CHECK
-			*/
-			/* if (gi.ProfilingMode == 0 && gi.BinningCoordinateType == 1) size = sqrt(pow(hd[i].rmax[0],2)+pow(hd[i].zHeight,2)); */
+			if (gi.ProfilingMode == 0 && gi.BinningCoordinateType == 1) size = sqrt(pow(hd[i].rmax[0],2)+pow(hd[i].zHeight,2));
 			/* if (gi.ProfilingMode == 3) size = gi.fincludeshaperadius*hd[i].rmax[0]; */
 			if (intersect(gi.us.LBox,gi.NCellData,hd[i],index,shift,size)) {
 			    j = HeadIndex[index[0]][index[1]][index[2]];
@@ -3526,10 +3522,7 @@ void put_particles_in_storage(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUDE *hdeg, co
 		    ** Process data
 		    */
 		    size = hd[i].rmax[0];
-		    /*
-		    ** CHECK
-		    */
-		    /* if (gi->ProfilingMode == 0 && gi->BinningCoordinateType == 1) size = sqrt(pow(hd[i].rmax[0],2)+pow(hd[i].zHeight,2)); */
+		    if (gi->ProfilingMode == 0 && gi->BinningCoordinateType == 1) size = sqrt(pow(hd[i].rmax[0],2)+pow(hd[i].zHeight,2));
 		    if (intersect(gi->us.LBox,gi->NCellData,hd[i],index,shift,size)) {
 			j = HeadIndex[index[0]][index[1]][index[2]];
 			while (j >= 0) {
