@@ -2004,12 +2004,13 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"Hbox     : %.6e\n",ad.ah.Hbox);
 	    fprintf(stderr,"magic2   : %.6e\n",ad.ah.magic2);
 	    fprintf(stderr,"Banner   : %s\n",ad.Banner);
+	    fprintf(stderr,"\n");
 	    for (i = 0; i < 10; i++) {
 		fprintf(stderr,"mass[%ld] : %.6e num[%ld] : %d\n",i,ad.ah.mass[i],i,ad.ah.num[i]);
 		}
 	    fprintf(stderr,"\n");
 	    fprintf(stderr,"ART data properties:\n\n");
-	    fprintf(stderr,"Particle File Mode : %d\n",ad.particle_file_mode);
+	    fprintf(stderr,"Particle file mode : %d\n",ad.particle_file_mode);
 	    fprintf(stderr,"Nparticleperrecord : %d\n",ad.Nparticleperrecord);
 	    fprintf(stderr,"Nrecord            : %d\n",ad.Nrecord);
 	    fprintf(stderr,"Nhydroproperties   : %d\n",ad.Nhydroproperties);
@@ -2069,7 +2070,7 @@ int main(int argc, char **argv) {
 	case 0: strcpy(cdummy,"Tipsy"); break;
 	case 1: strcpy(cdummy,"ART"); break;
 	default: strcpy(cdummy,"not supported"); }
-        fprintf(stderr,"Data format:                      : %s\n",cdummy);
+        fprintf(stderr,"Data format                       : %s\n",cdummy);
 	fprintf(stderr,"Contains anything                 : %s\n",(gi.SpeciesContained[TOT])?"yes":"no");
 	fprintf(stderr,"Contains gas                      : %s\n",(gi.SpeciesContained[GAS])?"yes":"no");
 	fprintf(stderr,"Contains dark matter              : %s\n",(gi.SpeciesContained[DARK])?"yes":"no");
@@ -2079,8 +2080,8 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"Do chemical species               : %s\n",(gi.DoChemicalSpecies)?"yes":"no");
 	fprintf(stderr,"Exclude particles                 : %s\n",(gi.ExcludeParticles)?"yes":"no");
 	switch(gi.HaloSize) {
-	case 0: strcpy(cdummy,"rbg");
-	case 1: strcpy(cdummy,"rcrit");
+	case 0: strcpy(cdummy,"rbg"); break;
+	case 1: strcpy(cdummy,"rcrit"); break;
 	default: strcpy(cdummy,"not supported"); }
 	fprintf(stderr,"Halo size                         : %s\n",cdummy);
 	fprintf(stderr,"Number of dimensions              : %d\n",gi.NDimProfile);
@@ -2823,7 +2824,10 @@ int read_halocatalogue_ascii_excludehalo(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUD
 		rcheck[d] = rcheck[d]-hd[i].rcentre[d];
 		}
 	    dsph = sqrt(rcheck[0]*rcheck[0]+rcheck[1]*rcheck[1]+rcheck[2]*rcheck[2]);
-	    if (dsph <= hd[i].rmax[0]) {
+	    /*
+	    ** Check if spheres overlap
+	    */
+	    if (dsph <= hd[i].rmax[0]+sizeorig) {
 		if (sizeorig > dsph) size = gi->fhaloexcludedistance*dsph;
 		else size = sizeorig;
 		if (size > 0) {
@@ -4378,7 +4382,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     int index0, index1, index2;
     int ***HeadIndex, *NextIndex;
     double r[3], shift[3];
-    double size, d, Qcheck, *Qcomp;
+    double d, size, sizeother, *sizecomp;
 
     /*
     ** Initialise linked list stuff
@@ -4419,28 +4423,18 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     /*
     ** Find top level haloes
     */
-    Qcomp = malloc(gi.NHalo*sizeof(double));
-    assert(Qcomp != NULL);
-    for (i = 0; i < gi.NHalo; i++) Qcomp[i] = 0;
+    sizecomp = malloc(gi.NHalo*sizeof(double));
+    assert(sizecomp != NULL);
+    for (i = 0; i < gi.NHalo; i++) sizecomp[i] = 0;
     for (i = 0; i < gi.NHalo; i++) {
 	size = 0;
-	Qcheck = 0;
-	if (gi.HaloSize == 0) {
-	    size = hd[i].rbg;
-	    Qcheck = hd[i].Mrbg;
-	    }
-	else if (gi.HaloSize == 1) {
-	    size = hd[i].rcrit;
-	    Qcheck = hd[i].Mrcrit;
-	    }
-	if (hd[i].rtrunc > 0 && (hd[i].rtrunc < size || size == 0)) {
-	    size = hd[i].rtrunc;
-	    Qcheck = hd[i].Mrtrunc;
-	    }
+	if (gi.HaloSize == 0) size = hd[i].rbg;
+	else if (gi.HaloSize == 1) size = hd[i].rcrit;
+	if (hd[i].rtrunc > 0 && (hd[i].rtrunc < size || size == 0)) size = hd[i].rtrunc;
 	/*
 	** Go through linked list
 	*/
-#pragma omp parallel for default(none) private(index,index0,index1,index2,j,k,r,d) shared(gi,hd,i,size,shift,Qcomp,Qcheck,HeadIndex,NextIndex)
+#pragma omp parallel for default(none) private(index,index0,index1,index2,j,k,r,d) shared(gi,hd,i,size,sizecomp,shift,HeadIndex,NextIndex)
 	for (index0 = 0; index0 < gi.NCellHalo; index0++) {
 	    for (index1 = 0; index1 < gi.NCellHalo; index1++) {
 		for (index2 = 0; index2 < gi.NCellHalo; index2++) {
@@ -4458,10 +4452,10 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
 				if (d <= size) {
 				    /*
-				    ** contained => use most massive halo
+				    ** contained => use largest halo
 				    */
-				    if (Qcheck > Qcomp[j]) {
-					Qcomp[j] = Qcheck;
+				    if (size > sizecomp[j]) {
+					sizecomp[j] = size;
 					hd[j].HostHaloID = hd[i].ID;
 					}
 				    }
@@ -4476,7 +4470,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     /*
     ** Sort out duplicates
     */
-#pragma omp parallel for default(none) private(i,j,k,r,d,size,Qcheck) shared(gi,hd)
+#pragma omp parallel for default(none) private(i,j,k,r,d,size,sizeother) shared(gi,hd)
     for (i = 0; i < gi.NHalo; i++) {
 	for (j = i+1; j < gi.NHalo; j++) {
 	    if (hd[i].HostHaloID == hd[j].ID && hd[j].HostHaloID == hd[i].ID) {
@@ -4492,18 +4486,18 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		if (gi.HaloSize == 0) size = hd[i].rbg;
 		else if (gi.HaloSize == 1) size = hd[i].rcrit;
 		if (hd[i].rtrunc > 0 && (hd[i].rtrunc < size || size == 0)) size = hd[i].rtrunc;
-		Qcheck = 0;
-		if (gi.HaloSize == 0) Qcheck = hd[j].rbg;
-		else if (gi.HaloSize == 1) Qcheck = hd[j].rcrit;
-		if (hd[j].rtrunc > 0 && (hd[j].rtrunc < Qcheck || Qcheck == 0)) Qcheck = hd[j].rtrunc;
+		sizeother = 0;
+		if (gi.HaloSize == 0) sizeother = hd[j].rbg;
+		else if (gi.HaloSize == 1) sizeother = hd[j].rcrit;
+		if (hd[j].rtrunc > 0 && (hd[j].rtrunc < sizeother || sizeother == 0)) sizeother = hd[j].rtrunc;
 		/*
 		** Check if the pair is close enough
 		*/
-		if (d <= gi.fhaloduplicate*(0.5*(size+Qcheck))) {
+		if (d <= gi.fhaloduplicate*(0.5*(size+sizeother))) {
 		    /*
 		    ** Found a duplicate
 		    */
-		    if (size >= Qcheck) {
+		    if (size >= sizeother) {
 			hd[j].ExtraHaloID = hd[i].ID;
 			hd[i].HostHaloID = 0;
 			for (k = 0; k < gi.NHalo; k++) {
@@ -4530,7 +4524,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		}
 	    }
 	}
-    free(Qcomp);
+    free(sizecomp);
     for (i = 0; i < gi.NCellHalo; i ++) {
 	for (j = 0; j < gi.NCellHalo; j++) {
 	    free(HeadIndex[i][j]);
