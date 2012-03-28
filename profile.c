@@ -153,6 +153,7 @@ typedef struct general_info {
     int ShapeTensorForm;
     int DoMetalSpecies;
     int DoChemicalSpecies;
+    int HaloSize;
     int rmaxFromHaloCatalogue;
     int ExcludeParticles;
     int zAxisCatalogueSpecified;
@@ -386,6 +387,12 @@ int main(int argc, char **argv) {
             }
         else if (strcmp(argv[i],"-DoChemicalSpecies") == 0) {
             gi.DoChemicalSpecies = 1;
+            i++;
+            }
+        else if (strcmp(argv[i],"-HaloSize") == 0) {
+            i++;
+            if (i >= argc) usage();
+	    gi.HaloSize = atoi(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-ExcludeParticles") == 0) {
@@ -2071,6 +2078,11 @@ int main(int argc, char **argv) {
 	fprintf(stderr,"Do metal species                  : %s\n",(gi.DoMetalSpecies)?"yes":"no");
 	fprintf(stderr,"Do chemical species               : %s\n",(gi.DoChemicalSpecies)?"yes":"no");
 	fprintf(stderr,"Exclude particles                 : %s\n",(gi.ExcludeParticles)?"yes":"no");
+	switch(gi.HaloSize) {
+	case 0: strcpy(cdummy,"rbg");
+	case 1: strcpy(cdummy,"rcrit");
+	default: strcpy(cdummy,"not supported"); }
+	fprintf(stderr,"Halo size                         : %s\n",cdummy);
 	fprintf(stderr,"Number of dimensions              : %d\n",gi.NDimProfile);
 	fprintf(stderr,"Number of read species            : %d\n",gi.NSpeciesRead);
 	fprintf(stderr,"Number of profiled species        : %d\n",gi.NSpeciesProfile);
@@ -2254,6 +2266,7 @@ void usage(void) {
     fprintf(stderr,"-ShapeTensorForm <value>             : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
     fprintf(stderr,"-DoMetalSpecies                      : set this flag for doing metal species\n");
     fprintf(stderr,"-DoChemicalSpecies                   : set this flag for doing chemical species\n");
+    fprintf(stderr,"-HaloSize <value>                    : 0 = rbg / 1 = rcrit (default: 0)\n");
     fprintf(stderr,"-ExcludeParticles <value>            : 0 = don't exclude any particles / 1 = exclude particles in specified halo catalogue (default: 0)\n");
     fprintf(stderr,"-LengthType <value>                  : 0 = comoving / 1 = physical (interpretation of rmin, rmax and zheight values) (default: 0)\n");
     fprintf(stderr,"-rmin <d> <value>                    : d = dimension (1/2/3) / global minimum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
@@ -2346,6 +2359,7 @@ void set_default_values_general_info(GI *gi) {
     gi->ShapeTensorForm = 0; /* no weights */
     gi->DoMetalSpecies = 0; /* no metal species */
     gi->DoChemicalSpecies = 0; /* no chemical species */
+    gi->HaloSize = 0; /* rbg */
     gi->ExcludeParticles = 0; /* no particles excluded */
     gi->zAxisCatalogueSpecified = 0; /* no z-axis catalogue sepcified */
     gi->CentreType = 0;
@@ -2779,8 +2793,12 @@ int read_halocatalogue_ascii_excludehalo(GI *gi, HALO_DATA *hd, HALO_DATA_EXCLUD
 	    ** Calculate size 
 	    */
 	    sizeorig = 1e100;
-	    if (rbg > 0 && rbg < sizeorig) sizeorig = rbg;
-	    if (rcrit > 0 && rcrit < sizeorig) sizeorig = rcrit;
+	    if (gi->HaloSize == 0) {
+		if (rbg > 0 && rbg < sizeorig) sizeorig = rbg;
+		}
+	    else if (gi->HaloSize == 1) {
+		if (rcrit > 0 && rcrit < sizeorig) sizeorig = rcrit;
+		}
 	    if (rtrunc > 0 && rtrunc < sizeorig) sizeorig = rtrunc;
 	    if (sizeorig == 1e100) sizeorig = 0;
 	    else sizeorig *= gi->fhaloexcludesize;
@@ -4403,13 +4421,19 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
     */
     Qcomp = malloc(gi.NHalo*sizeof(double));
     assert(Qcomp != NULL);
+    for (i = 0; i < gi.NHalo; i++) Qcomp[i] = 0;
     for (i = 0; i < gi.NHalo; i++) {
-	Qcomp[i] = 0;
-	}
-    for (i = 0; i < gi.NHalo; i++) {
-	size = hd[i].rcrit;
-	Qcheck = hd[i].Mrcrit;
-	if ((hd[i].rtrunc < size || size == 0) && (hd[i].rtrunc > 0)) {
+	size = 0;
+	Qcheck = 0;
+	if (gi.HaloSize == 0) {
+	    size = hd[i].rbg;
+	    Qcheck = hd[i].Mrbg;
+	    }
+	else if (gi.HaloSize == 1) {
+	    size = hd[i].rcrit;
+	    Qcheck = hd[i].Mrcrit;
+	    }
+	if (hd[i].rtrunc > 0 && (hd[i].rtrunc < size || size == 0)) {
 	    size = hd[i].rtrunc;
 	    Qcheck = hd[i].Mrtrunc;
 	    }
@@ -4434,7 +4458,7 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 				d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
 				if (d <= size) {
 				    /*
-				    ** contained
+				    ** contained => use most massive halo
 				    */
 				    if (Qcheck > Qcomp[j]) {
 					Qcomp[j] = Qcheck;
@@ -4464,19 +4488,22 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		    r[k] = r[k] - hd[i].rcentre[k];
 		    }
 		d = sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-		size = hd[i].rcrit;
-		if ((hd[i].rtrunc < size || size == 0) && (hd[i].rtrunc > 0)) size = hd[i].rtrunc;
-		Qcheck = hd[j].rcrit;
-		if ((hd[j].rtrunc < Qcheck || Qcheck == 0) && (hd[j].rtrunc > 0)) Qcheck = hd[j].rtrunc;
-		size = 0.5*(size+Qcheck);
+		size = 0;
+		if (gi.HaloSize == 0) size = hd[i].rbg;
+		else if (gi.HaloSize == 1) size = hd[i].rcrit;
+		if (hd[i].rtrunc > 0 && (hd[i].rtrunc < size || size == 0)) size = hd[i].rtrunc;
+		Qcheck = 0;
+		if (gi.HaloSize == 0) Qcheck = hd[j].rbg;
+		else if (gi.HaloSize == 1) Qcheck = hd[j].rcrit;
+		if (hd[j].rtrunc > 0 && (hd[j].rtrunc < Qcheck || Qcheck == 0)) Qcheck = hd[j].rtrunc;
 		/*
 		** Check if the pair is close enough
 		*/
-		if (d <= gi.fhaloduplicate*size) {
+		if (d <= gi.fhaloduplicate*(0.5*(size+Qcheck))) {
 		    /*
 		    ** Found a duplicate
 		    */
-		    if (hd[i].Mrcrit >= hd[j].Mrcrit) {
+		    if (size >= Qcheck) {
 			hd[j].ExtraHaloID = hd[i].ID;
 			hd[i].HostHaloID = 0;
 			for (k = 0; k < gi.NHalo; k++) {
