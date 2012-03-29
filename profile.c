@@ -1044,8 +1044,8 @@ int main(int argc, char **argv) {
 	for (d = 0; d < 3; d++) {
 	    gi.rmin[d] /= gi.ascale;
 	    gi.rmax[d] /= gi.ascale;
-	    gi.zHeight /= gi.ascale;
 	    }
+	gi.zHeight /= gi.ascale;
 	}
 
     if (gi.cosmous.LBox == 0) gi.cosmous.LBox = LBox;
@@ -2084,6 +2084,11 @@ int main(int argc, char **argv) {
 	case 1: strcpy(cdummy,"rcrit"); break;
 	default: strcpy(cdummy,"not supported"); }
 	fprintf(stderr,"Halo size                         : %s\n",cdummy);
+	switch(LengthType) {
+	case 0: strcpy(cdummy,"comoving"); break;
+	case 1: strcpy(cdummy,"physical"); break;
+	default: strcpy(cdummy,"not supported"); }
+	fprintf(stderr,"Length type                       : %s\n",cdummy);
 	fprintf(stderr,"Number of dimensions              : %d\n",gi.NDimProfile);
 	fprintf(stderr,"Number of read species            : %d\n",gi.NSpeciesRead);
 	fprintf(stderr,"Number of profiled species        : %d\n",gi.NSpeciesProfile);
@@ -2269,7 +2274,7 @@ void usage(void) {
     fprintf(stderr,"-DoChemicalSpecies                   : set this flag for doing chemical species\n");
     fprintf(stderr,"-HaloSize <value>                    : 0 = rbg / 1 = rcrit (default: 0)\n");
     fprintf(stderr,"-ExcludeParticles <value>            : 0 = don't exclude any particles / 1 = exclude particles in specified halo catalogue (default: 0)\n");
-    fprintf(stderr,"-LengthType <value>                  : 0 = comoving / 1 = physical (interpretation of rmin, rmax and zheight values) (default: 0)\n");
+    fprintf(stderr,"-LengthType <value>                  : 0 = comoving / 1 = physical (interpretation of rmin, rmax and zHeight values) (default: 0)\n");
     fprintf(stderr,"-rmin <d> <value>                    : d = dimension (1/2/3) / global minimum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
     fprintf(stderr,"-rmax <d> <value>                    : d = dimension (1/2/3) / global maximum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
     fprintf(stderr,"-NBin <d> <value>                    : d = dimension (1/2/3) / global number of bins between rmin and rmax for dimension d - overwrites values form halo catalogue (default: not set)\n");
