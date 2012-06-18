@@ -2925,8 +2925,8 @@ void initialise_halo_profile(GI *gi, HALO_DATA *hd) {
     PROFILE_BIN_PROPERTIES *bin;
     PROFILE_SHAPE_PROPERTIES *shape;
 
-    hd->HostHaloID = 0;
-    hd->ExtraHaloID = 0;
+    hd->HostHaloID = -1;
+    hd->ExtraHaloID = -1;
     hd->NHaloExclude = 0;
     hd->SizeExcludeHaloData = 0;
     hd->rmaxscale = 0;
@@ -4019,7 +4019,7 @@ void calculate_halo_properties(GI gi, HALO_DATA *hd) {
 	*/
 	hd[i].ExtraHaloID = 1;
 	remove_background(gi,&hd[i]);
-	hd[i].ExtraHaloID = 0;
+	hd[i].ExtraHaloID = -1;
 	/*
 	** Calculate rvcmax, Mrvcmax as well as rvcmaxtrunc, Mrvcmaxtrunc
 	*/
@@ -4504,14 +4504,14 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		    */
 		    if (size >= sizeother) {
 			hd[j].ExtraHaloID = hd[i].ID;
-			hd[i].HostHaloID = 0;
+			hd[i].HostHaloID = -1;
 			for (k = 0; k < gi.NHalo; k++) {
 			    if (hd[k].HostHaloID == hd[j].ID) hd[k].HostHaloID = hd[i].ID;
 			    }
 			}
 		    else {
 			hd[i].ExtraHaloID = hd[j].ID;
-			hd[j].HostHaloID = 0;
+			hd[j].HostHaloID = -1;
 			for (k = 0; k < gi.NHalo; k++) {
 			    if (hd[k].HostHaloID == hd[i].ID) hd[k].HostHaloID = hd[j].ID;
 			    }
@@ -4521,8 +4521,8 @@ void determine_halo_hierarchy(GI gi, HALO_DATA *hd) {
 		    /*
 		    ** Probably a merger
 		    */
-		    hd[i].HostHaloID = 0;
-		    hd[j].HostHaloID = 0;
+		    hd[i].HostHaloID = -1;
+		    hd[j].HostHaloID = -1;
 		    hd[i].ExtraHaloID = hd[j].ID;
 		    hd[j].ExtraHaloID = hd[i].ID;
 		    }
