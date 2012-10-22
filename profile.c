@@ -2646,7 +2646,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fRecentreDist = 1.5;
     gi->NLoopRecentre = 0;
 
-    gi->fcheckrvcmax = 1.5;
+    gi->fcheckrvcmax = 2.0;
     gi->slopertruncindicator = -0.5;
     gi->frhobg = 1.2;
     gi->shapeiterationtolerance = 1e-5;
