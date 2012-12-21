@@ -194,7 +194,7 @@ typedef struct general_info {
     double fcheckrvcmax;
     double slopertruncindicator;
     double frhobg;
-    double shapeiterationtolerance;
+    double ShapeIterationTolerance;
     double fhaloduplicate;
     double fhaloexcludesize, fhaloexcludedistance;
     /* double fincludeshapeproperty, fincludeshaperadius; */
@@ -240,7 +240,7 @@ int main(int argc, char **argv) {
     int L = -1;
     int ICurrentBlockGas, ICurrentBlockDark, ICurrentBlockStar;
     int PositionPrecision, VerboseLevel;
-    int LengthType_rmin, LengthType_rmax, LengthType_zHeight, LengthType_rRecentre, LengthType_rExclude;
+    int LengthType_rmin[3], LengthType_rmax[3], LengthType_zHeight, LengthType_rRecentre, LengthType_rExclude;
     int LmaxGasAnalysis;
     int NThreads;
     int timestart, timeend, timestartsub, timeendsub, timestartloop, timeendloop, timediff;
@@ -306,8 +306,10 @@ int main(int argc, char **argv) {
     */
 
     PositionPrecision = 0; /* single precision */
-    LengthType_rmin = 0; /* comoving */
-    LengthType_rmax = 0; /* comoving */
+    for (d = 0; d < 3; d++) {
+	LengthType_rmin[d] = 0; /* comoving */
+	LengthType_rmax[d] = 0; /* comoving */
+	}
     LengthType_zHeight = 0; /* comoving */
     LengthType_rExclude = 0; /* comoving */
     LengthType_rRecentre = 0; /* comoving */
@@ -457,14 +459,20 @@ int main(int argc, char **argv) {
             }
         else if (strcmp(argv[i],"-LengthType_rmin") == 0) {
 	    i++;
-            if (i >= argc) usage();
-            LengthType_rmin = atoi(argv[i]);
+	    if (i >= argc) usage();
+	    d = atoi(argv[i]);
+	    i++;
+	    if (i >= argc) usage();
+            LengthType_rmin[d-1] = atoi(argv[i]);
 	    i++;
             }
         else if (strcmp(argv[i],"-LengthType_rmax") == 0) {
 	    i++;
             if (i >= argc) usage();
-            LengthType_rmax = atoi(argv[i]);
+	    d = atoi(argv[i]);
+	    i++;
+	    if (i >= argc) usage();
+            LengthType_rmax[d-1] = atoi(argv[i]);
 	    i++;
             }
         else if (strcmp(argv[i],"-LengthType_zHeight") == 0) {
@@ -648,10 +656,10 @@ int main(int argc, char **argv) {
 	    gi.frhobg = atof(argv[i]);
 	    i++;
 	    }
-	else if (strcmp(argv[i],"-shapeiterationtolerance") == 0) {
+	else if (strcmp(argv[i],"-ShapeIterationTolerance") == 0) {
 	    i++;
             if (i >= argc) usage();
-	    gi.shapeiterationtolerance = atof(argv[i]);
+	    gi.ShapeIterationTolerance = atof(argv[i]);
 	    i++;
 	    }
 	else if (strcmp(argv[i],"-fhaloduplicate") == 0) {
@@ -1167,11 +1175,9 @@ int main(int argc, char **argv) {
 	gi.SpeciesContained[GAS_H2] = 1;
 	}
 
-    if (LengthType_rmin == 1) {
-	for (d = 0; d < 3; d++) gi.rmin[d] /= gi.ascale;
-	}
-    if (LengthType_rmax == 1) {
-	for (d = 0; d < 3; d++) gi.rmax[d] /= gi.ascale;
+    for (d = 0; d < 3; d++) {
+	if (LengthType_rmin[d] == 1) gi.rmin[d] /= gi.ascale;
+	if (LengthType_rmax[d] == 1) gi.rmax[d] /= gi.ascale;
 	}
     if (LengthType_zHeight == 1) gi.zHeight /= gi.ascale;
     if (LengthType_rExclude == 1) gi.rExclude /= gi.ascale;
@@ -2034,14 +2040,16 @@ int main(int argc, char **argv) {
 	/*
 	** Determine hierarchy of haloes
 	*/
-	gettimeofday(&time,NULL);
-	timestartsub = time.tv_sec;
-	fprintf(stderr,"Determining hierarchy of haloes ... ");
-	determine_halo_hierarchy(gi,hd);
-	gettimeofday(&time,NULL);
-	timeendsub = time.tv_sec;
-	timediff = timeendsub-timestartsub;
-	fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+	if (gi.BinningCoordinateType == 0) {
+	    gettimeofday(&time,NULL);
+	    timestartsub = time.tv_sec;
+	    fprintf(stderr,"Determining hierarchy of haloes ... ");
+	    determine_halo_hierarchy(gi,hd);
+	    gettimeofday(&time,NULL);
+	    timeendsub = time.tv_sec;
+	    timediff = timeendsub-timestartsub;
+	    fprintf(stderr,"Done. It took %d s = %d h %d m %d s.\n\n",timediff,timediff/3600,(timediff/60)%60,timediff%60);
+	    }
 	/*
 	** Write output
 	*/
@@ -2120,6 +2128,9 @@ int main(int argc, char **argv) {
     */
 
     if (VerboseLevel >= 1) {
+	/*
+	** 6DFOF
+	*/
 	if (gi.HaloCatalogueFormat == 1) {
 	    fprintf(stderr,"6DFOF specific parameters:\n\n");
 	    fprintf(stderr,"BinFactor             : %.6e\n",gi.BinFactor);
@@ -2128,7 +2139,9 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"rmaxFromHaloCatalogue : %s\n",(gi.rmaxFromHaloCatalogue == 0)?"no":"yes");
 	    fprintf(stderr,"\n");
 	    }
-
+	/*
+	** ART
+	*/
 	if (gi.DataFormat == 1) {
 	    fprintf(stderr,"ART general header:\n\n");
 	    fprintf(stderr,"aunin    : %.6e\n",ad.ah.aunin);
@@ -2192,7 +2205,9 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"LmaxGasAnalysis : %d\n",LmaxGasAnalysis);
 	    fprintf(stderr,"\n");
 	    }
-
+	/*
+	** Cosmology
+	*/
         fprintf(stderr,"Cosmology:\n\n");
         fprintf(stderr,"OmegaM0 : %.6e\n",gi.cp.OmegaM0);
         fprintf(stderr,"OmegaL0 : %.6e\n",gi.cp.OmegaL0);
@@ -2200,96 +2215,46 @@ int main(int argc, char **argv) {
         fprintf(stderr,"OmegaR0 : %.6e\n",gi.cp.OmegaR0);
         fprintf(stderr,"h0_100  : %.6e\n",gi.cp.h0_100);
 	fprintf(stderr,"\n");
-
+	/*
+	** Unit system
+	*/
         fprintf(stderr,"Unit System:\n\n");
         fprintf(stderr,"LBox     : %.6e LU\n",gi.us.LBox);
         fprintf(stderr,"Hubble0  : %.6e TU^{-1}\n",gi.us.Hubble0);
         fprintf(stderr,"rhocrit0 : %.6e MU LU^{-3}\n",gi.us.rhocrit0);
 	fprintf(stderr,"\n");
-
+	/*
+	** Internal units
+	*/
 	fprintf(stderr,"Internal units:\n\n");
 	fprintf(stderr,"LU : %.6e kpc\n",1.0/cosmo2internal_ct.L_usf);
 	fprintf(stderr,"TU : %.6e Gyr\n",1.0/cosmo2internal_ct.T_usf);
 	fprintf(stderr,"VU : %.6e kpc Gyr^{-1} = %.6e km s^{-1}\n",1.0/cosmo2internal_ct.V_usf,1.0/cosmo2internal_ct.V_usf*ConversionFactors.kpc_per_Gyr_2_km_per_s);
 	fprintf(stderr,"MU : %.6e Mo\n",1.0/cosmo2internal_ct.M_usf);
 	fprintf(stderr,"\n");
-
-	fprintf(stderr,"a    : %.6e\n",gi.ascale);
-	fprintf(stderr,"LBox : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
-	    cosmo2internal_ct.L_usf*LBox,LBox,gi.ascale*LBox);
-	fprintf(stderr,"Box  : [%.6e ... %.6e] x [%.6e ... %.6e] x [%.6e ... %.6e] LU (comoving)\n",gi.bc[0],gi.bc[3],gi.bc[1],gi.bc[4],gi.bc[2],gi.bc[5]);
-	fprintf(stderr,"\n");
-
-        fprintf(stderr,"Used values:\n\n");
+	/*
+	** Data properties
+	*/
+        fprintf(stderr,"Data properties:\n\n");
 	switch(gi.DataFormat) {
 	case 0: strcpy(cdummy,"Tipsy"); break;
 	case 1: strcpy(cdummy,"ART"); break;
 	default: strcpy(cdummy,"not supported"); }
-        fprintf(stderr,"Data format                       : %s\n",cdummy);
-	fprintf(stderr,"Contains anything                 : %s\n",(gi.SpeciesContained[TOT])?"yes":"no");
-	fprintf(stderr,"Contains gas                      : %s\n",(gi.SpeciesContained[GAS])?"yes":"no");
-	fprintf(stderr,"Contains dark matter              : %s\n",(gi.SpeciesContained[DARK])?"yes":"no");
-	fprintf(stderr,"Contains stars                    : %s\n",(gi.SpeciesContained[STAR])?"yes":"no");
-	fprintf(stderr,"Contains baryons                  : %s\n",(gi.SpeciesContained[BARYON])?"yes":"no");
-	fprintf(stderr,"Do metal species                  : %s\n",(gi.DoMetalSpecies)?"yes":"no");
-	fprintf(stderr,"Do chemical species               : %s\n",(gi.DoChemicalSpecies)?"yes":"no");
-	fprintf(stderr,"Do gas temperature                : %s\n",(gi.DoGasTemperature)?"yes":"no");
-	fprintf(stderr,"Do stellar age                    : %s\n",(gi.DoStellarAge)?"yes":"no");
-	fprintf(stderr,"More characteristics output       : %s\n",(gi.MoreCharacteristicsOutput)?"yes":"no");
-	fprintf(stderr,"Exclude particles                 : %s\n",(gi.ExcludeParticles)?"yes":"no");
-	switch(gi.HaloSize) {
-	case 0: strcpy(cdummy,"rbg"); break;
-	case 1: strcpy(cdummy,"rcrit"); break;
-	case 2: strcpy(cdummy,"rfix"); break;
-	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Halo size                         : %s\n",cdummy);
-	switch(LengthType_rmin) {
-	case 0: strcpy(cdummy,"comoving"); break;
-	case 1: strcpy(cdummy,"physical"); break;
-	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Length type rmin                  : %s\n",cdummy);
-	switch(LengthType_rmax) {
-	case 0: strcpy(cdummy,"comoving"); break;
-	case 1: strcpy(cdummy,"physical"); break;
-	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Length type rmax                  : %s\n",cdummy);
-	switch(LengthType_zHeight) {
-	case 0: strcpy(cdummy,"comoving"); break;
-	case 1: strcpy(cdummy,"physical"); break;
-	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Length type zHeight               : %s\n",cdummy);
-	switch(LengthType_rExclude) {
-	case 0: strcpy(cdummy,"comoving"); break;
-	case 1: strcpy(cdummy,"physical"); break;
-	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Length type rExclude              : %s\n",cdummy);
-	switch(LengthType_rRecentre) {
-	case 0: strcpy(cdummy,"comoving"); break;
-	case 1: strcpy(cdummy,"physical"); break;
-	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Length type rRecentre             : %s\n",cdummy);
-	fprintf(stderr,"Number of dimensions              : %d\n",gi.NDimProfile);
-	fprintf(stderr,"Number of read species            : %d\n",gi.NSpeciesRead);
-	fprintf(stderr,"Number of profiled species        : %d\n",gi.NSpeciesProfile);
-	for (i = 0; i < gi.NSpeciesRead; i++) {
-	    switch(i) {
-	    case GAS: strcpy(cdummy,"gas"); break;
-	    case DARK: strcpy(cdummy,"dark matter"); break;
-	    case STAR: strcpy(cdummy,"stars"); break;
-	    default: strcpy(cdummy,"not supported"); }
-	    fprintf(stderr,"Number of subspecies / properties : %d / %d (%s)\n",gi.NSubSpecies[i],gi.NProperties[i],cdummy);
-	    }
-	switch(gi.BinningCoordinateType) {
-	case 0: strcpy(cdummy,"spherical"); break;
-	case 1: strcpy(cdummy,"cylindrical"); break;
-	default: strcpy(cdummy,"not supported"); }
-        fprintf(stderr,"Binning                           : %s\n",cdummy);
-	switch(gi.VelocityProjectionType) {
-	case 0: strcpy(cdummy,"coordinate axes"); break;
-	case 1: strcpy(cdummy,"spherical"); break;
-	case 2: strcpy(cdummy,"cylindrical"); break;
-	default: strcpy(cdummy,"not supported"); }
-        fprintf(stderr,"Velocity projection               : %s\n",cdummy);
+        fprintf(stderr,"Data format          : %s\n",cdummy);
+	fprintf(stderr,"Contains anything    : %s\n",(gi.SpeciesContained[TOT])?"yes":"no");
+	fprintf(stderr,"Contains gas         : %s\n",(gi.SpeciesContained[GAS])?"yes":"no");
+	fprintf(stderr,"Contains dark matter : %s\n",(gi.SpeciesContained[DARK])?"yes":"no");
+	fprintf(stderr,"Contains stars       : %s\n",(gi.SpeciesContained[STAR])?"yes":"no");
+	fprintf(stderr,"Contains baryons     : %s\n",(gi.SpeciesContained[BARYON])?"yes":"no");
+	fprintf(stderr,"a                    : %.6e\n",gi.ascale);
+	fprintf(stderr,"LBox                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+	    cosmo2internal_ct.L_usf*LBox,LBox,gi.ascale*LBox);
+	fprintf(stderr,"Box                  : [%.6e ... %.6e] x [%.6e ... %.6e] x [%.6e ... %.6e] LU (comoving)\n",gi.bc[0],gi.bc[3],gi.bc[1],gi.bc[4],gi.bc[2],gi.bc[5]);
+	fprintf(stderr,"\n");
+	/*
+	** Profiling parameters
+	*/
+	fprintf(stderr,"Profiling parameters:\n\n");
 	switch(gi.ProfilingMode) {
 	case 0: strcpy(cdummy,"profiles"); break;
 	case 1: strcpy(cdummy,"shape determination"); break;
@@ -2300,19 +2265,53 @@ int main(int argc, char **argv) {
 	case 1: strcpy(cdummy,"store data in memory"); break;
 	default: strcpy(cdummy,"not supported"); }
 	fprintf(stderr,"Data processing mode              : %s\n",cdummy);
+	fprintf(stderr,"Do metal species                  : %s\n",(gi.DoMetalSpecies)?"yes":"no");
+	fprintf(stderr,"Do chemical species               : %s\n",(gi.DoChemicalSpecies)?"yes":"no");
+	fprintf(stderr,"Do gas temperature                : %s\n",(gi.DoGasTemperature)?"yes":"no");
+	fprintf(stderr,"Do stellar age                    : %s\n",(gi.DoStellarAge)?"yes":"no");
+	fprintf(stderr,"More characteristics output       : %s\n",(gi.MoreCharacteristicsOutput)?"yes":"no");
+	fprintf(stderr,"Exclude particles                 : %s\n",(gi.ExcludeParticles)?"yes":"no");
+	fprintf(stderr,"Number of profile dimensions      : %d\n",gi.NDimProfile);
+	fprintf(stderr,"Number of read species            : %d\n",gi.NSpeciesRead);
+	fprintf(stderr,"Number of profiled species        : %d\n",gi.NSpeciesProfile);
+	for (i = 0; i < gi.NSpeciesRead; i++) {
+	    switch(i) {
+	    case GAS: strcpy(cdummy,"gas"); break;
+	    case DARK: strcpy(cdummy,"dark matter"); break;
+	    case STAR: strcpy(cdummy,"stars"); break;
+	    default: strcpy(cdummy,"not supported"); }
+	    fprintf(stderr,"Number of subspecies / properties : %d / %d (%s)\n",gi.NSubSpecies[i],gi.NProperties[i],cdummy);
+	    }
+        fprintf(stderr,"NParticlePerBlockGas              : %d\n",gi.NParticlePerBlock[GAS]);
+        fprintf(stderr,"NParticlePerBlockDark             : %d\n",gi.NParticlePerBlock[DARK]);
+        fprintf(stderr,"NParticlePerBlockStar             : %d\n",gi.NParticlePerBlock[STAR]);
+        fprintf(stderr,"NCellData                         : %d\n",gi.NCellData);
+        fprintf(stderr,"NCellHalo                         : %d\n",gi.NCellHalo);
+        fprintf(stderr,"NLoopProcessData                  : %d\n",gi.NLoopProcessData);
+        fprintf(stderr,"NLoopRead                         : %d\n",gi.NLoopRead);
+	fprintf(stderr,"\n");
+	/*
+	** Halo catalogue
+	*/
+	fprintf(stderr,"Halo catalogue properties:\n\n");
 	switch(gi.HaloCatalogueFormat) {
 	case 0: strcpy(cdummy,"generic"); break;
 	case 1: strcpy(cdummy,"6DFOF"); break;
 	case 2: strcpy(cdummy,"characteristics"); break;
 	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Halocatalogue format              : %s\n",cdummy);
+	fprintf(stderr,"Halocatalogue format       : %s\n",cdummy);
 	switch(gi.HaloCatalogueBinningCoordinateType) {
 	case 0: strcpy(cdummy,"spherical"); break;
 	case 1: strcpy(cdummy,"cylindrical"); break;
 	default: strcpy(cdummy,"not supported"); }
-	fprintf(stderr,"Halocatalogue binning type        : %s\n",cdummy);
-	fprintf(stderr,"Halocatalogue dimension           : %d\n",gi.HaloCatalogueNDim);
-        fprintf(stderr,"NHalo                             : %d\n",gi.NHalo);
+	fprintf(stderr,"Halocatalogue binning type : %s\n",cdummy);
+	fprintf(stderr,"Halocatalogue dimension    : %d\n",gi.HaloCatalogueNDim);
+        fprintf(stderr,"NHalo                      : %d\n",gi.NHalo);
+	fprintf(stderr,"\n");
+	/*
+	** Exclude halo catalogue
+	*/
+	fprintf(stderr,"Exclude halo catalogue properties:\n\n");
 	if (gi.ExcludeParticles) {
 	    switch(gi.ExcludeHaloCatalogueFormat) {
 	    case 0: strcpy(cdummy,"generic"); break;
@@ -2324,63 +2323,154 @@ int main(int argc, char **argv) {
 	    fprintf(stderr,"ExcludeHalocatalogue dimension    : %d\n",gi.ExcludeHaloCatalogueNDim);
 	    fprintf(stderr,"NHaloExcludeGlobal                : %d\n",gi.NHaloExcludeGlobal);
 	    }
-	fprintf(stderr,"\n");
-
-	if (gi.ProfilingMode == 0) {
-	    fprintf(stderr,"rho_bg      : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
-		gi.rhobg,gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
-		gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-	    fprintf(stderr,"rho_crit    : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
-		gi.rhocrit,gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
-		gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-	    fprintf(stderr,"Delta_bg    : %.6e\n",gi.Deltabg);
-	    fprintf(stderr,"Delta_crit  : %.6e\n",gi.Deltacrit);
-	    fprintf(stderr,"Delta_fix   : %.6e\n",gi.Deltafix);
-	    fprintf(stderr,"afix        : %.6e\n",gi.afix);
-	    fprintf(stderr,"rhoenc_bg   : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
-		gi.rhoencbg,gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
-		gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-	    fprintf(stderr,"rhoenc_crit : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
-		gi.rhoenccrit,gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
-		gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-	    fprintf(stderr,"rhoenc_fix  : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
-		gi.rhoencfix,gi.rhoencfix*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
-		gi.rhoencfix*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+	else {
+	    fprintf(stderr,"No particles were excluded.\n");
 	    }
-	else if (gi.ProfilingMode == 1) {
+	fprintf(stderr,"\n");
+	/*
+	** Recentring
+	*/
+	fprintf(stderr,"Recentring:\n\n");
+	if (gi.NLoopRecentre > 0) {
+	    switch(LengthType_rRecentre) {
+	    case 0: strcpy(cdummy,"comoving"); break;
+	    case 1: strcpy(cdummy,"physical"); break;
+	    default: strcpy(cdummy,"not supported"); }
+	    fprintf(stderr,"Length type rRecentre : %s\n",cdummy);
+	    fprintf(stderr,"rRecentre             : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		gi.rRecentre,gi.rRecentre/cosmo2internal_ct.L_usf,gi.ascale*gi.rRecentre/cosmo2internal_ct.L_usf);
+	    fprintf(stderr,"fRecentreDist         : %.6e\n",gi.fRecentreDist);
+	    fprintf(stderr,"NLoopRecentre         : %d\n",gi.NLoopRecentre);
+	    for (i = 0; i < gi.NSpeciesRead; i++) {
+		switch(i) {
+		case GAS: strcpy(cdummy,"gas"); break;
+		case DARK: strcpy(cdummy,"dark matter"); break;
+		case STAR: strcpy(cdummy,"stars"); break;
+		default: strcpy(cdummy,"not supported"); }
+		fprintf(stderr,"Recentre use %s : %s\n",cdummy,gi.RecentreUse[i]?"yes":"no");
+		}
+	    }
+	else {
+	    fprintf(stderr,"No recentring was done.\n");
+	    }
+	fprintf(stderr,"\n");
+	/*
+	** Profiles
+	*/
+	if (gi.ProfilingMode == 0) {
+	    fprintf(stderr,"General profiling properties:\n\n");
+	    switch(gi.BinningCoordinateType) {
+	    case 0: strcpy(cdummy,"spherical"); break;
+	    case 1: strcpy(cdummy,"cylindrical"); break;
+	    default: strcpy(cdummy,"not supported"); }
+	    fprintf(stderr,"Binning             : %s\n",cdummy);
+	    switch(gi.VelocityProjectionType) {
+	    case 0: strcpy(cdummy,"coordinate axes"); break;
+	    case 1: strcpy(cdummy,"spherical"); break;
+	    case 2: strcpy(cdummy,"cylindrical"); break;
+	    default: strcpy(cdummy,"not supported"); }
+	    fprintf(stderr,"Velocity projection : %s\n",cdummy);
+	    fprintf(stderr,"\n");
+	    /*
+	    ** Spherical profiles
+	    */
+	    if (gi.BinningCoordinateType == 0) {
+		fprintf(stderr,"Spherical profiles:\n\n");
+		switch(gi.HaloSize) {
+		case 0: strcpy(cdummy,"rbg"); break;
+		case 1: strcpy(cdummy,"rcrit"); break;
+		case 2: strcpy(cdummy,"rfix"); break;
+		default: strcpy(cdummy,"not supported"); }
+		fprintf(stderr,"Halo size            : %s\n",cdummy);
+		fprintf(stderr,"rho_bg               : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		    gi.rhobg,gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		    gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+		fprintf(stderr,"rho_crit             : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		    gi.rhocrit,gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		    gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+		fprintf(stderr,"Delta_bg             : %.6e\n",gi.Deltabg);
+		fprintf(stderr,"Delta_crit           : %.6e\n",gi.Deltacrit);
+		fprintf(stderr,"Delta_fix            : %.6e\n",gi.Deltafix);
+		fprintf(stderr,"afix                 : %.6e\n",gi.afix);
+		fprintf(stderr,"rhoenc_bg            : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		    gi.rhoencbg,gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		    gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+		fprintf(stderr,"rhoenc_crit          : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		    gi.rhoenccrit,gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		    gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+		fprintf(stderr,"rhoenc_fix           : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		    gi.rhoencfix,gi.rhoencfix*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		    gi.rhoencfix*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+		switch(LengthType_rExclude) {
+		case 0: strcpy(cdummy,"comoving"); break;
+		case 1: strcpy(cdummy,"physical"); break;
+		default: strcpy(cdummy,"not supported"); }
+		fprintf(stderr,"Length type rExclude : %s\n",cdummy);
+		fprintf(stderr,"rExclude             : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		    gi.rExclude,gi.rExclude/cosmo2internal_ct.L_usf,gi.ascale*gi.rExclude/cosmo2internal_ct.L_usf);
+		fprintf(stderr,"fcheckrvcmax         : %.6e\n",gi.fcheckrvcmax);
+		fprintf(stderr,"slopertruncindicator : %.6e\n",gi.slopertruncindicator);
+		fprintf(stderr,"frhobg               : %.6e\n",gi.frhobg);
+		fprintf(stderr,"fhaloduplicate       : %.6e\n",gi.fhaloduplicate);
+		fprintf(stderr,"fhaloexcludesize     : %.6e\n",gi.fhaloexcludesize);
+		fprintf(stderr,"fhaloexcludedistance : %.6e\n",gi.fhaloexcludedistance);
+		fprintf(stderr,"\n");
+		}
+	    /*
+	    ** Cylindrical profiles
+	    */
+	    if (gi.BinningCoordinateType == 1) {
+		fprintf(stderr,"Cylindrical profiles:\n\n");
+		fprintf(stderr,"zAxis_x             : %.6e LU\n",gi.zAxis[0]);
+		fprintf(stderr,"zAxis_y             : %.6e LU\n",gi.zAxis[1]);
+		fprintf(stderr,"zAxis_z             : %.6e LU\n",gi.zAxis[2]);
+		switch(LengthType_zHeight) {
+		case 0: strcpy(cdummy,"comoving"); break;
+		case 1: strcpy(cdummy,"physical"); break;
+		default: strcpy(cdummy,"not supported"); }
+		fprintf(stderr,"Length type zHeight : %s\n",cdummy);
+		fprintf(stderr,"zHeight             : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		    gi.zHeight,gi.zHeight/cosmo2internal_ct.L_usf,gi.ascale*gi.zHeight/cosmo2internal_ct.L_usf);
+		fprintf(stderr,"\n");
+		}
+	    }
+	/*
+	** Shape
+	*/
+	if (gi.ProfilingMode == 1) {
+	    fprintf(stderr,"Shape determination:\n\n");
 	    switch(gi.ShapeDeterminationVolume) {
 	    case 0: strcpy(cdummy,"differential volume"); break;
 	    case 1: strcpy(cdummy,"enclosed volume"); break;
 	    default: strcpy(cdummy,"not supported"); }
-	    fprintf(stderr,"Shape determination volume : %s\n",cdummy);
+	    fprintf(stderr,"Shape determination volume    : %s\n",cdummy);
 	    switch(gi.ShapeTensorForm) {
 	    case 0: strcpy(cdummy,"S_ij"); break;
 	    case 1: strcpy(cdummy,"S_ij/r^2"); break;
 	    case 2: strcpy(cdummy,"S_ij/r_ell^2"); break;
 	    default: strcpy(cdummy,"not supported"); }
-	    fprintf(stderr,"Shape tensor form          : %s\n",cdummy);
+	    fprintf(stderr,"Shape tensor form             : %s\n",cdummy);
+	    fprintf(stderr,"NLoopShapeIterationMax        : %d\n",gi.NLoopShapeIterationMax);
+	    fprintf(stderr,"OutputFrequencyShapeIteration : %d\n",gi.OutputFrequencyShapeIteration);
+	    fprintf(stderr,"ShapeIterationTolerance       : %.6e\n",gi.ShapeIterationTolerance);
+	    fprintf(stderr,"\n");
 	    }
-	fprintf(stderr,"\n");
-
-	fprintf(stderr,"rExclude      : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
-	    gi.rExclude,gi.rExclude/cosmo2internal_ct.L_usf,gi.ascale*gi.rExclude/cosmo2internal_ct.L_usf);
-	fprintf(stderr,"rRecentre     : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
-	    gi.rRecentre,gi.rRecentre/cosmo2internal_ct.L_usf,gi.ascale*gi.rRecentre/cosmo2internal_ct.L_usf);
-	fprintf(stderr,"fRecentreDist : %.6e\n",gi.fRecentreDist);
-        fprintf(stderr,"NLoopRecentre : %d\n",gi.NLoopRecentre);
-	for (i = 0; i < gi.NSpeciesRead; i++) {
-	    switch(i) {
-	    case GAS: strcpy(cdummy,"gas"); break;
-	    case DARK: strcpy(cdummy,"dark matter"); break;
-	    case STAR: strcpy(cdummy,"stars"); break;
-	    default: strcpy(cdummy,"not supported"); }
-	    fprintf(stderr,"Recentre use %s : %s\n",cdummy,gi.RecentreUse[i]?"yes":"no");
-	    }
-	fprintf(stderr,"\n");
-
+	/*
+	** Global binning grid parameters
+	*/
 	fprintf(stderr,"Global binning grid parameters:\n\n");
 	for (d = 0; d < gi.NDimProfile; d++) {
 	    fprintf(stderr,"Dimension %ld:\n",d+1);
+	    switch(LengthType_rmin[d]) {
+	    case 0: strcpy(cdummy,"comoving"); break;
+	    case 1: strcpy(cdummy,"physical"); break;
+	    default: strcpy(cdummy,"not supported"); }
+	    fprintf(stderr,"Length type rmin  : %s\n",cdummy);
+	    switch(LengthType_rmax[d]) {
+	    case 0: strcpy(cdummy,"comoving"); break;
+	    case 1: strcpy(cdummy,"physical"); break;
+	    default: strcpy(cdummy,"not supported"); }
+	    fprintf(stderr,"Length type rmax  : %s\n",cdummy);
 	    if (gi.rmin[d] >= 0) {
 		fprintf(stderr,"rmin              : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 		    gi.rmin[d],gi.rmin[d]/cosmo2internal_ct.L_usf,gi.ascale*gi.rmin[d]/cosmo2internal_ct.L_usf);
@@ -2400,44 +2490,8 @@ int main(int argc, char **argv) {
 	    case 1: strcpy(cdummy,"linear"); break;
 	    default: strcpy(cdummy,"not supported"); }
 	    fprintf(stderr,"Binning grid type : %s\n",cdummy);
-	    }
-	fprintf(stderr,"\n");
-
-	if (gi.BinningCoordinateType == 1) {
-	    fprintf(stderr,"zAxis_x : %.6e LU\n",gi.zAxis[0]);
-	    fprintf(stderr,"zAxis_y : %.6e LU\n",gi.zAxis[1]);
-	    fprintf(stderr,"zAxis_z : %.6e LU\n",gi.zAxis[2]);
-	    fprintf(stderr,"zHeight : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
-		gi.zHeight,gi.zHeight/cosmo2internal_ct.L_usf,gi.ascale*gi.zHeight/cosmo2internal_ct.L_usf);
 	    fprintf(stderr,"\n");
 	    }
-
-        fprintf(stderr,"NParticlePerBlockGas   : %d\n",gi.NParticlePerBlock[GAS]);
-        fprintf(stderr,"NParticlePerBlockDark  : %d\n",gi.NParticlePerBlock[DARK]);
-        fprintf(stderr,"NParticlePerBlockStar  : %d\n",gi.NParticlePerBlock[STAR]);
-        fprintf(stderr,"NCellData              : %d\n",gi.NCellData);
-        fprintf(stderr,"NCellHalo              : %d\n",gi.NCellHalo);
-	fprintf(stderr,"\n");
-
-        fprintf(stderr,"NLoopShapeIterationMax : %d\n",gi.NLoopShapeIterationMax);
-        fprintf(stderr,"NLoopProcessData       : %d\n",gi.NLoopProcessData);
-        fprintf(stderr,"NLoopRead              : %d\n",gi.NLoopRead);
-        fprintf(stderr,"OutputFrequencySI      : %d\n",gi.OutputFrequencyShapeIteration);
-	fprintf(stderr,"\n");
-
-	fprintf(stderr,"fcheckrvcmax            : %.6e\n",gi.fcheckrvcmax);
-	fprintf(stderr,"slopertruncindicator    : %.6e\n",gi.slopertruncindicator);
-	fprintf(stderr,"frhobg                  : %.6e\n",gi.frhobg);
-	fprintf(stderr,"shapeiterationtolerance : %.6e\n",gi.shapeiterationtolerance);
-	fprintf(stderr,"fhaloduplicate          : %.6e\n",gi.fhaloduplicate);
-	fprintf(stderr,"\n");
-
-	fprintf(stderr,"fhaloexcludesize        : %.6e\n",gi.fhaloexcludesize);
-	fprintf(stderr,"fhaloexcludedistance    : %.6e\n",gi.fhaloexcludedistance);
-
-	/* fprintf(stderr,"fincludeshapeproperty   : %.6e\n",gi.fincludeshapeproperty); */
-	/* fprintf(stderr,"fincludeshaperadius     : %.6e\n",gi.fincludeshaperadius); */
-	fprintf(stderr,"\n");
         }
     gettimeofday(&time,NULL);
     timeend = time.tv_sec;
@@ -2461,7 +2515,7 @@ void usage(void) {
     fprintf(stderr,"-DataProcessingMode <value>          : 0 = read data again in every loop / 1 = store data in memory (default: 0)\n");
     fprintf(stderr,"-DataFormat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
     fprintf(stderr,"-HaloCatalogueFormat <value>         : 0 = generic / 1 = 6DFOF / 2 = characteristics (default: 0)\n");
-    fprintf(stderr,"-HaloCatalogueNDim <value>            : dimension of halo catalouge (default: 1)\n");
+    fprintf(stderr,"-HaloCatalogueNDim <value>           : dimension of halo catalouge (default: 1)\n");
     fprintf(stderr,"-ShapeDeterminationVolume <value>    : 0 = differential volume / 1 enclosed volume (default: 0)\n");
     fprintf(stderr,"-ShapeTensorForm <value>             : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
     fprintf(stderr,"-DoMetalSpecies                      : set this flag for doing metal species\n");
@@ -2474,30 +2528,30 @@ void usage(void) {
     fprintf(stderr,"-RecentreUseStar <value>             : 0 = no / 1 = yes (default: 1)\n");
     fprintf(stderr,"-HaloSize <value>                    : 0 = rbg / 1 = rcrit / 2 = rfix (default: 0)\n");
     fprintf(stderr,"-ExcludeParticles <value>            : 0 = don't exclude any particles / 1 = exclude particles in specified halo catalogue (default: 0)\n");
-    fprintf(stderr,"-LengthType_rmin <value>             : 0 = comoving / 1 = physical (default: 0)\n");
-    fprintf(stderr,"-LengthType_rmax <value>             : 0 = comoving / 1 = physical (default: 0)\n");
+    fprintf(stderr,"-LengthType_rmin <d> <value>         : d = dimension (1/2/3) / 0 = comoving / 1 = physical (default: 0)\n");
+    fprintf(stderr,"-LengthType_rmax <d> <value>         : d = dimension (1/2/3) / 0 = comoving / 1 = physical (default: 0)\n");
     fprintf(stderr,"-LengthType_zHeight <value>          : 0 = comoving / 1 = physical (default: 0)\n");
     fprintf(stderr,"-LengthType_rExclude <value>         : 0 = comoving / 1 = physical (default: 0)\n");
     fprintf(stderr,"-LengthType_rRecentre <value>        : 0 = comoving / 1 = physical (default: 0)\n");
     fprintf(stderr,"-rmin <d> <value>                    : d = dimension (1/2/3) / global minimum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
     fprintf(stderr,"-rmax <d> <value>                    : d = dimension (1/2/3) / global maximum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
     fprintf(stderr,"-NBin <d> <value>                    : d = dimension (1/2/3) / global number of bins between rmin and rmax for dimension d - overwrites values form halo catalogue (default: not set)\n");
-    fprintf(stderr,"-NBinPerDex <d> <value>              : d = dimension (1/2/3) / global number of bins per decade between rmin and rmax for dimension d (default: not set)\n");
+    fprintf(stderr,"-NBinPerDex <d> <value>              : d = dimension (1/2/3) / global number of bins per decade between rmin and rmax for dimension d (can be a float) (default: not set)\n");
     fprintf(stderr,"-BinningGridType <d> <value>         : d = dimension (1/2/3) / global binning grid type: 0 = logarithmic / 1 = linear (default: 0)\n");
-    fprintf(stderr,"-CentreType <value>                  : 0 = centre-of-mass centres / 1 = potmin or denmax centres (only for 6DFOF halocatalogue) (default: 0)\n");
     fprintf(stderr,"-BinningCoordinateType <value>       : 0 = spherical coordinates / 1 = cylindrical coordinates (default: 0)\n");
     fprintf(stderr,"-VelocityProjectionType <value>      : 0 = coordinate axes / 1 = spherical coordinates / 2 = cylindrical coordinates (default: 0)\n");
     fprintf(stderr,"-zAxis_x                             : x-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
     fprintf(stderr,"-zAxis_y                             : y-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
     fprintf(stderr,"-zAxis_z                             : z-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
     fprintf(stderr,"-zHeight                             : height above mid-plane for inclusion for cylindrical binning [LU] - overwrites values form z-axis catalogue (default: not set)\n");
-    fprintf(stderr,"-BinFactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5)\n");
-    fprintf(stderr,"-rmaxFromHaloCatalogue               : set this flag for rmax determined from 6DFOF file\n");
-    fprintf(stderr,"-OmegaM0 <value>                     : OmegaM0 value (default: 0) [only necessary for Tipsy format]\n");
-    fprintf(stderr,"-OmegaL0 <value>                     : OmegaL0 value (default: 0) [only necessary for Tipsy format]\n");
-    fprintf(stderr,"-OmegaK0 <value>                     : OmegaK0 value (default: 0) [only necessary for Tipsy format]\n");
-    fprintf(stderr,"-OmegaR0 <value>                     : OmegaR0 value (default: 0) [only necessary for Tipsy format]\n");
-    fprintf(stderr,"-h0_100 <value>                      : h0_100 value (default: 0) [only necessary for Tipsy format]\n");
+    fprintf(stderr,"-CentreType <value>                  : 0 = centre-of-mass centres / 1 = potmin or denmax centres (only for 6DFOF halocatalogue) (default: 0)\n");
+    fprintf(stderr,"-BinFactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5) (only for 6DFOF halocatalogue)\n");
+    fprintf(stderr,"-rmaxFromHaloCatalogue               : set this flag for rmax determined from 6DFOF file (only for 6DFOF halocatalogue)\n");
+    fprintf(stderr,"-OmegaM0 <value>                     : OmegaM0 value (default: 0) (only necessary for Tipsy format)\n");
+    fprintf(stderr,"-OmegaL0 <value>                     : OmegaL0 value (default: 0) (only necessary for Tipsy format)\n");
+    fprintf(stderr,"-OmegaK0 <value>                     : OmegaK0 value (default: 0) (only necessary for Tipsy format)\n");
+    fprintf(stderr,"-OmegaR0 <value>                     : OmegaR0 value (default: 0) (only necessary for Tipsy format)\n");
+    fprintf(stderr,"-h0_100 <value>                      : h0_100 value (default: 0) (only necessary for Tipsy format)\n");
     fprintf(stderr,"-LBox <value>                        : box length (comoving) [kpc]\n");
     fprintf(stderr,"-LBox_internal <value>               : box length (comoving) [LU] (default: standard value depending on file format)\n");
     fprintf(stderr,"-Hubble0_internal <value>            : Hubble parameter today [TU^{-1}] (default: standard value depending on file format)\n");
@@ -2533,7 +2587,7 @@ void usage(void) {
     fprintf(stderr,"-HaloCatalogue <name>                : halo catalouge file\n");
     fprintf(stderr,"-ExcludeHaloCatalogue <name>         : halo catalouge file (only characteristics format supported)\n");
     fprintf(stderr,"-zAxisCatalogue <name>               : z-axis catalouge file\n");
-    fprintf(stderr,"-Output <name>                       : name of output files (endings like .characteristics etc. appended)\n");
+    fprintf(stderr,"-Output <name>                       : name of output files (endings like .characteristics etc. appended automatically)\n");
     fprintf(stderr,"-v                                   : more informative output to screen\n");
     fprintf(stderr,"\n");
     exit(1);
@@ -2636,7 +2690,7 @@ void set_default_values_general_info(GI *gi) {
     gi->rhobg = 0;
     gi->rhocrit = 0;
     gi->Deltabg = 200;
-    gi->Deltacrit = 200;
+    gi->Deltacrit = 0;
     gi->Deltafix = 200;
     gi->afix = 1;
     gi->BinFactor = 5;
@@ -2649,7 +2703,7 @@ void set_default_values_general_info(GI *gi) {
     gi->fcheckrvcmax = 2.0;
     gi->slopertruncindicator = -0.5;
     gi->frhobg = 1.2;
-    gi->shapeiterationtolerance = 1e-5;
+    gi->ShapeIterationTolerance = 1e-5;
     gi->fhaloduplicate = 0;
 
     gi->fhaloexcludesize = 0.5;
@@ -4225,7 +4279,7 @@ double diagonalise_shape_tensors(GI gi, HALO_DATA *hd, int ILoop) {
 			*/
 			re_b_a = (shape->b_a-shape->b_a_old)/shape->b_a_old;
 			re_c_a = (shape->c_a-shape->c_a_old)/shape->c_a_old;
-			if (fabs(re_b_a) <= gi.shapeiterationtolerance && fabs(re_c_a) <= gi.shapeiterationtolerance && shape->N > 2) {
+			if (fabs(re_b_a) <= gi.ShapeIterationTolerance && fabs(re_c_a) <= gi.ShapeIterationTolerance && shape->N > 2) {
 			    Nconverged++;
 			    shape->NLoopConverged = ILoop;
 			    }
