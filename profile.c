@@ -2557,9 +2557,10 @@ void usage(void) {
     fprintf(stderr,"-Hubble0_internal <value>            : Hubble parameter today [TU^{-1}] (default: standard value depending on file format)\n");
     fprintf(stderr,"-rhocrit0_internal <value>           : critical density today [MU LU^{-3}] (default: standard value depending on file format)\n");
     fprintf(stderr,"-Delta_bg <value>                    : overdensity with respect to current background density (default: 200)\n");
-    fprintf(stderr,"-Delta_crit <value>                  : overdensity with respect to current critical density (default: 178*(OmegaM^0.45) [OmegaK0=0] / 178*(OmegaM^0.3) [OmegaL0=0])\n");
+    fprintf(stderr,"-Delta_crit <value>                  : overdensity with respect to current critical density (default: 200)\n");
     fprintf(stderr,"-Delta_fix <value>                   : overdensity with respect to background density at afix (default: 200)\n");
     fprintf(stderr,"-afix <value>                        : scale factor for fixed overdensity (default: 1)\n");
+    fprintf(stderr,"-ascale <value>                      : scale factor of the data (default: set from data, needed for non-cosmological simulations)\n");
     fprintf(stderr,"-LmaxGasAnalysis <value>             : maximum level of gas analysed [counting from 0] (default: Lmaxgas in data)\n");
     fprintf(stderr,"-NParticlePerBockGas <value>         : number of gas particles per block (default: 1e7)\n");
     fprintf(stderr,"-NParticlePerBlockDark <value>       : number of dark matter particles per block (default: 1e7)\n");
@@ -2690,7 +2691,7 @@ void set_default_values_general_info(GI *gi) {
     gi->rhobg = 0;
     gi->rhocrit = 0;
     gi->Deltabg = 200;
-    gi->Deltacrit = 0;
+    gi->Deltacrit = 200;
     gi->Deltafix = 200;
     gi->afix = 1;
     gi->BinFactor = 5;
@@ -2737,21 +2738,13 @@ void calculate_densities(GI *gi) {
 
     E = Ecosmo(gi->ascale,gi->cp);
     OmegaM = gi->cp.OmegaM0/(pow(gi->ascale,3)*E*E);
-    gi->rhocrit = gi->us.rhocrit0*E*E*pow(gi->ascale,3); /* comoving density */
-    if (gi->Deltacrit == 0) {
-	if (gi->cp.OmegaK0 == 0) {
-	    gi->Deltacrit = 178*pow(OmegaM,0.45);
-	    }
-	else if (gi->cp.OmegaL0 == 0) {
-	    gi->Deltacrit = 178*pow(OmegaM,0.3);
-	    }
-	}
     assert(gi->Deltabg > 0);
     assert(gi->Deltacrit > 0);
     assert(gi->Deltafix > 0);
     /* 
     ** The following densities are all comoving densities at ascale
     */
+    gi->rhocrit = gi->us.rhocrit0*E*E*pow(gi->ascale,3);
     gi->rhobg = OmegaM*gi->rhocrit;
     gi->rhoencbg = gi->Deltabg*gi->rhobg;
     gi->rhoenccrit = gi->Deltacrit*gi->rhocrit;
