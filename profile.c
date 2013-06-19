@@ -27,7 +27,7 @@
 
 /*
 ** Be careful with changing order of species here!
-** Some loops assume that order of species are this way.
+** Some loops assume that the order of species are this way.
 */
 
 #define GAS 0
@@ -120,7 +120,7 @@ typedef struct halo_data {
     double vcentre[3];
     double rcentrenew[3];
     double vcentrenew[3];
-    double rbg, Mrbg;
+    double rmean, Mrmean;
     double rcrit, Mrcrit;
     double rfix, Mrfix;
     double rtrunc, Mrtrunc;
@@ -180,9 +180,9 @@ typedef struct general_info {
     int OutputFrequencyShapeIteration;
     int pi[NSPECIESREADMAX][NSUBSPECIESMAX+NPROPERTIESMAX];
     int bi[NSPECIESPROFILEMAX][NPROPERTIESMAX];
-    double rhobg, rhocrit;
-    double rhoencbg, rhoenccrit, rhoencfix;
-    double Deltabg, Deltacrit, Deltafix;
+    double rhomean, rhocrit;
+    double rhoencmean, rhoenccrit, rhoencfix;
+    double Deltamean, Deltacrit, Deltafix;
     double afix;
     double ascale;
     double rmin[3], rmax[3];
@@ -596,10 +596,10 @@ int main(int argc, char **argv) {
 	    gi.BinFactor = atof(argv[i]);
 	    i++;
 	    }
-        else if (strcmp(argv[i],"-Delta_bg") == 0) {
+        else if (strcmp(argv[i],"-Delta_mean") == 0) {
             i++;
             if (i >= argc) usage();
-            gi.Deltabg = atof(argv[i]);
+            gi.Deltamean = atof(argv[i]);
             i++;
             }
         else if (strcmp(argv[i],"-Delta_crit") == 0) {
@@ -2377,24 +2377,24 @@ int main(int argc, char **argv) {
 	    if (gi.BinningCoordinateType == 0) {
 		fprintf(stderr,"Spherical profiles:\n\n");
 		switch(gi.HaloSize) {
-		case 0: strcpy(cdummy,"rbg"); break;
+		case 0: strcpy(cdummy,"rmean"); break;
 		case 1: strcpy(cdummy,"rcrit"); break;
 		case 2: strcpy(cdummy,"rfix"); break;
 		default: strcpy(cdummy,"not supported"); }
 		fprintf(stderr,"Halo size            : %s\n",cdummy);
-		fprintf(stderr,"rho_bg               : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
-		    gi.rhobg,gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
-		    gi.rhobg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+		fprintf(stderr,"rho_mean             : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		    gi.rhomean,gi.rhomean*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		    gi.rhomean*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
 		fprintf(stderr,"rho_crit             : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 		    gi.rhocrit,gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 		    gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-		fprintf(stderr,"Delta_bg             : %.6e\n",gi.Deltabg);
+		fprintf(stderr,"Delta_mean           : %.6e\n",gi.Deltamean);
 		fprintf(stderr,"Delta_crit           : %.6e\n",gi.Deltacrit);
 		fprintf(stderr,"Delta_fix            : %.6e\n",gi.Deltafix);
 		fprintf(stderr,"afix                 : %.6e\n",gi.afix);
-		fprintf(stderr,"rhoenc_bg            : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
-		    gi.rhoencbg,gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
-		    gi.rhoencbg*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
+		fprintf(stderr,"rhoenc_mean          : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+		    gi.rhoencmean,gi.rhoencmean*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
+		    gi.rhoencmean*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
 		fprintf(stderr,"rhoenc_crit          : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 		    gi.rhoenccrit,gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 		    gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
@@ -2526,7 +2526,7 @@ void usage(void) {
     fprintf(stderr,"-RecentreUseGas <value>              : 0 = no / 1 = yes (default: 0)\n");
     fprintf(stderr,"-RecentreUseDark <value>             : 0 = no / 1 = yes (default: 1)\n");
     fprintf(stderr,"-RecentreUseStar <value>             : 0 = no / 1 = yes (default: 1)\n");
-    fprintf(stderr,"-HaloSize <value>                    : 0 = rbg / 1 = rcrit / 2 = rfix (default: 0)\n");
+    fprintf(stderr,"-HaloSize <value>                    : 0 = rmean / 1 = rcrit / 2 = rfix (default: 0)\n");
     fprintf(stderr,"-ExcludeParticles <value>            : 0 = don't exclude any particles / 1 = exclude particles in specified halo catalogue (default: 0)\n");
     fprintf(stderr,"-LengthType_rmin <d> <value>         : d = dimension (1/2/3) / 0 = comoving / 1 = physical (default: 0)\n");
     fprintf(stderr,"-LengthType_rmax <d> <value>         : d = dimension (1/2/3) / 0 = comoving / 1 = physical (default: 0)\n");
@@ -2556,7 +2556,7 @@ void usage(void) {
     fprintf(stderr,"-LBox_internal <value>               : box length (comoving) [LU] (default: standard value depending on file format)\n");
     fprintf(stderr,"-Hubble0_internal <value>            : Hubble parameter today [TU^{-1}] (default: standard value depending on file format)\n");
     fprintf(stderr,"-rhocrit0_internal <value>           : critical density today [MU LU^{-3}] (default: standard value depending on file format)\n");
-    fprintf(stderr,"-Delta_bg <value>                    : overdensity with respect to current background density (default: 200)\n");
+    fprintf(stderr,"-Delta_mean <value>                  : overdensity with respect to current background density (default: 200)\n");
     fprintf(stderr,"-Delta_crit <value>                  : overdensity with respect to current critical density (default: 200)\n");
     fprintf(stderr,"-Delta_fix <value>                   : overdensity with respect to background density at afix (default: 200)\n");
     fprintf(stderr,"-afix <value>                        : scale factor for fixed overdensity (default: 1)\n");
@@ -2632,7 +2632,7 @@ void set_default_values_general_info(GI *gi) {
     gi->DoGasTemperature = 0; /* no gas temperature */
     gi->DoStellarAge = 0; /* no stellar age */
     gi->MoreCharacteristicsOutput = 0; /* not more characteristics output */
-    gi->HaloSize = 0; /* rbg */
+    gi->HaloSize = 0; /* rmean */
     gi->ExcludeParticles = 0; /* no particles excluded */
     gi->zAxisCatalogueSpecified = 0; /* no z-axis catalogue sepcified */
     gi->CentreType = 0;
@@ -2688,9 +2688,9 @@ void set_default_values_general_info(GI *gi) {
     gi->OutputFrequencyShapeIteration = 10;
 
     gi->ascale = 0;
-    gi->rhobg = 0;
+    gi->rhomean = 0;
     gi->rhocrit = 0;
-    gi->Deltabg = 200;
+    gi->Deltamean = 200;
     gi->Deltacrit = 200;
     gi->Deltafix = 200;
     gi->afix = 1;
@@ -2738,15 +2738,15 @@ void calculate_densities(GI *gi) {
 
     E = Ecosmo(gi->ascale,gi->cp);
     OmegaM = gi->cp.OmegaM0/(pow(gi->ascale,3)*E*E);
-    assert(gi->Deltabg > 0);
+    assert(gi->Deltamean > 0);
     assert(gi->Deltacrit > 0);
     assert(gi->Deltafix > 0);
     /* 
     ** The following densities are all comoving densities at ascale
     */
     gi->rhocrit = gi->us.rhocrit0*E*E*pow(gi->ascale,3);
-    gi->rhobg = OmegaM*gi->rhocrit;
-    gi->rhoencbg = gi->Deltabg*gi->rhobg;
+    gi->rhomean = OmegaM*gi->rhocrit;
+    gi->rhoencmean = gi->Deltamean*gi->rhomean;
     gi->rhoenccrit = gi->Deltacrit*gi->rhocrit;
     /*
     ** Calculate fixed density at afix
@@ -2859,7 +2859,7 @@ void read_halocatalogue_ascii(GI *gi, HALO_DATA **hdin) {
 		/*
 		** Estimate maximum radius; assume isothermal sphere scaling 
 		*/
-		rmax[0] = sqrt((3.0*mass/(4.0*M_PI*radius*radius*radius))/gi->rhoencbg)*radius*gi->BinFactor;
+		rmax[0] = sqrt((3.0*mass/(4.0*M_PI*radius*radius*radius))/gi->rhoencmean)*radius*gi->BinFactor;
 		assert(rmax[0] > 0);
 		}
 	    else {
@@ -3207,8 +3207,8 @@ void initialise_halo_profile(GI *gi, HALO_DATA *hd) {
     hd->NHaloExclude = 0;
     hd->SizeExcludeHaloData = 0;
     hd->IsTruncated = 0;
-    hd->rbg = 0;
-    hd->Mrbg = 0;
+    hd->rmean = 0;
+    hd->Mrmean = 0;
     hd->rcrit = 0;
     hd->Mrcrit = 0;
     hd->rfix = 0;
@@ -4378,7 +4378,7 @@ void calculate_overdensity_characteristics(GI gi, HALO_DATA *hd) {
 	rscale[j] = 0;
 	Mrscale[j] = 0;
 	}
-    rhoencscale[0] = gi.rhoencbg;
+    rhoencscale[0] = gi.rhoencmean;
     rhoencscale[1] = gi.rhoenccrit;
     rhoencscale[2] = gi.rhoencfix;
 
@@ -4425,10 +4425,10 @@ void calculate_overdensity_characteristics(GI gi, HALO_DATA *hd) {
 	if (Scheck == Ncheck) break;
 	} /* for n[0] */
 
-    hd->rbg = rscale[0];
+    hd->rmean = rscale[0];
     hd->rcrit = rscale[1];
     hd->rfix = rscale[2];
-    hd->Mrbg = Mrscale[0];
+    hd->Mrmean = Mrscale[0];
     hd->Mrcrit = Mrscale[1];
     hd->Mrfix = Mrscale[2];
     }
@@ -4554,8 +4554,8 @@ void remove_background(GI gi, HALO_DATA *hd) {
 void calculate_halo_size(GI gi, HALO_DATA *hd) {
 
     if (gi.HaloSize == 0) {
-	hd->size = hd->rbg;
-	hd->mass = hd->Mrbg;
+	hd->size = hd->rmean;
+	hd->mass = hd->Mrmean;
 	}
     else if (gi.HaloSize == 1) {
 	hd->size = hd->rcrit;
@@ -4846,7 +4846,7 @@ void write_output_matter_profile(GI gi, HALO_DATA *hd) {
 	fprintf(outputfile," rvcmax_dark/%d Mrvcmax_dark/%d",k,k+1); k += 2;
 	fprintf(outputfile," IsTruncated/%d HostHaloID/%d ExtraHaloID/%d",k,k+1,k+2); k += 3;
 	if (gi.MoreCharacteristicsOutput) {
-	    fprintf(outputfile," rbg/%d Mrbg/%d",k,k+1); k += 2;
+	    fprintf(outputfile," rmean/%d Mrmean/%d",k,k+1); k += 2;
 	    fprintf(outputfile," rcrit/%d Mrcrit/%d",k,k+1); k += 2;
 	    fprintf(outputfile," rfix/%d Mrfix/%d",k,k+1); k += 2;
 	    fprintf(outputfile," rtrunc/%d Mrtrunc/%d",k,k+1); k += 2;
@@ -4872,7 +4872,7 @@ void write_output_matter_profile(GI gi, HALO_DATA *hd) {
 	    fprintf(outputfile," %.6e %.6e",hd[i].rvcmax[DARK][l],hd[i].Mrvcmax[DARK][l]);
 	    fprintf(outputfile," %d %d %d",hd[i].IsTruncated,hd[i].HostHaloID,hd[i].ExtraHaloID);
 	    if (gi.MoreCharacteristicsOutput) {
-		fprintf(outputfile," %.6e %.6e",hd[i].rbg,hd[i].Mrbg);
+		fprintf(outputfile," %.6e %.6e",hd[i].rmean,hd[i].Mrmean);
 		fprintf(outputfile," %.6e %.6e",hd[i].rcrit,hd[i].Mrcrit);
 		fprintf(outputfile," %.6e %.6e",hd[i].rfix,hd[i].Mrfix);
 		fprintf(outputfile," %.6e %.6e",hd[i].rtrunc,hd[i].Mrtrunc);
