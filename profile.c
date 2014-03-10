@@ -2133,9 +2133,9 @@ int main(int argc, char **argv) {
 		*/
 		if (gi.HaloCatalogueFormat == 1) {
 			fprintf(stderr,"6DFOF specific parameters:\n\n");
-			fprintf(stderr,"BinFactor			  : %.6e\n",gi.BinFactor);
-			if (gi.CentreType == 0) fprintf(stderr,"CentreType			  : centre-of-mass\n");
-			else if (gi.CentreType == 1) fprintf(stderr,"CentreType			   : potmin or denmax\n");
+			fprintf(stderr,"BinFactor             : %.6e\n",gi.BinFactor);
+			if (gi.CentreType == 0) fprintf(stderr,"CentreType            : centre-of-mass\n");
+			else if (gi.CentreType == 1) fprintf(stderr,"CentreType            : potmin or denmax\n");
 			fprintf(stderr,"rmaxFromHaloCatalogue : %s\n",(gi.rmaxFromHaloCatalogue == 0)?"no":"yes");
 			fprintf(stderr,"\n");
 			}
@@ -2144,34 +2144,34 @@ int main(int argc, char **argv) {
 		*/
 		if (gi.DataFormat == 1) {
 			fprintf(stderr,"ART general header:\n\n");
-			fprintf(stderr,"aunin	 : %.6e\n",ad.ah.aunin);
-			fprintf(stderr,"auni0	 : %.6e\n",ad.ah.auni0);
-			fprintf(stderr,"amplt	 : %.6e\n",ad.ah.amplt);
-			fprintf(stderr,"astep	 : %.6e\n",ad.ah.astep);
-			fprintf(stderr,"istep	 : %d\n",ad.ah.istep);
-			fprintf(stderr,"partw	 : %.6e\n",ad.ah.partw);
-			fprintf(stderr,"tintg	 : %.6e\n",ad.ah.tintg);
-			fprintf(stderr,"ekin	 : %.6e\n",ad.ah.ekin);
-			fprintf(stderr,"ekin1	 : %.6e\n",ad.ah.ekin1);
-			fprintf(stderr,"ekin2	 : %.6e\n",ad.ah.ekin2);
-			fprintf(stderr,"au0		 : %.6e\n",ad.ah.au0);
-			fprintf(stderr,"aeu0	 : %.6e\n",ad.ah.aeu0);
-			fprintf(stderr,"Nrow	 : %d\n",ad.ah.Nrow);
-			fprintf(stderr,"Ngrid	 : %d\n",ad.ah.Ngrid);
+			fprintf(stderr,"aunin    : %.6e\n",ad.ah.aunin);
+			fprintf(stderr,"auni0    : %.6e\n",ad.ah.auni0);
+			fprintf(stderr,"amplt    : %.6e\n",ad.ah.amplt);
+			fprintf(stderr,"astep    : %.6e\n",ad.ah.astep);
+			fprintf(stderr,"istep    : %d\n",ad.ah.istep);
+			fprintf(stderr,"partw    : %.6e\n",ad.ah.partw);
+			fprintf(stderr,"tintg    : %.6e\n",ad.ah.tintg);
+			fprintf(stderr,"ekin     : %.6e\n",ad.ah.ekin);
+			fprintf(stderr,"ekin1    : %.6e\n",ad.ah.ekin1);
+			fprintf(stderr,"ekin2    : %.6e\n",ad.ah.ekin2);
+			fprintf(stderr,"au0      : %.6e\n",ad.ah.au0);
+			fprintf(stderr,"aeu0     : %.6e\n",ad.ah.aeu0);
+			fprintf(stderr,"Nrow     : %d\n",ad.ah.Nrow);
+			fprintf(stderr,"Ngrid    : %d\n",ad.ah.Ngrid);
 			fprintf(stderr,"Nspecies : %d\n",ad.ah.Nspecies);
-			fprintf(stderr,"Nseed	 : %d\n",ad.ah.Nseed);
-			fprintf(stderr,"OmM0	 : %.6e\n",ad.ah.OmM0);
-			fprintf(stderr,"OmL0	 : %.6e\n",ad.ah.OmL0);
-			fprintf(stderr,"h100	 : %.6e\n",ad.ah.h100);
-			fprintf(stderr,"Wp5		 : %.6e\n",ad.ah.Wp5);
-			fprintf(stderr,"OmK0	 : %.6e\n",ad.ah.OmK0);
-			fprintf(stderr,"OmB0	 : %.6e\n",ad.ah.OmB0);
-			fprintf(stderr,"magic1	 : %.6e\n",ad.ah.magic1);
-			fprintf(stderr,"DelDC	 : %.6e\n",ad.ah.DelDC);
-			fprintf(stderr,"abox	 : %.6e\n",ad.ah.abox);
-			fprintf(stderr,"Hbox	 : %.6e\n",ad.ah.Hbox);
-			fprintf(stderr,"magic2	 : %.6e\n",ad.ah.magic2);
-			fprintf(stderr,"Banner	 : %s\n",ad.Banner);
+			fprintf(stderr,"Nseed    : %d\n",ad.ah.Nseed);
+			fprintf(stderr,"OmM0     : %.6e\n",ad.ah.OmM0);
+			fprintf(stderr,"OmL0     : %.6e\n",ad.ah.OmL0);
+			fprintf(stderr,"h100     : %.6e\n",ad.ah.h100);
+			fprintf(stderr,"Wp5      : %.6e\n",ad.ah.Wp5);
+			fprintf(stderr,"OmK0     : %.6e\n",ad.ah.OmK0);
+			fprintf(stderr,"OmB0     : %.6e\n",ad.ah.OmB0);
+			fprintf(stderr,"magic1   : %.6e\n",ad.ah.magic1);
+			fprintf(stderr,"DelDC    : %.6e\n",ad.ah.DelDC);
+			fprintf(stderr,"abox     : %.6e\n",ad.ah.abox);
+			fprintf(stderr,"Hbox     : %.6e\n",ad.ah.Hbox);
+			fprintf(stderr,"magic2   : %.6e\n",ad.ah.magic2);
+			fprintf(stderr,"Banner   : %s\n",ad.Banner);
 			fprintf(stderr,"\n");
 			for (i = 0; i < 10; i++) {
 				fprintf(stderr,"mass[%ld] : %.6e num[%ld] : %d\n",i,ad.ah.mass[i],i,ad.ah.num[i]);
@@ -2180,25 +2180,25 @@ int main(int argc, char **argv) {
 			fprintf(stderr,"ART data properties:\n\n");
 			fprintf(stderr,"Particle file mode : %d\n",ad.particle_file_mode);
 			fprintf(stderr,"Nparticleperrecord : %d\n",ad.Nparticleperrecord);
-			fprintf(stderr,"Nrecord			   : %d\n",ad.Nrecord);
+			fprintf(stderr,"Nrecord            : %d\n",ad.Nrecord);
 			fprintf(stderr,"Nhydroproperties   : %d\n",ad.Nhydroproperties);
 			fprintf(stderr,"Notherproperties   : %d\n",ad.Notherproperties);
-			fprintf(stderr,"Nrtchemspecies	   : %d\n",ad.Nrtchemspecies);
-			fprintf(stderr,"Nchemspecies	   : %d\n",ad.Nchemspecies);
-			fprintf(stderr,"Nstarproperties	   : %d\n",ad.Nstarproperties);
-			fprintf(stderr,"Lmingas			   : %d\n",ad.Lmingas);
-			fprintf(stderr,"Lmaxgas			   : %d\n",ad.Lmaxgas);
-			fprintf(stderr,"Lmindark		   : %d\n",ad.Lmindark);
-			fprintf(stderr,"Lmaxdark		   : %d\n",ad.Lmaxdark);
+			fprintf(stderr,"Nrtchemspecies     : %d\n",ad.Nrtchemspecies);
+			fprintf(stderr,"Nchemspecies       : %d\n",ad.Nchemspecies);
+			fprintf(stderr,"Nstarproperties    : %d\n",ad.Nstarproperties);
+			fprintf(stderr,"Lmingas            : %d\n",ad.Lmingas);
+			fprintf(stderr,"Lmaxgas            : %d\n",ad.Lmaxgas);
+			fprintf(stderr,"Lmindark           : %d\n",ad.Lmindark);
+			fprintf(stderr,"Lmaxdark           : %d\n",ad.Lmaxdark);
 			fprintf(stderr,"\n");
 			fprintf(stderr,"ART preprocessor flags:\n\n");
-			fprintf(stderr,"-GRAVITY					 : %s\n",(ad.GRAVITY == 0)?"not set":"set");
-			fprintf(stderr,"-HYDRO						 : %s\n",(ad.HYDRO == 0)?"not set":"set");
-			fprintf(stderr,"-ADVECT_SPECIES				 : %s\n",(ad.ADVECT_SPECIES == 0)?"not set":"set");
-			fprintf(stderr,"-STARFORM					 : %s\n",(ad.STARFORM == 0)?"not set":"set");
-			fprintf(stderr,"-ENRICH						 : %s\n",(ad.ENRICH == 0)?"not set":"set");
-			fprintf(stderr,"-ENRICH_SNIa				 : %s\n",(ad.ENRICH_SNIa == 0)?"not set":"set");
-			fprintf(stderr,"-RADIATIVE_TRANSFER			 : %s\n",(ad.RADIATIVE_TRANSFER == 0)?"not set":"set");
+			fprintf(stderr,"-GRAVITY                     : %s\n",(ad.GRAVITY == 0)?"not set":"set");
+			fprintf(stderr,"-HYDRO                       : %s\n",(ad.HYDRO == 0)?"not set":"set");
+			fprintf(stderr,"-ADVECT_SPECIES              : %s\n",(ad.ADVECT_SPECIES == 0)?"not set":"set");
+			fprintf(stderr,"-STARFORM                    : %s\n",(ad.STARFORM == 0)?"not set":"set");
+			fprintf(stderr,"-ENRICH                      : %s\n",(ad.ENRICH == 0)?"not set":"set");
+			fprintf(stderr,"-ENRICH_SNIa                 : %s\n",(ad.ENRICH_SNIa == 0)?"not set":"set");
+			fprintf(stderr,"-RADIATIVE_TRANSFER          : %s\n",(ad.RADIATIVE_TRANSFER == 0)?"not set":"set");
 			fprintf(stderr,"-ELECTRON_ION_NONEQUILIBRIUM : %s\n",(ad.ELECTRON_ION_NONEQUILIBRIUM == 0)?"not set":"set");
 			fprintf(stderr,"\n");
 			fprintf(stderr,"ART specific parameters:\n\n");
@@ -2213,14 +2213,14 @@ int main(int argc, char **argv) {
 		fprintf(stderr,"OmegaL0 : %.6e\n",gi.cp.OmegaL0);
 		fprintf(stderr,"OmegaK0 : %.6e\n",gi.cp.OmegaK0);
 		fprintf(stderr,"OmegaR0 : %.6e\n",gi.cp.OmegaR0);
-		fprintf(stderr,"h0_100	: %.6e\n",gi.cp.h0_100);
+		fprintf(stderr,"h0_100  : %.6e\n",gi.cp.h0_100);
 		fprintf(stderr,"\n");
 		/*
 		** Unit system
 		*/
 		fprintf(stderr,"Unit System:\n\n");
-		fprintf(stderr,"LBox	 : %.6e LU\n",gi.us.LBox);
-		fprintf(stderr,"Hubble0	 : %.6e TU^{-1}\n",gi.us.Hubble0);
+		fprintf(stderr,"LBox     : %.6e LU\n",gi.us.LBox);
+		fprintf(stderr,"Hubble0  : %.6e TU^{-1}\n",gi.us.Hubble0);
 		fprintf(stderr,"rhocrit0 : %.6e MU LU^{-3}\n",gi.us.rhocrit0);
 		fprintf(stderr,"\n");
 		/*
@@ -2240,16 +2240,16 @@ int main(int argc, char **argv) {
 		case 0: strcpy(cdummy,"Tipsy"); break;
 		case 1: strcpy(cdummy,"ART"); break;
 		default: strcpy(cdummy,"not supported"); }
-		fprintf(stderr,"Data format			 : %s\n",cdummy);
-		fprintf(stderr,"Contains anything	 : %s\n",(gi.SpeciesContained[TOT])?"yes":"no");
-		fprintf(stderr,"Contains gas		 : %s\n",(gi.SpeciesContained[GAS])?"yes":"no");
+		fprintf(stderr,"Data format          : %s\n",cdummy);
+		fprintf(stderr,"Contains anything    : %s\n",(gi.SpeciesContained[TOT])?"yes":"no");
+		fprintf(stderr,"Contains gas         : %s\n",(gi.SpeciesContained[GAS])?"yes":"no");
 		fprintf(stderr,"Contains dark matter : %s\n",(gi.SpeciesContained[DARK])?"yes":"no");
-		fprintf(stderr,"Contains stars		 : %s\n",(gi.SpeciesContained[STAR])?"yes":"no");
-		fprintf(stderr,"Contains baryons	 : %s\n",(gi.SpeciesContained[BARYON])?"yes":"no");
-		fprintf(stderr,"a					 : %.6e\n",gi.ascale);
-		fprintf(stderr,"LBox				 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+		fprintf(stderr,"Contains stars       : %s\n",(gi.SpeciesContained[STAR])?"yes":"no");
+		fprintf(stderr,"Contains baryons     : %s\n",(gi.SpeciesContained[BARYON])?"yes":"no");
+		fprintf(stderr,"a                    : %.6e\n",gi.ascale);
+		fprintf(stderr,"LBox                 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 			cosmo2internal_ct.L_usf*LBox,LBox,gi.ascale*LBox);
-		fprintf(stderr,"Box					 : [%.6e ... %.6e] x [%.6e ... %.6e] x [%.6e ... %.6e] LU (comoving)\n",gi.bc[0],gi.bc[3],gi.bc[1],gi.bc[4],gi.bc[2],gi.bc[5]);
+		fprintf(stderr,"Box                  : [%.6e ... %.6e] x [%.6e ... %.6e] x [%.6e ... %.6e] LU (comoving)\n",gi.bc[0],gi.bc[3],gi.bc[1],gi.bc[4],gi.bc[2],gi.bc[5]);
 		fprintf(stderr,"\n");
 		/*
 		** Profiling parameters
@@ -2259,21 +2259,21 @@ int main(int argc, char **argv) {
 		case 0: strcpy(cdummy,"profiles"); break;
 		case 1: strcpy(cdummy,"shape determination"); break;
 		default: strcpy(cdummy,"not supported"); }
-		fprintf(stderr,"Profiling mode					  : %s\n",cdummy);
+		fprintf(stderr,"Profiling mode                    : %s\n",cdummy);
 		switch(gi.DataProcessingMode) {
 		case 0: strcpy(cdummy,"read data again in every loop"); break;
 		case 1: strcpy(cdummy,"store data in memory"); break;
 		default: strcpy(cdummy,"not supported"); }
-		fprintf(stderr,"Data processing mode			  : %s\n",cdummy);
-		fprintf(stderr,"Do metal species				  : %s\n",(gi.DoMetalSpecies)?"yes":"no");
-		fprintf(stderr,"Do chemical species				  : %s\n",(gi.DoChemicalSpecies)?"yes":"no");
-		fprintf(stderr,"Do gas temperature				  : %s\n",(gi.DoGasTemperature)?"yes":"no");
-		fprintf(stderr,"Do stellar age					  : %s\n",(gi.DoStellarAge)?"yes":"no");
-		fprintf(stderr,"More characteristics output		  : %s\n",(gi.MoreCharacteristicsOutput)?"yes":"no");
-		fprintf(stderr,"Exclude particles				  : %s\n",(gi.ExcludeParticles)?"yes":"no");
-		fprintf(stderr,"Number of profile dimensions	  : %d\n",gi.NDimProfile);
-		fprintf(stderr,"Number of read species			  : %d\n",gi.NSpeciesRead);
-		fprintf(stderr,"Number of profiled species		  : %d\n",gi.NSpeciesProfile);
+		fprintf(stderr,"Data processing mode              : %s\n",cdummy);
+		fprintf(stderr,"Do metal species                  : %s\n",(gi.DoMetalSpecies)?"yes":"no");
+		fprintf(stderr,"Do chemical species               : %s\n",(gi.DoChemicalSpecies)?"yes":"no");
+		fprintf(stderr,"Do gas temperature                : %s\n",(gi.DoGasTemperature)?"yes":"no");
+		fprintf(stderr,"Do stellar age                    : %s\n",(gi.DoStellarAge)?"yes":"no");
+		fprintf(stderr,"More characteristics output       : %s\n",(gi.MoreCharacteristicsOutput)?"yes":"no");
+		fprintf(stderr,"Exclude particles                 : %s\n",(gi.ExcludeParticles)?"yes":"no");
+		fprintf(stderr,"Number of profile dimensions      : %d\n",gi.NDimProfile);
+		fprintf(stderr,"Number of read species            : %d\n",gi.NSpeciesRead);
+		fprintf(stderr,"Number of profiled species        : %d\n",gi.NSpeciesProfile);
 		for (i = 0; i < gi.NSpeciesRead; i++) {
 			switch(i) {
 			case GAS: strcpy(cdummy,"gas"); break;
@@ -2282,13 +2282,13 @@ int main(int argc, char **argv) {
 			default: strcpy(cdummy,"not supported"); }
 			fprintf(stderr,"Number of subspecies / properties : %d / %d (%s)\n",gi.NSubSpecies[i],gi.NProperties[i],cdummy);
 			}
-		fprintf(stderr,"NParticlePerBlockGas			  : %d\n",gi.NParticlePerBlock[GAS]);
-		fprintf(stderr,"NParticlePerBlockDark			  : %d\n",gi.NParticlePerBlock[DARK]);
-		fprintf(stderr,"NParticlePerBlockStar			  : %d\n",gi.NParticlePerBlock[STAR]);
-		fprintf(stderr,"NCellData						  : %d\n",gi.NCellData);
-		fprintf(stderr,"NCellHalo						  : %d\n",gi.NCellHalo);
-		fprintf(stderr,"NLoopProcessData				  : %d\n",gi.NLoopProcessData);
-		fprintf(stderr,"NLoopRead						  : %d\n",gi.NLoopRead);
+		fprintf(stderr,"NParticlePerBlockGas              : %d\n",gi.NParticlePerBlock[GAS]);
+		fprintf(stderr,"NParticlePerBlockDark             : %d\n",gi.NParticlePerBlock[DARK]);
+		fprintf(stderr,"NParticlePerBlockStar             : %d\n",gi.NParticlePerBlock[STAR]);
+		fprintf(stderr,"NCellData                         : %d\n",gi.NCellData);
+		fprintf(stderr,"NCellHalo                         : %d\n",gi.NCellHalo);
+		fprintf(stderr,"NLoopProcessData                  : %d\n",gi.NLoopProcessData);
+		fprintf(stderr,"NLoopRead                         : %d\n",gi.NLoopRead);
 		fprintf(stderr,"\n");
 		/*
 		** Halo catalogue
@@ -2299,14 +2299,14 @@ int main(int argc, char **argv) {
 		case 1: strcpy(cdummy,"6DFOF"); break;
 		case 2: strcpy(cdummy,"characteristics"); break;
 		default: strcpy(cdummy,"not supported"); }
-		fprintf(stderr,"Halocatalogue format	   : %s\n",cdummy);
+		fprintf(stderr,"Halocatalogue format       : %s\n",cdummy);
 		switch(gi.HaloCatalogueBinningCoordinateType) {
 		case 0: strcpy(cdummy,"spherical"); break;
 		case 1: strcpy(cdummy,"cylindrical"); break;
 		default: strcpy(cdummy,"not supported"); }
 		fprintf(stderr,"Halocatalogue binning type : %s\n",cdummy);
-		fprintf(stderr,"Halocatalogue dimension	   : %d\n",gi.HaloCatalogueNDim);
-		fprintf(stderr,"NHalo					   : %d\n",gi.NHalo);
+		fprintf(stderr,"Halocatalogue dimension    : %d\n",gi.HaloCatalogueNDim);
+		fprintf(stderr,"NHalo                      : %d\n",gi.NHalo);
 		fprintf(stderr,"\n");
 		/*
 		** Exclude halo catalogue
@@ -2318,10 +2318,10 @@ int main(int argc, char **argv) {
 			case 1: strcpy(cdummy,"6DFOF"); break;
 			case 2: strcpy(cdummy,"characteristics"); break;
 			default: strcpy(cdummy,"not supported"); }
-			fprintf(stderr,"ExcludeHalocatalogue format		  : %s\n",cdummy);
+			fprintf(stderr,"ExcludeHalocatalogue format       : %s\n",cdummy);
 			fprintf(stderr,"ExcludeHalocatalogue binning type : spherical\n");
-			fprintf(stderr,"ExcludeHalocatalogue dimension	  : %d\n",gi.ExcludeHaloCatalogueNDim);
-			fprintf(stderr,"NHaloExcludeGlobal				  : %d\n",gi.NHaloExcludeGlobal);
+			fprintf(stderr,"ExcludeHalocatalogue dimension    : %d\n",gi.ExcludeHaloCatalogueNDim);
+			fprintf(stderr,"NHaloExcludeGlobal                : %d\n",gi.NHaloExcludeGlobal);
 			}
 		else {
 			fprintf(stderr,"No particles were excluded.\n");
@@ -2337,10 +2337,10 @@ int main(int argc, char **argv) {
 			case 1: strcpy(cdummy,"physical"); break;
 			default: strcpy(cdummy,"not supported"); }
 			fprintf(stderr,"Length type rRecentre : %s\n",cdummy);
-			fprintf(stderr,"rRecentre			  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+			fprintf(stderr,"rRecentre             : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 				gi.rRecentre,gi.rRecentre/cosmo2internal_ct.L_usf,gi.ascale*gi.rRecentre/cosmo2internal_ct.L_usf);
-			fprintf(stderr,"fRecentreDist		  : %.6e\n",gi.fRecentreDist);
-			fprintf(stderr,"NLoopRecentre		  : %d\n",gi.NLoopRecentre);
+			fprintf(stderr,"fRecentreDist         : %.6e\n",gi.fRecentreDist);
+			fprintf(stderr,"NLoopRecentre         : %d\n",gi.NLoopRecentre);
 			for (i = 0; i < gi.NSpeciesRead; i++) {
 				switch(i) {
 				case GAS: strcpy(cdummy,"gas"); break;
@@ -2363,7 +2363,7 @@ int main(int argc, char **argv) {
 			case 0: strcpy(cdummy,"spherical"); break;
 			case 1: strcpy(cdummy,"cylindrical"); break;
 			default: strcpy(cdummy,"not supported"); }
-			fprintf(stderr,"Binning				: %s\n",cdummy);
+			fprintf(stderr,"Binning             : %s\n",cdummy);
 			switch(gi.VelocityProjectionType) {
 			case 0: strcpy(cdummy,"coordinate axes"); break;
 			case 1: strcpy(cdummy,"spherical"); break;
@@ -2381,24 +2381,24 @@ int main(int argc, char **argv) {
 				case 1: strcpy(cdummy,"rcrit"); break;
 				case 2: strcpy(cdummy,"rfix"); break;
 				default: strcpy(cdummy,"not supported"); }
-				fprintf(stderr,"Halo size			 : %s\n",cdummy);
-				fprintf(stderr,"rho_mean			 : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+				fprintf(stderr,"Halo size            : %s\n",cdummy);
+				fprintf(stderr,"rho_mean             : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 					gi.rhomean,gi.rhomean*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 					gi.rhomean*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-				fprintf(stderr,"rho_crit			 : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+				fprintf(stderr,"rho_crit             : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 					gi.rhocrit,gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 					gi.rhocrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-				fprintf(stderr,"Delta_mean			 : %.6e\n",gi.Deltamean);
-				fprintf(stderr,"Delta_crit			 : %.6e\n",gi.Deltacrit);
-				fprintf(stderr,"Delta_fix			 : %.6e\n",gi.Deltafix);
-				fprintf(stderr,"afix				 : %.6e\n",gi.afix);
-				fprintf(stderr,"rhoenc_mean			 : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+				fprintf(stderr,"Delta_mean           : %.6e\n",gi.Deltamean);
+				fprintf(stderr,"Delta_crit           : %.6e\n",gi.Deltacrit);
+				fprintf(stderr,"Delta_fix            : %.6e\n",gi.Deltafix);
+				fprintf(stderr,"afix                 : %.6e\n",gi.afix);
+				fprintf(stderr,"rhoenc_mean          : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 					gi.rhoencmean,gi.rhoencmean*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 					gi.rhoencmean*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-				fprintf(stderr,"rhoenc_crit			 : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+				fprintf(stderr,"rhoenc_crit          : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 					gi.rhoenccrit,gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 					gi.rhoenccrit*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
-				fprintf(stderr,"rhoenc_fix			 : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
+				fprintf(stderr,"rhoenc_fix           : %.6e MU LU^{-3} (comoving) = %.6e Mo kpc^{-3} (comoving) = %.6e Mo kpc^{-3} (physical)\n",
 					gi.rhoencfix,gi.rhoencfix*pow(cosmo2internal_ct.L_usf,3)/cosmo2internal_ct.M_usf,
 					gi.rhoencfix*pow(cosmo2internal_ct.L_usf,3)/(pow(gi.ascale,3)*cosmo2internal_ct.M_usf));
 				switch(LengthType_rExclude) {
@@ -2406,13 +2406,13 @@ int main(int argc, char **argv) {
 				case 1: strcpy(cdummy,"physical"); break;
 				default: strcpy(cdummy,"not supported"); }
 				fprintf(stderr,"Length type rExclude : %s\n",cdummy);
-				fprintf(stderr,"rExclude			 : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+				fprintf(stderr,"rExclude             : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 					gi.rExclude,gi.rExclude/cosmo2internal_ct.L_usf,gi.ascale*gi.rExclude/cosmo2internal_ct.L_usf);
-				fprintf(stderr,"fcheckrvcmax		 : %.6e\n",gi.fcheckrvcmax);
+				fprintf(stderr,"fcheckrvcmax         : %.6e\n",gi.fcheckrvcmax);
 				fprintf(stderr,"slopertruncindicator : %.6e\n",gi.slopertruncindicator);
-				fprintf(stderr,"frhobg				 : %.6e\n",gi.frhobg);
-				fprintf(stderr,"fhaloduplicate		 : %.6e\n",gi.fhaloduplicate);
-				fprintf(stderr,"fhaloexcludesize	 : %.6e\n",gi.fhaloexcludesize);
+				fprintf(stderr,"frhobg               : %.6e\n",gi.frhobg);
+				fprintf(stderr,"fhaloduplicate       : %.6e\n",gi.fhaloduplicate);
+				fprintf(stderr,"fhaloexcludesize     : %.6e\n",gi.fhaloexcludesize);
 				fprintf(stderr,"fhaloexcludedistance : %.6e\n",gi.fhaloexcludedistance);
 				fprintf(stderr,"\n");
 				}
@@ -2421,15 +2421,15 @@ int main(int argc, char **argv) {
 			*/
 			if (gi.BinningCoordinateType == 1) {
 				fprintf(stderr,"Cylindrical profiles:\n\n");
-				fprintf(stderr,"zAxis_x				: %.6e LU\n",gi.zAxis[0]);
-				fprintf(stderr,"zAxis_y				: %.6e LU\n",gi.zAxis[1]);
-				fprintf(stderr,"zAxis_z				: %.6e LU\n",gi.zAxis[2]);
+				fprintf(stderr,"zAxis_x             : %.6e LU\n",gi.zAxis[0]);
+				fprintf(stderr,"zAxis_y             : %.6e LU\n",gi.zAxis[1]);
+				fprintf(stderr,"zAxis_z             : %.6e LU\n",gi.zAxis[2]);
 				switch(LengthType_zHeight) {
 				case 0: strcpy(cdummy,"comoving"); break;
 				case 1: strcpy(cdummy,"physical"); break;
 				default: strcpy(cdummy,"not supported"); }
 				fprintf(stderr,"Length type zHeight : %s\n",cdummy);
-				fprintf(stderr,"zHeight				: %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+				fprintf(stderr,"zHeight             : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 					gi.zHeight,gi.zHeight/cosmo2internal_ct.L_usf,gi.ascale*gi.zHeight/cosmo2internal_ct.L_usf);
 				fprintf(stderr,"\n");
 				}
@@ -2443,16 +2443,16 @@ int main(int argc, char **argv) {
 			case 0: strcpy(cdummy,"differential volume"); break;
 			case 1: strcpy(cdummy,"enclosed volume"); break;
 			default: strcpy(cdummy,"not supported"); }
-			fprintf(stderr,"Shape determination volume	  : %s\n",cdummy);
+			fprintf(stderr,"Shape determination volume    : %s\n",cdummy);
 			switch(gi.ShapeTensorForm) {
 			case 0: strcpy(cdummy,"S_ij"); break;
 			case 1: strcpy(cdummy,"S_ij/r^2"); break;
 			case 2: strcpy(cdummy,"S_ij/r_ell^2"); break;
 			default: strcpy(cdummy,"not supported"); }
-			fprintf(stderr,"Shape tensor form			  : %s\n",cdummy);
-			fprintf(stderr,"NLoopShapeIterationMax		  : %d\n",gi.NLoopShapeIterationMax);
+			fprintf(stderr,"Shape tensor form             : %s\n",cdummy);
+			fprintf(stderr,"NLoopShapeIterationMax        : %d\n",gi.NLoopShapeIterationMax);
 			fprintf(stderr,"OutputFrequencyShapeIteration : %d\n",gi.OutputFrequencyShapeIteration);
-			fprintf(stderr,"ShapeIterationTolerance		  : %.6e\n",gi.ShapeIterationTolerance);
+			fprintf(stderr,"ShapeIterationTolerance       : %.6e\n",gi.ShapeIterationTolerance);
 			fprintf(stderr,"\n");
 			}
 		/*
@@ -2472,19 +2472,19 @@ int main(int argc, char **argv) {
 			default: strcpy(cdummy,"not supported"); }
 			fprintf(stderr,"Length type rmax  : %s\n",cdummy);
 			if (gi.rmin[d] >= 0) {
-				fprintf(stderr,"rmin			  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+				fprintf(stderr,"rmin              : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 					gi.rmin[d],gi.rmin[d]/cosmo2internal_ct.L_usf,gi.ascale*gi.rmin[d]/cosmo2internal_ct.L_usf);
 				}
-			else fprintf(stderr,"rmin			   : not set\n");
+			else fprintf(stderr,"rmin              : not set\n");
 			if (gi.rmax[d] >= 0) {
-				fprintf(stderr,"rmax			  : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
+				fprintf(stderr,"rmax              : %.6e LU (comoving) = %.6e kpc (comoving) = %.6e kpc (physical)\n",
 					gi.rmax[d],gi.rmax[d]/cosmo2internal_ct.L_usf,gi.ascale*gi.rmax[d]/cosmo2internal_ct.L_usf);
 				}
-			else fprintf(stderr,"rmax			   : not set\n");
-			if (gi.NBin[d] > 0) fprintf(stderr,"NBin			  : %d\n",gi.NBin[d]);
-			else fprintf(stderr,"NBin			   : not set\n");
-			if (gi.NBinPerDex[d] > 0) fprintf(stderr,"NBinPerDex		: %g\n",gi.NBinPerDex[d]);
-			else fprintf(stderr,"NBinPerDex		   : not set\n");
+			else fprintf(stderr,"rmax              : not set\n");
+			if (gi.NBin[d] > 0) fprintf(stderr,"NBin              : %d\n",gi.NBin[d]);
+			else fprintf(stderr,"NBin              : not set\n");
+			if (gi.NBinPerDex[d] > 0) fprintf(stderr,"NBinPerDex        : %g\n",gi.NBinPerDex[d]);
+			else fprintf(stderr,"NBinPerDex        : not set\n");
 			switch(gi.BinningGridType[d]) {
 			case 0: strcpy(cdummy,"logarithmic"); break;
 			case 1: strcpy(cdummy,"linear"); break;
@@ -2507,89 +2507,89 @@ void usage(void) {
 	fprintf(stderr,"\n");
 	fprintf(stderr,"You can specify the following arguments:\n");
 	fprintf(stderr,"\n");
-	fprintf(stderr,"-spp								 : set this flag if Tipsy XDR input files have single precision positions (default)\n");
-	fprintf(stderr,"-dpp								 : set this flag if Tipsy XDR input files have double precision positions\n");
-	fprintf(stderr,"-pfm <value>						 : set this flag for ART native binary particle file mode: 0 everything double precision; 1 positions and velocities double precision, times single precision; 2 everything single precision (default: 0)\n");
-	fprintf(stderr,"-ProfilingMode <value>				 : 0 = NDimProfile-dimensional profiles / 1 = shape determination (default: 0)\n");
-	fprintf(stderr,"-NDimProfile <value>				 : number of dimensions for profiling (default: 1)\n");
-	fprintf(stderr,"-DataProcessingMode <value>			 : 0 = read data again in every loop / 1 = store data in memory (default: 0)\n");
-	fprintf(stderr,"-DataFormat <value>					 : 0 = Tipsy / 1 = ART (default: 0)\n");
-	fprintf(stderr,"-HaloCatalogueFormat <value>		 : 0 = generic / 1 = 6DFOF / 2 = characteristics (default: 0)\n");
-	fprintf(stderr,"-HaloCatalogueNDim <value>			 : dimension of halo catalouge (default: 1)\n");
-	fprintf(stderr,"-ShapeDeterminationVolume <value>	 : 0 = differential volume / 1 enclosed volume (default: 0)\n");
-	fprintf(stderr,"-ShapeTensorForm <value>			 : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
-	fprintf(stderr,"-DoMetalSpecies						 : set this flag for doing metal species\n");
-	fprintf(stderr,"-DoChemicalSpecies					 : set this flag for doing chemical species\n");
-	fprintf(stderr,"-DoGasTemperature					 : set this flag for doing gas temperature\n");
-	fprintf(stderr,"-DoStellarAge						 : set this flag for doing stellar age\n");
-	fprintf(stderr,"-MoreCharacteristicsOutput			 : set this flag for more characteristics output\n");
-	fprintf(stderr,"-RecentreUseGas <value>				 : 0 = no / 1 = yes (default: 0)\n");
-	fprintf(stderr,"-RecentreUseDark <value>			 : 0 = no / 1 = yes (default: 1)\n");
-	fprintf(stderr,"-RecentreUseStar <value>			 : 0 = no / 1 = yes (default: 1)\n");
-	fprintf(stderr,"-HaloSize <value>					 : 0 = rmean / 1 = rcrit / 2 = rfix (default: 0)\n");
-	fprintf(stderr,"-ExcludeParticles <value>			 : 0 = don't exclude any particles / 1 = exclude particles in specified halo catalogue (default: 0)\n");
-	fprintf(stderr,"-LengthType_rmin <d> <value>		 : d = dimension (1/2/3) / 0 = comoving / 1 = physical (default: 0)\n");
-	fprintf(stderr,"-LengthType_rmax <d> <value>		 : d = dimension (1/2/3) / 0 = comoving / 1 = physical (default: 0)\n");
-	fprintf(stderr,"-LengthType_zHeight <value>			 : 0 = comoving / 1 = physical (default: 0)\n");
-	fprintf(stderr,"-LengthType_rExclude <value>		 : 0 = comoving / 1 = physical (default: 0)\n");
-	fprintf(stderr,"-LengthType_rRecentre <value>		 : 0 = comoving / 1 = physical (default: 0)\n");
-	fprintf(stderr,"-rmin <d> <value>					 : d = dimension (1/2/3) / global minimum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
-	fprintf(stderr,"-rmax <d> <value>					 : d = dimension (1/2/3) / global maximum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
-	fprintf(stderr,"-NBin <d> <value>					 : d = dimension (1/2/3) / global number of bins between rmin and rmax for dimension d - overwrites values form halo catalogue (default: not set)\n");
-	fprintf(stderr,"-NBinPerDex <d> <value>				 : d = dimension (1/2/3) / global number of bins per decade between rmin and rmax for dimension d (can be a float) (default: not set)\n");
-	fprintf(stderr,"-BinningGridType <d> <value>		 : d = dimension (1/2/3) / global binning grid type: 0 = logarithmic / 1 = linear (default: 0)\n");
-	fprintf(stderr,"-BinningCoordinateType <value>		 : 0 = spherical coordinates / 1 = cylindrical coordinates (default: 0)\n");
-	fprintf(stderr,"-VelocityProjectionType <value>		 : 0 = coordinate axes / 1 = spherical coordinates / 2 = cylindrical coordinates (default: 0)\n");
-	fprintf(stderr,"-zAxis_x							 : x-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
-	fprintf(stderr,"-zAxis_y							 : y-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
-	fprintf(stderr,"-zAxis_z							 : z-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
-	fprintf(stderr,"-zHeight							 : height above mid-plane for inclusion for cylindrical binning [LU] - overwrites values form z-axis catalogue (default: not set)\n");
-	fprintf(stderr,"-CentreType <value>					 : 0 = centre-of-mass centres / 1 = potmin or denmax centres (only for 6DFOF halocatalogue) (default: 0)\n");
-	fprintf(stderr,"-BinFactor <value>					 : extra factor for rmax determined form 6DFOF file (default: 5) (only for 6DFOF halocatalogue)\n");
-	fprintf(stderr,"-rmaxFromHaloCatalogue				 : set this flag for rmax determined from 6DFOF file (only for 6DFOF halocatalogue)\n");
-	fprintf(stderr,"-OmegaM0 <value>					 : OmegaM0 value (default: 0) (only necessary for Tipsy format)\n");
-	fprintf(stderr,"-OmegaL0 <value>					 : OmegaL0 value (default: 0) (only necessary for Tipsy format)\n");
-	fprintf(stderr,"-OmegaK0 <value>					 : OmegaK0 value (default: 0) (only necessary for Tipsy format)\n");
-	fprintf(stderr,"-OmegaR0 <value>					 : OmegaR0 value (default: 0) (only necessary for Tipsy format)\n");
-	fprintf(stderr,"-h0_100 <value>						 : h0_100 value (default: 0) (only necessary for Tipsy format)\n");
-	fprintf(stderr,"-LBox <value>						 : box length (comoving) [kpc]\n");
-	fprintf(stderr,"-LBox_internal <value>				 : box length (comoving) [LU] (default: standard value depending on file format)\n");
-	fprintf(stderr,"-Hubble0_internal <value>			 : Hubble parameter today [TU^{-1}] (default: standard value depending on file format)\n");
-	fprintf(stderr,"-rhocrit0_internal <value>			 : critical density today [MU LU^{-3}] (default: standard value depending on file format)\n");
-	fprintf(stderr,"-Delta_mean <value>					 : overdensity with respect to current background density (default: 200)\n");
-	fprintf(stderr,"-Delta_crit <value>					 : overdensity with respect to current critical density (default: 200)\n");
-	fprintf(stderr,"-Delta_fix <value>					 : overdensity with respect to background density at afix (default: 200)\n");
-	fprintf(stderr,"-afix <value>						 : scale factor for fixed overdensity (default: 1)\n");
-	fprintf(stderr,"-ascale <value>						 : scale factor of the data (default: set from data, needed for non-cosmological simulations)\n");
-	fprintf(stderr,"-LmaxGasAnalysis <value>			 : maximum level of gas analysed [counting from 0] (default: Lmaxgas in data)\n");
-	fprintf(stderr,"-NParticlePerBockGas <value>		 : number of gas particles per block (default: 1e7)\n");
-	fprintf(stderr,"-NParticlePerBlockDark <value>		 : number of dark matter particles per block (default: 1e7)\n");
-	fprintf(stderr,"-NParticlePerBlockStar <value>		 : number of star particles per block (default: 1e7)\n");
-	fprintf(stderr,"-NCellData <value>					 : number of cells per dimension in linked cell method for data loops (default: 20)\n");
-	fprintf(stderr,"-NCellHalo <value>					 : number of cells per dimension in linked cell method for halo loops (default: 10)\n");
-	fprintf(stderr,"-NLoopRecentre <value>				 : number of loops for recentering (default: 0)\n");
-	fprintf(stderr,"-rRecentre <value>					 : radius for recentering [LU] (default: 0 LU)\n");
-	fprintf(stderr,"-fRecentreDist <value>				 : factor for subsequential decrease of region in recentering loops (default: 1.5)\n");
-	fprintf(stderr,"-rExclude <value>					 : radius for exclusion [LU] (default: 0 LU)\n");
-	fprintf(stderr,"-NLoopShapeIterationMax <value>		 : number of maximum loops for shape iteration (default: 50)\n");
-	fprintf(stderr,"-GRAVITY <value>					 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
-	fprintf(stderr,"-HYDRO <value>						 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
-	fprintf(stderr,"-ADVECT_SPECIES <value>				 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
-	fprintf(stderr,"-STARFORM <value>					 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
-	fprintf(stderr,"-ENRICH <value>						 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
-	fprintf(stderr,"-ENRICH_SNIa <value>				 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
-	fprintf(stderr,"-RADIATIVE_TRANSFER <value>			 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+	fprintf(stderr,"-spp                                 : set this flag if Tipsy XDR input files have single precision positions (default)\n");
+	fprintf(stderr,"-dpp                                 : set this flag if Tipsy XDR input files have double precision positions\n");
+	fprintf(stderr,"-pfm <value>                         : set this flag for ART native binary particle file mode: 0 everything double precision; 1 positions and velocities double precision, times single precision; 2 everything single precision (default: 0)\n");
+	fprintf(stderr,"-ProfilingMode <value>               : 0 = NDimProfile-dimensional profiles / 1 = shape determination (default: 0)\n");
+	fprintf(stderr,"-NDimProfile <value>                 : number of dimensions for profiling (default: 1)\n");
+	fprintf(stderr,"-DataProcessingMode <value>          : 0 = read data again in every loop / 1 = store data in memory (default: 0)\n");
+	fprintf(stderr,"-DataFormat <value>                  : 0 = Tipsy / 1 = ART (default: 0)\n");
+	fprintf(stderr,"-HaloCatalogueFormat <value>         : 0 = generic / 1 = 6DFOF / 2 = characteristics (default: 0)\n");
+	fprintf(stderr,"-HaloCatalogueNDim <value>           : dimension of halo catalouge (default: 1)\n");
+	fprintf(stderr,"-ShapeDeterminationVolume <value>    : 0 = differential volume / 1 enclosed volume (default: 0)\n");
+	fprintf(stderr,"-ShapeTensorForm <value>             : 0 = S_ij / 1 = S_ij/r^2 / 2 = S_ij/r_ell^2 (default: 0)\n");
+	fprintf(stderr,"-DoMetalSpecies                      : set this flag for doing metal species\n");
+	fprintf(stderr,"-DoChemicalSpecies                   : set this flag for doing chemical species\n");
+	fprintf(stderr,"-DoGasTemperature                    : set this flag for doing gas temperature\n");
+	fprintf(stderr,"-DoStellarAge                        : set this flag for doing stellar age\n");
+	fprintf(stderr,"-MoreCharacteristicsOutput           : set this flag for more characteristics output\n");
+	fprintf(stderr,"-RecentreUseGas <value>              : 0 = no / 1 = yes (default: 0)\n");
+	fprintf(stderr,"-RecentreUseDark <value>             : 0 = no / 1 = yes (default: 1)\n");
+	fprintf(stderr,"-RecentreUseStar <value>             : 0 = no / 1 = yes (default: 1)\n");
+	fprintf(stderr,"-HaloSize <value>                    : 0 = rmean / 1 = rcrit / 2 = rfix (default: 0)\n");
+	fprintf(stderr,"-ExcludeParticles <value>            : 0 = don't exclude any particles / 1 = exclude particles in specified halo catalogue (default: 0)\n");
+	fprintf(stderr,"-LengthType_rmin <d> <value>         : d = dimension (1/2/3) / 0 = comoving / 1 = physical (default: 0)\n");
+	fprintf(stderr,"-LengthType_rmax <d> <value>         : d = dimension (1/2/3) / 0 = comoving / 1 = physical (default: 0)\n");
+	fprintf(stderr,"-LengthType_zHeight <value>          : 0 = comoving / 1 = physical (default: 0)\n");
+	fprintf(stderr,"-LengthType_rExclude <value>         : 0 = comoving / 1 = physical (default: 0)\n");
+	fprintf(stderr,"-LengthType_rRecentre <value>        : 0 = comoving / 1 = physical (default: 0)\n");
+	fprintf(stderr,"-rmin <d> <value>                    : d = dimension (1/2/3) / global minimum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
+	fprintf(stderr,"-rmax <d> <value>                    : d = dimension (1/2/3) / global maximum grid radius for dimension d [LU] - overwrites values form halo catalogue (default: not set)\n");
+	fprintf(stderr,"-NBin <d> <value>                    : d = dimension (1/2/3) / global number of bins between rmin and rmax for dimension d - overwrites values form halo catalogue (default: not set)\n");
+	fprintf(stderr,"-NBinPerDex <d> <value>              : d = dimension (1/2/3) / global number of bins per decade between rmin and rmax for dimension d (can be a float) (default: not set)\n");
+	fprintf(stderr,"-BinningGridType <d> <value>         : d = dimension (1/2/3) / global binning grid type: 0 = logarithmic / 1 = linear (default: 0)\n");
+	fprintf(stderr,"-BinningCoordinateType <value>       : 0 = spherical coordinates / 1 = cylindrical coordinates (default: 0)\n");
+	fprintf(stderr,"-VelocityProjectionType <value>      : 0 = coordinate axes / 1 = spherical coordinates / 2 = cylindrical coordinates (default: 0)\n");
+	fprintf(stderr,"-zAxis_x                             : x-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
+	fprintf(stderr,"-zAxis_y                             : y-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
+	fprintf(stderr,"-zAxis_z                             : z-component of global z-axis for cylindrical coordinates [LU] - overwrites values form z-axis catalogue (default: not set)\n");
+	fprintf(stderr,"-zHeight                             : height above mid-plane for inclusion for cylindrical binning [LU] - overwrites values form z-axis catalogue (default: not set)\n");
+	fprintf(stderr,"-CentreType <value>                  : 0 = centre-of-mass centres / 1 = potmin or denmax centres (only for 6DFOF halocatalogue) (default: 0)\n");
+	fprintf(stderr,"-BinFactor <value>                   : extra factor for rmax determined form 6DFOF file (default: 5) (only for 6DFOF halocatalogue)\n");
+	fprintf(stderr,"-rmaxFromHaloCatalogue               : set this flag for rmax determined from 6DFOF file (only for 6DFOF halocatalogue)\n");
+	fprintf(stderr,"-OmegaM0 <value>                     : OmegaM0 value (default: 0) (only necessary for Tipsy format)\n");
+	fprintf(stderr,"-OmegaL0 <value>                     : OmegaL0 value (default: 0) (only necessary for Tipsy format)\n");
+	fprintf(stderr,"-OmegaK0 <value>                     : OmegaK0 value (default: 0) (only necessary for Tipsy format)\n");
+	fprintf(stderr,"-OmegaR0 <value>                     : OmegaR0 value (default: 0) (only necessary for Tipsy format)\n");
+	fprintf(stderr,"-h0_100 <value>                      : h0_100 value (default: 0) (only necessary for Tipsy format)\n");
+	fprintf(stderr,"-LBox <value>                        : box length (comoving) [kpc]\n");
+	fprintf(stderr,"-LBox_internal <value>               : box length (comoving) [LU] (default: standard value depending on file format)\n");
+	fprintf(stderr,"-Hubble0_internal <value>            : Hubble parameter today [TU^{-1}] (default: standard value depending on file format)\n");
+	fprintf(stderr,"-rhocrit0_internal <value>           : critical density today [MU LU^{-3}] (default: standard value depending on file format)\n");
+	fprintf(stderr,"-Delta_mean <value>                  : overdensity with respect to current background density (default: 200)\n");
+	fprintf(stderr,"-Delta_crit <value>                  : overdensity with respect to current critical density (default: 200)\n");
+	fprintf(stderr,"-Delta_fix <value>                   : overdensity with respect to background density at afix (default: 200)\n");
+	fprintf(stderr,"-afix <value>                        : scale factor for fixed overdensity (default: 1)\n");
+	fprintf(stderr,"-ascale <value>                      : scale factor of the data (default: set from data, needed for non-cosmological simulations)\n");
+	fprintf(stderr,"-LmaxGasAnalysis <value>             : maximum level of gas analysed [counting from 0] (default: Lmaxgas in data)\n");
+	fprintf(stderr,"-NParticlePerBockGas <value>         : number of gas particles per block (default: 1e7)\n");
+	fprintf(stderr,"-NParticlePerBlockDark <value>       : number of dark matter particles per block (default: 1e7)\n");
+	fprintf(stderr,"-NParticlePerBlockStar <value>       : number of star particles per block (default: 1e7)\n");
+	fprintf(stderr,"-NCellData <value>                   : number of cells per dimension in linked cell method for data loops (default: 20)\n");
+	fprintf(stderr,"-NCellHalo <value>                   : number of cells per dimension in linked cell method for halo loops (default: 10)\n");
+	fprintf(stderr,"-NLoopRecentre <value>               : number of loops for recentering (default: 0)\n");
+	fprintf(stderr,"-rRecentre <value>                   : radius for recentering [LU] (default: 0 LU)\n");
+	fprintf(stderr,"-fRecentreDist <value>               : factor for subsequential decrease of region in recentering loops (default: 1.5)\n");
+	fprintf(stderr,"-rExclude <value>                    : radius for exclusion [LU] (default: 0 LU)\n");
+	fprintf(stderr,"-NLoopShapeIterationMax <value>      : number of maximum loops for shape iteration (default: 50)\n");
+	fprintf(stderr,"-GRAVITY <value>                     : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format] \n");
+	fprintf(stderr,"-HYDRO <value>                       : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+	fprintf(stderr,"-ADVECT_SPECIES <value>              : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+	fprintf(stderr,"-STARFORM <value>                    : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+	fprintf(stderr,"-ENRICH <value>                      : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+	fprintf(stderr,"-ENRICH_SNIa <value>                 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
+	fprintf(stderr,"-RADIATIVE_TRANSFER <value>          : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
 	fprintf(stderr,"-ELECTRON_ION_NONEQUILIBRIUM <value> : 0 = flag not set / 1 = flag set (default: 0) [only necessary for ART format]\n");
-	fprintf(stderr,"< <name>							 : name of input file in Tipsy XDR format\n");
-	fprintf(stderr,"-ARTHeader <name>					 : header file in ART native binary format\n");
-	fprintf(stderr,"-ARTCoordinatesData <name>			 : coordinates data file in ART native binary format\n");
-	fprintf(stderr,"-ARTStarProperties <name>			 : star properties file in ART native binary format\n");
-	fprintf(stderr,"-ARTGas <name>						 : gas file in ART native binary format\n");
-	fprintf(stderr,"-HaloCatalogue <name>				 : halo catalouge file\n");
-	fprintf(stderr,"-ExcludeHaloCatalogue <name>		 : halo catalouge file (only characteristics format supported)\n");
-	fprintf(stderr,"-zAxisCatalogue <name>				 : z-axis catalouge file\n");
-	fprintf(stderr,"-Output <name>						 : name of output files (endings like .characteristics etc. appended automatically)\n");
-	fprintf(stderr,"-v									 : more informative output to screen\n");
+	fprintf(stderr,"< <name>                             : name of input file in Tipsy XDR format\n");
+	fprintf(stderr,"-ARTHeader <name>                    : header file in ART native binary format\n");
+	fprintf(stderr,"-ARTCoordinatesData <name>           : coordinates data file in ART native binary format\n");
+	fprintf(stderr,"-ARTStarProperties <name>            : star properties file in ART native binary format\n");
+	fprintf(stderr,"-ARTGas <name>                       : gas file in ART native binary format\n");
+	fprintf(stderr,"-HaloCatalogue <name>                : halo catalouge file\n");
+	fprintf(stderr,"-ExcludeHaloCatalogue <name>         : halo catalouge file (only characteristics format supported)\n");
+	fprintf(stderr,"-zAxisCatalogue <name>               : z-axis catalouge file\n");
+	fprintf(stderr,"-Output <name>                       : name of output files (endings like .characteristics etc. appended automatically)\n");
+	fprintf(stderr,"-v                                   : more informative output to screen\n");
 	fprintf(stderr,"\n");
 	exit(1);
 	}
