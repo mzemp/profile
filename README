@@ -1,0 +1,47 @@
+DESCRIPTION
+
+Profile can calculate the radial profile, characteristic scales and shapes of haloes. Some details of the program are given in the appendix of Zemp et al., 2012, Astrophysical Journal, Volume 748, Issue 1, Article ID 54 (ADS: http://adsabs.harvard.edu/abs/2012ApJ...748...54Z).
+
+
+AUTHOR
+
+Marcel Zemp <marcelzemp@gmail.com>
+
+
+OFFICIAL SOURCE
+
+GitHub: https://github.com/mzemp/profile
+
+
+DEPENDENCIES
+
+math library (should already be installed by default)
+GNU scientific library (http://www.gnu.org/software/gsl)
+iof library (https://github.com/mzemp/iof)
+artsfc library (https://github.com/mzemp/artsfc)
+
+
+COMPILATION
+
+First, make sure you have installed all the libraries mentioned above under dependencies. The Makefile assumes that you have installed that in a local library path (e.g. ~/libraries/ under your home directory) and the following environment variable is set (e.g. in your .bashrc file):
+
+export LOCAL_LIB_PATH=~/libraries
+
+or that the libraries are installed in a system-wide path so that the code can be linked against them.
+
+Then clone or download the code from GitHub. In order to compile the code just type make in the profile code directory:
+
+$> make
+
+This will generate an executable file called profile.
+
+In order to clean up the code type:
+
+$> make clean
+
+
+HELP & OPTIONS
+
+You can find help and a list of all command line options by calling:
+
+$> profile -h
