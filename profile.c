@@ -3,7 +3,7 @@
 **
 ** Program written in order to calculate profile, characteristic scales and shapes of haloes
 **
-** written by Marcel Zemp
+** Written by Marcel Zemp
 */
 
 #include <stdio.h>
@@ -17,7 +17,7 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_eigen.h>
 #include <iof.h>
-#include <art_sfc.h>
+#include <artsfc.h>
 
 #define NSPECIESREADMAX 3
 #define NSPECIESPROFILEMAX 17
@@ -295,17 +295,11 @@ int main(int argc, char **argv) {
 	timestart = time.tv_sec;
 
 	/*
-	** Get number of threads
-	*/
-
-	NThreads = omp_get_max_threads();
-	fprintf(stderr,"Using in maximum %d OpenMP threads.\n\n",NThreads);
-
-	/*
 	** Set some default values
 	*/
 
 	PositionPrecision = 0; /* single precision */
+	VerboseLevel = 0; /* not verbose */
 	for (d = 0; d < 3; d++) {
 		LengthType_rmin[d] = 0; /* comoving */
 		LengthType_rmax[d] = 0; /* comoving */
@@ -316,7 +310,7 @@ int main(int argc, char **argv) {
 	Nparticleread = 0;
 	LmaxGasAnalysis = -1;
 	LBox = 0;
-	
+
 	set_default_values_general_info(&gi);
 	set_default_values_art_data(&ad);
 	set_default_values_coordinate_transformation(&cosmo2internal_ct);
@@ -327,6 +321,13 @@ int main(int argc, char **argv) {
 
 	i = 1;
 	while (i < argc) {
+		if ((strcmp(argv[i],"-h") == 0) || (strcmp(argv[i],"-help") == 0)) {
+			usage();
+			}
+		if (strcmp(argv[i],"-version") == 0) {
+			fprintf(stderr,"profile (%s)\n",VERSION);
+			exit(1);
+			}
 		if (strcmp(argv[i],"-spp") == 0) {
 			PositionPrecision = 0;
 			i++;
@@ -948,18 +949,22 @@ int main(int argc, char **argv) {
 		/*	   strcpy(StarDensityFileName,argv[i]); */
 		/*	   i++; */
 		/*	   } */
-		else if (strcmp(argv[i],"-v") == 0) {
+		else if (strcmp(argv[i],"-verbose") == 0) {
 			VerboseLevel = 1;
 			i++;
-			}
-		else if ((strcmp(argv[i],"-h") == 0) || (strcmp(argv[i],"-help") == 0)) {
-			usage();
 			}
 		else {
 			usage();
 			}
 		}
-	
+
+	/*
+	** Get number of threads
+	*/
+
+	NThreads = omp_get_max_threads();
+	fprintf(stderr,"Using in maximum %d OpenMP threads.\n\n",NThreads);
+
 	/*
 	** Set some defaults and do some checks
 	*/
@@ -2127,7 +2132,7 @@ int main(int argc, char **argv) {
 	** Some more output if desired
 	*/
 
-	if (VerboseLevel >= 1) {
+	if (VerboseLevel > 0) {
 		/*
 		** 6DFOF
 		*/
@@ -2503,6 +2508,8 @@ int main(int argc, char **argv) {
 void usage(void) {
 
 	fprintf(stderr,"\n");
+	fprintf(stderr,"profile (%s)\n",VERSION);
+	fprintf(stderr,"\n");
 	fprintf(stderr,"Program calculates the profiles and characteristics of haloes.\n");
 	fprintf(stderr,"\n");
 	fprintf(stderr,"You can specify the following arguments:\n");
@@ -2580,6 +2587,7 @@ void usage(void) {
 	fprintf(stderr,"-ENRICH_SNIa <value>                 : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
 	fprintf(stderr,"-RADIATIVE_TRANSFER <value>          : 0 = flag not set / 1 = flag set (default: 1) [only necessary for ART format]\n");
 	fprintf(stderr,"-ELECTRON_ION_NONEQUILIBRIUM <value> : 0 = flag not set / 1 = flag set (default: 0) [only necessary for ART format]\n");
+	fprintf(stderr,"-verbose                             : verbose\n");
 	fprintf(stderr,"< <name>                             : name of input file in Tipsy XDR format\n");
 	fprintf(stderr,"-ARTHeader <name>                    : header file in ART native binary format\n");
 	fprintf(stderr,"-ARTCoordinatesData <name>           : coordinates data file in ART native binary format\n");
@@ -2589,7 +2597,6 @@ void usage(void) {
 	fprintf(stderr,"-ExcludeHaloCatalogue <name>         : halo catalouge file (only characteristics format supported)\n");
 	fprintf(stderr,"-zAxisCatalogue <name>               : z-axis catalouge file\n");
 	fprintf(stderr,"-Output <name>                       : name of output files (endings like .characteristics etc. appended automatically)\n");
-	fprintf(stderr,"-v                                   : more informative output to screen\n");
 	fprintf(stderr,"\n");
 	exit(1);
 	}
@@ -2733,7 +2740,7 @@ void set_default_values_general_info(GI *gi) {
 	}
 
 void calculate_densities(GI *gi) {
-	
+
 	double E, OmegaM;
 
 	E = Ecosmo(gi->ascale,gi->cp);
@@ -3372,7 +3379,7 @@ void reset_halo_profile_shape(GI gi, HALO_DATA *hd) {
 	}
 
 void add_particle_to_shape_tensor(GI gi, PROFILE_SHAPE_PROPERTIES *shape, double M, double r[3], double dsph, double dell) {
-	
+
 	int d;
 	double fst;
 
@@ -3920,7 +3927,7 @@ int intersect(double LBox, int NCell, HALO_DATA hd, int index[3], double shift[3
 	int d;
 	double celllength, distance, dcheck;
 	double rhalo[3], rcell[3], dsph[3];
-	
+
 	celllength = LBox/NCell;
 	for (d = 0; d < 3; d++) {
 		rhalo[d] = hd.rcentre[d];
@@ -4487,7 +4494,6 @@ void calculate_truncation_characteristics(GI gi, HALO_DATA *hd) {
 				hd->rtruncindicator = rcheck;
 				assert(hd->rtruncindicator > 0);
 				}
-
 			}
 		if (hd->rtruncindicator > 0) break;
 		}
@@ -4529,7 +4535,7 @@ void calculate_truncation_characteristics(GI gi, HALO_DATA *hd) {
 	}
 
 void remove_background(GI gi, HALO_DATA *hd) {
-	
+
 	int n[3], j;
 	double Venc;
 
